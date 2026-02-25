@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Plus, RefreshCw, Trash2, Check, Eye, EyeOff, Zap, Settings, Download, ChevronDown, Edit2, LayoutGrid, List, Globe } from 'lucide-react';
+import { Sparkles, Plus, RefreshCw, Trash2, Check, Eye, EyeOff, Zap, Settings, Download, ChevronDown, Edit2, LayoutGrid, List, Globe, GripVertical } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { useTokenStore } from '../stores/useTokenStore';
 import ModalDialog from '../components/common/ModalDialog';
@@ -93,7 +93,7 @@ function ModelSelect({ value, onChange, placeholder, models }: ModelSelectProps)
 
 function ClaudePage() {
     const { t } = useTranslation();
-    const { tokens, loading, loadTokens, addToken, updateToken, switchToken, deleteToken, fetchModels } = useTokenStore();
+    const { tokens, loading, loadTokens, addToken, updateToken, switchToken, deleteToken, moveToken, fetchModels } = useTokenStore();
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdding, setIsAdding] = useState(false);
@@ -111,6 +111,10 @@ function ClaudePage() {
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [fetchingModels, setFetchingModels] = useState(false);
     const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
+    const [draggingTokenId, setDraggingTokenId] = useState<string | null>(null);
+    const [dragOverTokenId, setDragOverTokenId] = useState<string | null>(null);
+    const dragSourceTokenIdRef = useRef<string | null>(null);
+    const dragOverTokenIdRef = useRef<string | null>(null);
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string }>({
         isOpen: false,
         id: '',
@@ -200,6 +204,114 @@ function ClaudePage() {
             showToast('切换失败: ' + error, 'error');
         }
     };
+
+    const getTokenIndex = (tokenId: string) => {
+        return tokens.findIndex(token => token.id === tokenId);
+    };
+
+    const handleMoveToken = async (tokenId: string, targetIndex: number, successMessage: string) => {
+        try {
+            await moveToken(tokenId, targetIndex);
+            showToast(successMessage, 'success');
+        } catch (error) {
+            showToast('移动失败: ' + error, 'error');
+        }
+    };
+
+    const updateDragOverTokenId = (tokenId: string | null) => {
+        dragOverTokenIdRef.current = tokenId;
+        setDragOverTokenId(tokenId);
+    };
+
+    const resolveTokenIdFromPoint = (clientX: number, clientY: number) => {
+        const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+        return element?.closest<HTMLElement>('[data-token-id]')?.dataset.tokenId || null;
+    };
+
+    const clearDragState = () => {
+        dragSourceTokenIdRef.current = null;
+        updateDragOverTokenId(null);
+        setDraggingTokenId(null);
+    };
+
+    const handlePointerDragStart = (tokenId: string) => (e: React.PointerEvent<HTMLElement>) => {
+        if (loading) {
+            return;
+        }
+        if (e.button !== 0) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        dragSourceTokenIdRef.current = tokenId;
+        setDraggingTokenId(tokenId);
+    };
+
+    const getDraggingSourceTokenId = () => {
+        return dragSourceTokenIdRef.current;
+    };
+
+    const handlePointerOver = (tokenId: string) => () => {
+        const sourceTokenId = getDraggingSourceTokenId();
+        if (!sourceTokenId || sourceTokenId === tokenId) {
+            return;
+        }
+        if (dragOverTokenIdRef.current !== tokenId) {
+            updateDragOverTokenId(tokenId);
+        }
+    };
+
+    useEffect(() => {
+        const handleGlobalPointerMove = (event: PointerEvent) => {
+            const sourceTokenId = dragSourceTokenIdRef.current;
+            if (!sourceTokenId) {
+                return;
+            }
+
+            const hoverTokenId = resolveTokenIdFromPoint(event.clientX, event.clientY);
+            if (hoverTokenId && hoverTokenId !== sourceTokenId) {
+                if (dragOverTokenIdRef.current !== hoverTokenId) {
+                    updateDragOverTokenId(hoverTokenId);
+                }
+            } else if (dragOverTokenIdRef.current !== null) {
+                updateDragOverTokenId(null);
+            }
+        };
+
+        const handleGlobalPointerUp = (event: PointerEvent) => {
+            const sourceTokenId = dragSourceTokenIdRef.current;
+            if (!sourceTokenId) {
+                return;
+            }
+
+            const targetTokenId =
+                dragOverTokenIdRef.current ||
+                resolveTokenIdFromPoint(event.clientX, event.clientY);
+
+            clearDragState();
+
+            if (!targetTokenId || targetTokenId === sourceTokenId) {
+                return;
+            }
+
+            const sourceIndex = getTokenIndex(sourceTokenId);
+            const targetIndex = getTokenIndex(targetTokenId);
+            if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+                return;
+            }
+
+            void handleMoveToken(sourceTokenId, targetIndex, '已更新配置顺序');
+        };
+
+        window.addEventListener('pointermove', handleGlobalPointerMove);
+        window.addEventListener('pointerup', handleGlobalPointerUp);
+        window.addEventListener('pointercancel', handleGlobalPointerUp);
+        return () => {
+            window.removeEventListener('pointermove', handleGlobalPointerMove);
+            window.removeEventListener('pointerup', handleGlobalPointerUp);
+            window.removeEventListener('pointercancel', handleGlobalPointerUp);
+        };
+    }, [tokens]);
 
     const handleDelete = (id: string, name: string) => {
         setDeleteModal({ isOpen: true, id, name });
@@ -348,6 +460,7 @@ function ClaudePage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="input input-bordered input-sm w-full"
                         />
+                        <p className="mt-1 text-xs text-base-content/50">可拖拽配置卡片或表格行调整顺序</p>
                     </div>
                 </div>
 
@@ -396,17 +509,43 @@ function ClaudePage() {
                                         token.isActive
                                             ? 'bg-gradient-to-r from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20 border-l-4 border-l-orange-500'
                                             : ''
-                                    }`}>
+                                    } ${draggingTokenId === token.id ? 'opacity-60' : ''} ${
+                                        dragOverTokenId === token.id && draggingTokenId !== token.id
+                                            ? 'bg-info/5'
+                                            : ''
+                                    }`}
+                                        data-token-id={token.id}
+                                        onPointerOver={handlePointerOver(token.id)}
+                                    >
                                         <td className="w-12">
-                                            {token.isActive && (
-                                                <div className="tooltip tooltip-right" data-tip="使用中">
-                                                    <Zap className="w-5 h-5 text-orange-500" fill="currentColor" />
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onPointerDown={handlePointerDragStart(token.id)}
+                                                    onClick={(e) => e.preventDefault()}
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded text-base-content/50 hover:bg-base-200 cursor-grab active:cursor-grabbing"
+                                                    title="拖拽排序"
+                                                >
+                                                    <GripVertical className="w-4 h-4" />
+                                                </button>
+                                                {token.isActive && (
+                                                    <div className="tooltip tooltip-right" data-tip="使用中">
+                                                        <Zap className="w-5 h-5 text-orange-500" fill="currentColor" />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="font-medium">
                                             <div className="flex flex-col gap-1">
-                                                <span className="text-base">{token.name}</span>
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-base truncate">{token.name}</span>
+                                                    {token.isActive && (
+                                                        <span className="badge badge-sm bg-gradient-to-r from-orange-500 to-pink-500 text-white border-none gap-1 shadow-sm whitespace-nowrap shrink-0">
+                                                            <Zap className="w-3 h-3" fill="currentColor" />
+                                                            使用中
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 {token.description && (
                                                     <span className="text-xs text-base-content/60">{token.description}</span>
                                                 )}
@@ -520,19 +659,37 @@ function ClaudePage() {
                 {viewMode === 'card' && filteredTokens.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
                         {filteredTokens.map((token) => (
-                            <div key={token.id} className={`card bg-base-100 border-2 transition-all hover:shadow-lg flex flex-col ${
+                            <div
+                                key={token.id}
+                                className={`card bg-base-100 border-2 transition-all hover:shadow-lg flex flex-col ${
                                 token.isActive
                                     ? 'border-orange-500 ring-2 ring-orange-500/20 bg-gradient-to-br from-orange-50/50 to-pink-50/50 dark:from-orange-900/10 dark:to-pink-900/10'
                                     : 'border-base-300 hover:border-orange-500/50'
-                            }`}>
+                            } ${draggingTokenId === token.id ? 'opacity-60' : ''} ${
+                                dragOverTokenId === token.id && draggingTokenId !== token.id
+                                    ? 'ring-info/50'
+                                    : ''
+                            }`}
+                                data-token-id={token.id}
+                                onPointerOver={handlePointerOver(token.id)}
+                            >
                                 <div className="card-body p-4 flex flex-col">
                                     {/* 顶部固定内容 - 标题和操作按钮 */}
-                                    <div className="flex items-start justify-between gap-2 mb-2 h-12">
+                                    <div className="flex items-start justify-between gap-2 mb-2 min-h-12">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <button
+                                                    type="button"
+                                                    onPointerDown={handlePointerDragStart(token.id)}
+                                                    onClick={(e) => e.preventDefault()}
+                                                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-base-content/50 hover:bg-base-200 cursor-grab active:cursor-grabbing"
+                                                    title="拖拽排序"
+                                                >
+                                                    <GripVertical className="w-4 h-4" />
+                                                </button>
                                                 <h3 className="font-bold text-base truncate">{token.name}</h3>
                                                 {token.isActive && (
-                                                    <span className="badge badge-sm bg-gradient-to-r from-orange-500 to-pink-500 text-white border-none gap-1 shadow-md">
+                                                    <span className="badge badge-sm bg-gradient-to-r from-orange-500 to-pink-500 text-white border-none gap-1 shadow-md whitespace-nowrap shrink-0">
                                                         <Zap className="w-3 h-3" fill="currentColor" />
                                                         使用中
                                                     </span>

@@ -150,6 +150,11 @@ fn delete_api_token(token_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn move_api_token(token_id: String, target_index: usize) -> Result<(), String> {
+    token_service::move_token(&token_id, target_index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn fetch_available_models(base_url: String, api_key: String) -> Result<Vec<String>, String> {
     token_service::fetch_models(base_url, api_key).await
 }
@@ -226,6 +231,7 @@ pub fn run() {
             update_api_token,
             switch_api_token,
             delete_api_token,
+            move_api_token,
             fetch_available_models,
             get_dashboard_stats,
             get_dashboard_projects,

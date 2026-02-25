@@ -12,6 +12,7 @@ interface TokenState {
     updateToken: (id: string, tokenData: Omit<ApiToken, 'id' | 'createdAt' | 'isActive' | 'lastUsed'>) => Promise<void>;
     switchToken: (tokenId: string) => Promise<void>;
     deleteToken: (tokenId: string) => Promise<void>;
+    moveToken: (tokenId: string, targetIndex: number) => Promise<void>;
     fetchModels: (baseUrl: string, apiKey: string) => Promise<string[]>;
 }
 
@@ -87,6 +88,17 @@ export const useTokenStore = create<TokenState>((set, get) => ({
         set({ loading: true, error: null });
         try {
             await invoke('delete_api_token', { tokenId });
+            await get().loadTokens();
+        } catch (error) {
+            set({ error: String(error), loading: false });
+            throw error;
+        }
+    },
+
+    moveToken: async (tokenId: string, targetIndex: number) => {
+        set({ loading: true, error: null });
+        try {
+            await invoke('move_api_token', { tokenId, targetIndex });
             await get().loadTokens();
         } catch (error) {
             set({ error: String(error), loading: false });

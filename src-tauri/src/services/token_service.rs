@@ -37,6 +37,24 @@ fn get_claude_settings_path() -> Result<PathBuf, io::Error> {
     Ok(home.join(".claude").join("settings.json"))
 }
 
+fn save_tokens(tokens: &[ApiToken]) -> Result<(), io::Error> {
+    let tokens_path = get_tokens_path()?;
+    let config = TokensConfig {
+        tokens: tokens.to_vec(),
+    };
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(&tokens_path, content)?;
+    Ok(())
+}
+
+fn normalize_optional_value(value: Option<&str>) -> Option<String> {
+    value
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+        .map(|v| v.trim_end_matches('/').to_ascii_lowercase())
+}
+
 pub fn list_tokens() -> Result<Vec<ApiToken>, io::Error> {
     let tokens_path = get_tokens_path()?;
 
@@ -57,58 +75,97 @@ pub fn list_tokens() -> Result<Vec<ApiToken>, io::Error> {
 
 // 校验当前激活的 token 是否与 settings.json 一致
 fn verify_active_token(tokens: &mut Vec<ApiToken>) -> Result<(), io::Error> {
+    let original_active_state: Vec<bool> = tokens.iter().map(|token| token.is_active).collect();
     let settings_path = get_claude_settings_path()?;
+    let mut active_index: Option<usize> = None;
 
-    // 如果 settings.json 不存在，清除所有 active 状态
-    if !settings_path.exists() {
-        for token in tokens.iter_mut() {
-            token.is_active = false;
+    if settings_path.exists() {
+        let settings_content = fs::read_to_string(&settings_path)?;
+        let settings: serde_json::Value = serde_json::from_str(&settings_content)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        let env = settings.get("env");
+        let current_api_key = env
+            .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
+            .and_then(|v| v.as_str())
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty());
+
+        if let Some(current_api_key) = current_api_key {
+            let current_base_url = normalize_optional_value(
+                env.and_then(|env| env.get("ANTHROPIC_BASE_URL"))
+                    .and_then(|v| v.as_str()),
+            );
+            let current_sonnet_model = normalize_optional_value(
+                env.and_then(|env| env.get("ANTHROPIC_DEFAULT_SONNET_MODEL"))
+                    .and_then(|v| v.as_str()),
+            );
+            let current_opus_model = normalize_optional_value(
+                env.and_then(|env| env.get("ANTHROPIC_DEFAULT_OPUS_MODEL"))
+                    .and_then(|v| v.as_str()),
+            );
+            let current_haiku_model = normalize_optional_value(
+                env.and_then(|env| env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL"))
+                    .and_then(|v| v.as_str()),
+            );
+
+            let exact_matches: Vec<usize> = tokens
+                .iter()
+                .enumerate()
+                .filter_map(|(index, token)| {
+                    let is_match = token.api_key == current_api_key
+                        && normalize_optional_value(token.url.as_deref()) == current_base_url
+                        && normalize_optional_value(token.default_sonnet_model.as_deref())
+                            == current_sonnet_model
+                        && normalize_optional_value(token.default_opus_model.as_deref())
+                            == current_opus_model
+                        && normalize_optional_value(token.default_haiku_model.as_deref())
+                            == current_haiku_model;
+
+                    if is_match {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if exact_matches.len() == 1 {
+                active_index = exact_matches.first().copied();
+            } else if !exact_matches.is_empty() {
+                // 出现重复配置时，强制只保留第一个为激活态
+                active_index = exact_matches.first().copied();
+            } else {
+                let api_key_matches: Vec<usize> = tokens
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, token)| {
+                        if token.api_key == current_api_key {
+                            Some(index)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if api_key_matches.len() == 1 {
+                    active_index = api_key_matches.first().copied();
+                }
+            }
         }
-        return Ok(());
     }
 
-    // 读取当前配置
-    let settings_content = fs::read_to_string(&settings_path)?;
-    let settings: serde_json::Value = serde_json::from_str(&settings_content)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    for (index, token) in tokens.iter_mut().enumerate() {
+        token.is_active = active_index == Some(index);
+    }
 
-    // 获取当前使用的 API Key
-    let current_api_key = settings
-        .get("env")
-        .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
-        .and_then(|v| v.as_str());
+    let has_active_change = tokens
+        .iter()
+        .zip(original_active_state.iter())
+        .any(|(token, old_state)| token.is_active != *old_state);
 
-    // 如果没有配置或配置为空，清除所有 active 状态
-    let current_api_key = match current_api_key {
-        Some(key) if !key.is_empty() => key,
-        _ => {
-            for token in tokens.iter_mut() {
-                token.is_active = false;
-            }
-            return Ok(());
-        }
-    };
-
-    // 检查是否有匹配的 token
-    let has_match = tokens.iter().any(|t| t.api_key == current_api_key);
-
-    if !has_match {
-        // 如果当前使用的 API Key 不在列表中，清除所有 active 状态
-        for token in tokens.iter_mut() {
-            token.is_active = false;
-        }
-    } else {
-        // 更新匹配的 token 状态
-        for token in tokens.iter_mut() {
-            token.is_active = token.api_key == current_api_key;
-        }
-
-        // 保存更新后的状态
-        let tokens_path = get_tokens_path()?;
-        let config = TokensConfig { tokens: tokens.clone() };
-        let content = serde_json::to_string_pretty(&config)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        fs::write(&tokens_path, content)?;
+    if has_active_change {
+        save_tokens(tokens)?;
     }
 
     Ok(())
@@ -125,16 +182,11 @@ pub fn add_token(token: ApiToken) -> Result<(), io::Error> {
     let mut tokens = list_tokens().unwrap_or_default();
     tokens.push(token);
 
-    let config = TokensConfig { tokens };
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    fs::write(&tokens_path, content)?;
+    save_tokens(&tokens)?;
     Ok(())
 }
 
 pub fn switch_token(token_id: &str) -> Result<(), io::Error> {
-    let tokens_path = get_tokens_path()?;
     let mut tokens = list_tokens()?;
 
     // 找到要激活的 token
@@ -159,10 +211,7 @@ pub fn switch_token(token_id: &str) -> Result<(), io::Error> {
     }
 
     // 保存 tokens.json
-    let config = TokensConfig { tokens };
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(&tokens_path, content)?;
+    save_tokens(&tokens)?;
 
     // 更新 Claude settings.json
     let settings_path = get_claude_settings_path()?;
@@ -224,7 +273,6 @@ pub fn switch_token(token_id: &str) -> Result<(), io::Error> {
 }
 
 pub fn update_token(token_id: &str, updated_token: ApiToken) -> Result<(), io::Error> {
-    let tokens_path = get_tokens_path()?;
     let mut tokens = list_tokens()?;
 
     // 查找并更新 token
@@ -244,25 +292,36 @@ pub fn update_token(token_id: &str, updated_token: ApiToken) -> Result<(), io::E
     // last_used 不更新
 
     // 保存更新后的列表
-    let config = TokensConfig { tokens };
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(&tokens_path, content)?;
+    save_tokens(&tokens)?;
 
     Ok(())
 }
 
 pub fn delete_token(token_id: &str) -> Result<(), io::Error> {
-    let tokens_path = get_tokens_path()?;
     let mut tokens = list_tokens()?;
 
     tokens.retain(|t| t.id != token_id);
 
-    let config = TokensConfig { tokens };
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    save_tokens(&tokens)?;
+    Ok(())
+}
 
-    fs::write(&tokens_path, content)?;
+pub fn move_token(token_id: &str, target_index: usize) -> Result<(), io::Error> {
+    let mut tokens = list_tokens()?;
+    let current_index = tokens
+        .iter()
+        .position(|token| token.id == token_id)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Token not found"))?;
+
+    if current_index == target_index {
+        return Ok(());
+    }
+
+    let token = tokens.remove(current_index);
+    let insert_index = target_index.min(tokens.len());
+    tokens.insert(insert_index, token);
+
+    save_tokens(&tokens)?;
     Ok(())
 }
 
