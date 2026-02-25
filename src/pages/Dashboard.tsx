@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Activity, BarChart3, Clock, Coins, FolderOpen, Hash, MessageSquare, RefreshCw } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { Activity, BarChart3, Clock, Coins, FolderOpen, Hash, MessageSquare, PieChart, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface DashboardStats {
@@ -45,6 +45,22 @@ interface ProjectTokenStat {
     total_tokens: number;
 }
 
+interface ChartPoint {
+    x: number;
+    y: number;
+}
+
+interface PieShareItem {
+    name: string;
+    tokens: number;
+    color: string;
+}
+
+interface DonutSegment extends PieShareItem {
+    dash: number;
+    offset: number;
+}
+
 function Dashboard() {
     const { t } = useTranslation();
     const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -52,6 +68,8 @@ function Dashboard() {
     const [tokenStats, setTokenStats] = useState<StatsCache | null>(null);
     const [projectTokenStats, setProjectTokenStats] = useState<ProjectTokenStat[]>([]);
     const [loading, setLoading] = useState(true);
+    const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
+    const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -102,7 +120,28 @@ function Dashboard() {
         date: d.date,
         total: Object.values(d.tokensByModel).reduce((s, v) => s + v, 0),
     }));
-    const maxDailyTokens = Math.max(...dailyTotals.map(d => d.total), 1);
+    const smoothedDailyTotals = smoothDailyTotals(dailyTotals);
+    const maxSmoothedDailyTokens = Math.max(...smoothedDailyTotals.map(d => d.total), 1);
+
+    const trendPoints: ChartPoint[] = smoothedDailyTotals.map((day, index) => {
+        const x = smoothedDailyTotals.length <= 1 ? 50 : 6 + (index / (smoothedDailyTotals.length - 1)) * 88;
+        const y = 86 - (day.total / maxSmoothedDailyTokens) * 70;
+        return { x, y: Math.min(Math.max(y, 12), 86) };
+    });
+    const trendLinePath = buildSmoothPath(trendPoints);
+    const trendAreaPath = trendLinePath && trendPoints.length > 0
+        ? `${trendLinePath} L ${trendPoints[trendPoints.length - 1].x} 86 L ${trendPoints[0].x} 86 Z`
+        : '';
+    const hoveredTrendPoint = hoveredTrendIndex !== null ? trendPoints[hoveredTrendIndex] : null;
+    const hoveredTrendDay = hoveredTrendIndex !== null ? dailyTotals[hoveredTrendIndex] : null;
+    const hoveredTrendLabelX = hoveredTrendPoint ? Math.min(Math.max(hoveredTrendPoint.x, 10), 90) : 50;
+    const midTrendDay = dailyTotals.length > 0 ? dailyTotals[Math.floor((dailyTotals.length - 1) / 2)] : null;
+
+    const totalRecentTokens = dailyTotals.reduce((sum, day) => sum + day.total, 0);
+    const avgDailyTokens = dailyTotals.length > 0 ? Math.round(totalRecentTokens / dailyTotals.length) : 0;
+    const peakTokenDay = dailyTotals.length > 0
+        ? dailyTotals.reduce((peak, current) => (current.total > peak.total ? current : peak), dailyTotals[0])
+        : null;
 
     const hourData = Array.from({ length: 24 }, (_, i) => ({
         hour: i,
@@ -119,14 +158,45 @@ function Dashboard() {
         .slice(0, 12);
     const maxProjectTokens = Math.max(...topProjects.map(p => p.total_tokens), 1);
 
-    const linePoints = dailyTotals
-        .map((d, i) => {
-            const x = dailyTotals.length <= 1 ? 50 : (i / (dailyTotals.length - 1)) * 100;
-            const y = 36 - (d.total / maxDailyTokens) * 32;
-            return `${x},${y}`;
-        })
-        .join(' ');
-    const areaPoints = dailyTotals.length > 0 ? `0,36 ${linePoints} 100,36` : '';
+    const pieColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#22c55e', '#94a3b8'];
+    const primaryPieData: PieShareItem[] = topModels.slice(0, 5).map(([name, usage], index) => ({
+        name,
+        tokens: usage.inputTokens + usage.outputTokens,
+        color: pieColors[index],
+    }));
+    const primaryPieTokens = primaryPieData.reduce((sum, item) => sum + item.tokens, 0);
+    const othersTokens = Math.max(totalTokens - primaryPieTokens, 0);
+    const pieData: PieShareItem[] = othersTokens > 0
+        ? [...primaryPieData, { name: t('common.unknown', 'Others'), tokens: othersTokens, color: pieColors[5] }]
+        : primaryPieData;
+    const donutRadius = 34;
+    const donutCircumference = 2 * Math.PI * donutRadius;
+    const donutSegments = buildDonutSegments(pieData, totalTokens, donutCircumference);
+    const hoveredPieItem = hoveredPieName ? pieData.find(item => item.name === hoveredPieName) || null : null;
+    const hoveredPieShare = hoveredPieItem && totalTokens > 0
+        ? ((hoveredPieItem.tokens / totalTokens) * 100).toFixed(1)
+        : null;
+
+    const handleTrendMouseMove = (event: ReactMouseEvent<SVGSVGElement>) => {
+        if (trendPoints.length === 0) {
+            return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (rect.width <= 0) {
+            return;
+        }
+        const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
+        let nearestIndex = 0;
+        let minDistance = Number.POSITIVE_INFINITY;
+        trendPoints.forEach((point, index) => {
+            const distance = Math.abs(point.x - xPercent);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestIndex = index;
+            }
+        });
+        setHoveredTrendIndex(nearestIndex);
+    };
 
     return (
         <div className="h-full w-full overflow-y-auto">
@@ -151,18 +221,13 @@ function Dashboard() {
                 </div>
 
                 {stats && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                        <DualMetricCard
-                            icon={Activity}
-                            firstLabel={t('dashboard.stats_startups')}
-                            firstValue={stats.num_startups}
-                            secondLabel={t('token_usage.total_tokens')}
-                            secondValue={totalTokens}
-                            accent="text-blue-500"
-                        />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <StatCard icon={Activity} label={t('dashboard.stats_startups')} value={stats.num_startups} color="text-blue-500" />
+                        <StatCard icon={Coins} label={t('token_usage.total_tokens')} value={totalTokens} color="text-emerald-500" />
                         <StatCard icon={Hash} label={t('dashboard.stats_sessions')} value={stats.total_sessions} color="text-purple-500" />
                         <StatCard icon={MessageSquare} label={t('token_usage.total_messages')} value={tokenStats?.totalMessages || 0} color="text-pink-500" />
-                        <StatCard icon={FolderOpen} label={t('dashboard.stats_projects')} value={stats.total_projects} color="text-green-500" subValue={`${stats.total_history.toLocaleString()} ${t('dashboard.stats_history')}`} />
+                        <StatCard icon={FolderOpen} label={t('dashboard.stats_projects')} value={stats.total_projects} color="text-cyan-500" />
+                        <StatCard icon={BarChart3} label={t('dashboard.stats_history')} value={stats.total_history} color="text-amber-500" />
                     </div>
                 )}
 
@@ -199,14 +264,11 @@ function Dashboard() {
                                         })}
                                     </div>
                                     <div className="flex gap-1 mt-1">
-                                        {recentActivity.map((entry, i) => {
-                                            const date = new Date(entry.date);
-                                            return (
-                                                <div key={i} className="flex-1 text-center">
-                                                    <span className="text-[10px] text-gray-400">{`${date.getMonth() + 1}/${date.getDate()}`}</span>
-                                                </div>
-                                            );
-                                        })}
+                                        {recentActivity.map((entry, i) => (
+                                            <div key={i} className="flex-1 text-center">
+                                                <span className="text-[10px] text-gray-400">{formatDateLabel(entry.date)}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -246,58 +308,200 @@ function Dashboard() {
                     </div>
                 </div>
 
-                {dailyTotals.length > 0 && (
-                    <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
-                        <div className="flex items-center gap-2 mb-4">
-                            <BarChart3 className="w-5 h-5 text-emerald-500" />
-                            <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                                {t('token_usage.daily_trend_title')}
-                            </h2>
-                            <span className="text-xs text-gray-400 ml-auto">
-                                {dailyTotals.length} days
-                            </span>
-                        </div>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    {dailyTotals.length > 0 && (
+                        <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+                            <div className="flex items-center gap-2 mb-4">
+                                <BarChart3 className="w-5 h-5 text-emerald-500" />
+                                <h2 className="font-semibold text-gray-900 dark:text-base-content">
+                                    {t('token_usage.daily_trend_title')}
+                                </h2>
+                                <span className="text-xs text-gray-400 ml-auto">{dailyTotals.length} days</span>
+                            </div>
 
-                        <div className="h-44 relative">
-                            <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full">
-                                <line x1="0" y1="36" x2="100" y2="36" stroke="currentColor" className="text-gray-200 dark:text-base-300" />
-                                <line x1="0" y1="20" x2="100" y2="20" stroke="currentColor" className="text-gray-100 dark:text-base-300/50" />
-                                {dailyTotals.length > 1 && (
-                                    <>
-                                        <polygon points={areaPoints} className="fill-emerald-200/35 dark:fill-emerald-500/15" />
-                                        <polyline
-                                            points={linePoints}
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="1.6"
-                                            className="text-emerald-500"
-                                        />
-                                    </>
-                                )}
-                                {dailyTotals.map((d, i) => {
-                                    const x = dailyTotals.length <= 1 ? 50 : (i / (dailyTotals.length - 1)) * 100;
-                                    const y = 36 - (d.total / maxDailyTokens) * 32;
-                                    return (
-                                        <circle
-                                            key={i}
-                                            cx={x}
-                                            cy={y}
-                                            r="1.1"
-                                            className="fill-emerald-500 transition-all duration-200 hover:r-[1.8]"
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                                <TrendMetric label={t('token_usage.total_tokens')} value={formatCompactTokens(totalRecentTokens)} />
+                                <TrendMetric label="Avg / Day" value={formatCompactTokens(avgDailyTokens)} />
+                                <TrendMetric label="Peak" value={peakTokenDay ? formatCompactTokens(peakTokenDay.total) : '0'} />
+                            </div>
+
+                            <div className="rounded-lg border border-[#1f355e] bg-[#0d1833]/60 p-3">
+                                <div className="flex">
+                                    <div className="w-12 h-52 pr-2 text-[10px] text-slate-400/90 flex flex-col justify-between">
+                                        <span>{formatCompactTokens(maxSmoothedDailyTokens)}</span>
+                                        <span>{formatCompactTokens(Math.round(maxSmoothedDailyTokens / 2))}</span>
+                                        <span>0</span>
+                                    </div>
+                                    <div className="flex-1 h-52 relative">
+                                        <svg
+                                            viewBox="0 0 100 90"
+                                            preserveAspectRatio="none"
+                                            className="w-full h-full cursor-crosshair"
+                                            onMouseMove={handleTrendMouseMove}
+                                            onMouseLeave={() => setHoveredTrendIndex(null)}
                                         >
-                                            <title>{`${d.date}: ${d.total.toLocaleString()}`}</title>
-                                        </circle>
-                                    );
-                                })}
-                            </svg>
+                                            <defs>
+                                                <linearGradient id="trendAreaFill" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.18" />
+                                                    <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.00" />
+                                                </linearGradient>
+                                            </defs>
+                                            {[16, 32, 48, 64, 80].map(y => (
+                                                <line
+                                                    key={y}
+                                                    x1="0"
+                                                    y1={y}
+                                                    x2="100"
+                                                    y2={y}
+                                                    stroke="#22365a"
+                                                    strokeWidth="0.5"
+                                                    vectorEffect="non-scaling-stroke"
+                                                />
+                                            ))}
+                                            {trendAreaPath && (
+                                                <path d={trendAreaPath} fill="url(#trendAreaFill)" />
+                                            )}
+                                            {trendLinePath && (
+                                                <path
+                                                    d={trendLinePath}
+                                                    fill="none"
+                                                    stroke="#14b8a6"
+                                                    strokeWidth="1.6"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    vectorEffect="non-scaling-stroke"
+                                                />
+                                            )}
+                                            {hoveredTrendPoint && (
+                                                <>
+                                                    <line
+                                                        x1={hoveredTrendPoint.x}
+                                                        y1="12"
+                                                        x2={hoveredTrendPoint.x}
+                                                        y2="86"
+                                                        stroke="#22d3ee"
+                                                        strokeOpacity="0.45"
+                                                        strokeWidth="0.8"
+                                                        strokeDasharray="1.8 1.8"
+                                                        vectorEffect="non-scaling-stroke"
+                                                    />
+                                                </>
+                                            )}
+                                        </svg>
+                                        {hoveredTrendPoint && hoveredTrendDay && (
+                                            <div
+                                                className="absolute -top-2 -translate-y-full px-2 py-1 rounded-md text-xs bg-slate-900/95 border border-slate-700 text-slate-100 pointer-events-none whitespace-nowrap"
+                                                style={{ left: `${hoveredTrendLabelX}%`, transform: 'translate(-50%, -100%)' }}
+                                            >
+                                                <div className="text-slate-300">{formatDateFull(hoveredTrendDay.date)}</div>
+                                                <div className="font-semibold text-cyan-300">{hoveredTrendDay.total.toLocaleString()}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-3 text-[11px] text-gray-400">
+                                <span className="justify-self-start whitespace-nowrap">{formatDateFull(dailyTotals[0]?.date)}</span>
+                                <span className="justify-self-center whitespace-nowrap">{formatDateFull(midTrendDay?.date)}</span>
+                                <span className="justify-self-end whitespace-nowrap">{formatDateFull(dailyTotals[dailyTotals.length - 1]?.date)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className={`bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${dailyTotals.length === 0 ? 'xl:col-span-3' : ''}`}>
+                        <div className="flex items-center gap-2 mb-4">
+                            <PieChart className="w-5 h-5 text-teal-500" />
+                            <h2 className="font-semibold text-gray-900 dark:text-base-content">{'\u6a21\u578b Token \u5360\u6bd4'}</h2>
                         </div>
 
-                        <div className="mt-2 flex justify-between text-[11px] text-gray-400">
-                            <span>{dailyTotals[0]?.date || ''}</span>
-                            <span>{dailyTotals[dailyTotals.length - 1]?.date || ''}</span>
-                        </div>
+                        {pieData.length === 0 ? (
+                            <div className="h-48 flex items-center justify-center text-sm text-gray-400">
+                                {t('token_usage.no_data')}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex justify-center">
+                                    <div className="relative w-44 h-44">
+                                        <svg
+                                            viewBox="0 0 100 100"
+                                            className="w-full h-full -rotate-90"
+                                            onMouseLeave={() => setHoveredPieName(null)}
+                                        >
+                                            <circle
+                                                cx="50"
+                                                cy="50"
+                                                r={donutRadius}
+                                                fill="none"
+                                                stroke="#1f2f4d"
+                                                strokeWidth="16"
+                                            />
+                                            {donutSegments.map((segment) => {
+                                                const isActive = hoveredPieName === segment.name;
+                                                const hasActive = hoveredPieName !== null;
+                                                return (
+                                                    <circle
+                                                        key={segment.name}
+                                                        cx="50"
+                                                        cy="50"
+                                                        r={donutRadius}
+                                                        fill="none"
+                                                        stroke={segment.color}
+                                                        strokeWidth={isActive ? 18 : 16}
+                                                        strokeDasharray={`${segment.dash} ${donutCircumference}`}
+                                                        strokeDashoffset={-segment.offset}
+                                                        opacity={hasActive && !isActive ? 0.35 : 1}
+                                                        className="cursor-pointer transition-all duration-150"
+                                                        onMouseEnter={() => setHoveredPieName(segment.name)}
+                                                    />
+                                                );
+                                            })}
+                                        </svg>
+                                        <div className="absolute inset-[24%] rounded-full bg-white dark:bg-base-100 border border-gray-100 dark:border-base-300 flex items-center justify-center">
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-gray-500">{hoveredPieItem ? 'Current Model' : 'Total Tokens'}</div>
+                                                <div className="text-xs font-semibold text-gray-900 dark:text-base-content px-2">
+                                                    {hoveredPieItem ? truncateText(hoveredPieItem.name, 20) : formatCompactTokens(totalTokens)}
+                                                </div>
+                                                {hoveredPieItem && hoveredPieShare && (
+                                                    <div className="text-[10px] mt-0.5 text-cyan-500">
+                                                        {hoveredPieShare}% · {formatCompactTokens(hoveredPieItem.tokens)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 space-y-2">
+                                    {pieData.map((item) => {
+                                        const share = totalTokens > 0 ? (item.tokens / totalTokens) * 100 : 0;
+                                        return (
+                                            <div
+                                                key={item.name}
+                                                className={`flex items-center justify-between text-sm rounded px-1 py-0.5 transition-colors cursor-pointer ${
+                                                    hoveredPieName === item.name ? 'bg-cyan-500/10' : ''
+                                                }`}
+                                                onMouseEnter={() => setHoveredPieName(item.name)}
+                                                onMouseLeave={() => setHoveredPieName(null)}
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                                                    <span className="truncate text-gray-700 dark:text-gray-200" title={item.name}>
+                                                        {item.name}
+                                                    </span>
+                                                </div>
+                                                <div className="text-gray-500 dark:text-gray-400 shrink-0">
+                                                    {share.toFixed(1)}% · {formatCompactTokens(item.tokens)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
                     </div>
-                )}
+                </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
@@ -339,11 +543,11 @@ function Dashboard() {
                         <div className="flex items-center gap-2 mb-4">
                             <FolderOpen className="w-5 h-5 text-cyan-500" />
                             <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                                {t('dashboard.project_token_title', '项目 Token 使用排行')}
+                                {t('dashboard.project_token_title', 'Project Token Ranking')}
                             </h2>
                         </div>
                         {topProjects.length === 0 ? (
-                            <div className="text-sm text-gray-400">{t('dashboard.project_token_empty', '暂无项目 Token 数据')}</div>
+                            <div className="text-sm text-gray-400">{t('dashboard.project_token_empty', 'No project token data')}</div>
                         ) : (
                             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                                 {topProjects.map((project) => (
@@ -386,13 +590,11 @@ function StatCard({
     label,
     value,
     color,
-    subValue,
 }: {
     icon: React.ElementType;
     label: string;
     value: number;
     color: string;
-    subValue?: string;
 }) {
     return (
         <div className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
@@ -403,50 +605,113 @@ function StatCard({
                         {value.toLocaleString()}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
-                    {subValue && (
-                        <div className="text-[11px] text-gray-400 mt-0.5">{subValue}</div>
-                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-function DualMetricCard({
-    icon: Icon,
-    firstLabel,
-    firstValue,
-    secondLabel,
-    secondValue,
-    accent,
-}: {
-    icon: React.ElementType;
-    firstLabel: string;
-    firstValue: number;
-    secondLabel: string;
-    secondValue: number;
-    accent: string;
-}) {
+function TrendMetric({ label, value }: { label: string; value: string }) {
     return (
-        <div className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
-            <div className="flex items-start gap-3">
-                <Icon className={`w-5 h-5 mt-1 ${accent}`} />
-                <div className="flex-1">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-base-content">
-                        {firstValue.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{firstLabel}</div>
-
-                    <div className="my-2 border-t border-dashed border-gray-200 dark:border-base-300" />
-
-                    <div className="text-xl font-semibold text-emerald-600 dark:text-emerald-400">
-                        {secondValue.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{secondLabel}</div>
-                </div>
-            </div>
+        <div className="rounded-md border border-[#28426c] bg-[#0f1d39]/70 px-3 py-2">
+            <div className="text-[11px] text-slate-300/90">{label}</div>
+            <div className="text-sm font-semibold text-cyan-300">{value}</div>
         </div>
     );
+}
+
+function smoothDailyTotals(dailyTotals: Array<{ date: string; total: number }>) {
+    return dailyTotals.map((day, index, allDays) => {
+        const prev = allDays[index - 1]?.total ?? day.total;
+        const next = allDays[index + 1]?.total ?? day.total;
+        return {
+            date: day.date,
+            total: Math.round((prev + day.total + next) / 3),
+        };
+    });
+}
+
+function buildSmoothPath(points: ChartPoint[]) {
+    if (points.length === 0) {
+        return '';
+    }
+    if (points.length === 1) {
+        return `M ${points[0].x} ${points[0].y}`;
+    }
+
+    const [firstPoint, ...restPoints] = points;
+    let path = `M ${firstPoint.x} ${firstPoint.y}`;
+    for (let index = 0; index < restPoints.length; index++) {
+        const currentPoint = restPoints[index];
+        const previousPoint = points[index];
+        const controlX = (previousPoint.x + currentPoint.x) / 2;
+        path += ` Q ${controlX} ${previousPoint.y}, ${currentPoint.x} ${currentPoint.y}`;
+    }
+    return path;
+}
+
+function buildDonutSegments(items: PieShareItem[], total: number, circumference: number): DonutSegment[] {
+    if (items.length === 0 || total <= 0 || circumference <= 0) {
+        return [];
+    }
+
+    let offset = 0;
+    return items.map((item) => {
+        const ratio = item.tokens / total;
+        const dash = ratio * circumference;
+        const segment: DonutSegment = {
+            ...item,
+            dash,
+            offset,
+        };
+        offset += dash;
+        return segment;
+    });
+}
+
+function truncateText(text: string, maxLength: number) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return `${text.slice(0, Math.max(maxLength - 3, 1))}...`;
+}
+
+function formatCompactTokens(value: number) {
+    if (value >= 1_000_000_000) {
+        return `${(value / 1_000_000_000).toFixed(1)}B`;
+    }
+    if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(1)}M`;
+    }
+    if (value >= 1_000) {
+        return `${(value / 1_000).toFixed(1)}K`;
+    }
+    return value.toLocaleString();
+}
+
+function formatDateLabel(rawDate?: string) {
+    if (!rawDate) {
+        return '';
+    }
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) {
+        return rawDate;
+    }
+    return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+}
+
+function formatDateFull(rawDate?: string) {
+    if (!rawDate) {
+        return '';
+    }
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) {
+        return rawDate;
+    }
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 export default Dashboard;
