@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Sparkles, Plus, RefreshCw, Trash2, Check, Eye, EyeOff, Zap, Settings, Download, ChevronDown, Edit2, LayoutGrid, List, Globe, GripVertical } from 'lucide-react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTokenStore } from '../stores/useTokenStore';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
@@ -93,7 +93,7 @@ function ModelSelect({ value, onChange, placeholder, models }: ModelSelectProps)
 
 function ClaudePage() {
     const { t } = useTranslation();
-    const { tokens, loading, loadTokens, addToken, updateToken, switchToken, deleteToken, moveToken, fetchModels } = useTokenStore();
+    const { tokens, hasLoaded, loading, loadTokens, addToken, updateToken, switchToken, deleteToken, moveToken, fetchModels } = useTokenStore();
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdding, setIsAdding] = useState(false);
@@ -122,16 +122,24 @@ function ClaudePage() {
     });
 
     // 搜索过滤
-    const filteredTokens = tokens.filter(token =>
-        token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        token.apiKey.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (token.url && token.url.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (token.description && token.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredTokens = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) {
+            return tokens;
+        }
+        return tokens.filter(token =>
+            token.name.toLowerCase().includes(query) ||
+            token.apiKey.toLowerCase().includes(query) ||
+            (token.url && token.url.toLowerCase().includes(query)) ||
+            (token.description && token.description.toLowerCase().includes(query))
+        );
+    }, [tokens, searchQuery]);
 
     useEffect(() => {
-        loadTokens();
-    }, [loadTokens]);
+        if (!hasLoaded) {
+            void loadTokens();
+        }
+    }, [hasLoaded, loadTokens]);
 
     const handleAdd = () => {
         setNewToken({
@@ -433,7 +441,7 @@ function ClaudePage() {
                             打开设置
                         </button>
                         <button
-                            onClick={() => loadTokens()}
+                            onClick={() => loadTokens(true)}
                             disabled={loading}
                             className="btn btn-ghost btn-sm gap-2"
                         >
@@ -492,15 +500,15 @@ function ClaudePage() {
 
                 {viewMode === 'table' && filteredTokens.length > 0 && (
                     <div className="overflow-x-auto bg-base-100 rounded-lg border border-base-300">
-                        <table className="table">
+                        <table className="table table-fixed min-w-[1180px]">
                             <thead>
                                 <tr className="border-b border-base-300">
-                                    <th className="bg-base-200"></th>
-                                    <th className="bg-base-200">名称</th>
-                                    <th className="bg-base-200">API Key</th>
-                                    <th className="bg-base-200">URL</th>
-                                    <th className="bg-base-200">模型配置</th>
-                                    <th className="bg-base-200 text-right">操作</th>
+                                    <th className="bg-base-200 w-14"></th>
+                                    <th className="bg-base-200 w-52">名称</th>
+                                    <th className="bg-base-200 w-48">API Key</th>
+                                    <th className="bg-base-200 w-72">URL</th>
+                                    <th className="bg-base-200 w-72">模型配置</th>
+                                    <th className="bg-base-200 text-right w-44 sticky right-0 z-20">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -535,7 +543,7 @@ function ClaudePage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="font-medium">
+                                        <td className="font-medium w-52">
                                             <div className="flex flex-col gap-1">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <span className="text-base truncate">{token.name}</span>
@@ -551,9 +559,9 @@ function ClaudePage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td>
+                                        <td className="w-48">
                                             <div className="flex items-center gap-2">
-                                                <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded">
+                                                <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded truncate max-w-[140px]">
                                                     {showKeys[token.id] ? token.apiKey : maskApiKey(token.apiKey)}
                                                 </code>
                                                 <button
@@ -568,10 +576,10 @@ function ClaudePage() {
                                                 </button>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td className="w-72">
                                             <div className="flex items-center gap-1 min-w-0">
                                                 <code
-                                                    className="font-mono text-xs text-base-content/70 truncate"
+                                                    className="font-mono text-xs text-base-content/70 truncate max-w-[250px]"
                                                     title={token.url || 'api.anthropic.com'}
                                                 >
                                                     {token.url || 'api.anthropic.com'}
@@ -587,24 +595,24 @@ function ClaudePage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td>
-                                            <div className="text-xs space-y-1 font-mono">
+                                        <td className="w-72">
+                                            <div className="text-xs space-y-1 font-mono max-w-[280px]">
                                                 {token.defaultSonnetModel && (
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
                                                         <span className="text-base-content/50 w-14 flex-shrink-0">Sonnet</span>
-                                                        <span className="text-base-content/70 truncate">{token.defaultSonnetModel}</span>
+                                                        <span className="text-base-content/70 truncate max-w-[190px]">{token.defaultSonnetModel}</span>
                                                     </div>
                                                 )}
                                                 {token.defaultOpusModel && (
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
                                                         <span className="text-base-content/50 w-14 flex-shrink-0">Opus</span>
-                                                        <span className="text-base-content/70 truncate">{token.defaultOpusModel}</span>
+                                                        <span className="text-base-content/70 truncate max-w-[190px]">{token.defaultOpusModel}</span>
                                                     </div>
                                                 )}
                                                 {token.defaultHaikuModel && (
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
                                                         <span className="text-base-content/50 w-14 flex-shrink-0">Haiku</span>
-                                                        <span className="text-base-content/70 truncate">{token.defaultHaikuModel}</span>
+                                                        <span className="text-base-content/70 truncate max-w-[190px]">{token.defaultHaikuModel}</span>
                                                     </div>
                                                 )}
                                                 {!token.defaultSonnetModel && !token.defaultOpusModel && !token.defaultHaikuModel && (
@@ -612,8 +620,12 @@ function ClaudePage() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td>
-                                            <div className="flex justify-end gap-2">
+                                        <td className={`w-44 sticky right-0 z-10 ${
+                                            token.isActive
+                                                ? 'bg-gradient-to-r from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20'
+                                                : 'bg-base-100'
+                                        }`}>
+                                            <div className="flex justify-end gap-2 whitespace-nowrap">
                                                 {token.isActive ? (
                                                     <button
                                                         disabled

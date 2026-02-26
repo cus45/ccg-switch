@@ -1,49 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Activity, BarChart3, Clock, Coins, FolderOpen, Hash, MessageSquare, PieChart, RefreshCw } from 'lucide-react';
-import { useState, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-
-interface DashboardStats {
-    num_startups: number;
-    total_projects: number;
-    total_sessions: number;
-    total_history: number;
-}
-
-interface HistoryEntry {
-    date: string;
-    count: number;
-}
-
-interface ModelUsage {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadInputTokens: number;
-    cacheCreationInputTokens: number;
-    costUsd: number;
-}
-
-interface DailyModelTokens {
-    date: string;
-    tokensByModel: Record<string, number>;
-}
-
-interface StatsCache {
-    modelUsage: Record<string, ModelUsage>;
-    dailyModelTokens: DailyModelTokens[];
-    hourCounts: Record<string, number>;
-    totalSessions: number;
-    totalMessages: number;
-}
-
-interface ProjectTokenStat {
-    name: string;
-    path: string;
-    session_count: number;
-    input_tokens: number;
-    output_tokens: number;
-    total_tokens: number;
-}
+import { useState, useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
+import { useDashboardStore } from '../stores/useDashboardStore';
 
 interface ChartPoint {
     x: number;
@@ -63,115 +21,100 @@ interface DonutSegment extends PieShareItem {
 
 function Dashboard() {
     const { t } = useTranslation();
-    const [stats, setStats] = useState<DashboardStats | null>(null);
-    const [activity, setActivity] = useState<HistoryEntry[]>([]);
-    const [tokenStats, setTokenStats] = useState<StatsCache | null>(null);
-    const [projectTokenStats, setProjectTokenStats] = useState<ProjectTokenStat[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData } = useDashboardStore();
     const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
 
-    const loadData = useCallback(async () => {
-        setLoading(true);
-
-        try {
-            const statsData = await invoke<DashboardStats>('get_dashboard_stats');
-            setStats(statsData);
-        } catch (e) {
-            console.error('Failed to load stats:', e);
-        }
-
-        try {
-            const activityData = await invoke<HistoryEntry[]>('get_activity_history');
-            setActivity(activityData);
-        } catch (e) {
-            console.error('Failed to load activity:', e);
-        }
-
-        try {
-            const tokenData = await invoke<StatsCache>('get_stats_cache_data');
-            setTokenStats(tokenData);
-        } catch (e) {
-            console.error('Failed to load token stats:', e);
-        }
-
-        try {
-            const projectTokenData = await invoke<ProjectTokenStat[]>('get_project_token_stats');
-            setProjectTokenStats(projectTokenData);
-        } catch (e) {
-            console.error('Failed to load project token stats:', e);
-        }
-
-        setLoading(false);
-    }, []);
-
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        if (!hasLoaded) {
+            void loadData();
+        }
+    }, [hasLoaded, loadData]);
 
-    const recentActivity = activity.slice(-30);
-    const maxCount = Math.max(...recentActivity.map(a => a.count), 1);
+    const recentActivity = useMemo(() => activity.slice(-30), [activity]);
+    const maxCount = useMemo(() => Math.max(...recentActivity.map(a => a.count), 1), [recentActivity]);
 
-    const modelEntries = tokenStats ? Object.entries(tokenStats.modelUsage) : [];
-    const totalTokens = modelEntries.reduce((sum, [, u]) => sum + u.inputTokens + u.outputTokens, 0);
+    const modelEntries = useMemo(() => tokenStats ? Object.entries(tokenStats.modelUsage) : [], [tokenStats]);
+    const totalTokens = useMemo(() => modelEntries.reduce((sum, [, u]) => sum + u.inputTokens + u.outputTokens, 0), [modelEntries]);
 
-    const recentTokenDays = (tokenStats?.dailyModelTokens || []).slice(-30);
-    const dailyTotals = recentTokenDays.map(d => ({
-        date: d.date,
-        total: Object.values(d.tokensByModel).reduce((s, v) => s + v, 0),
-    }));
-    const smoothedDailyTotals = smoothDailyTotals(dailyTotals);
-    const maxSmoothedDailyTokens = Math.max(...smoothedDailyTotals.map(d => d.total), 1);
+    const { dailyTotals, trendPoints, trendLinePath, trendAreaPath, midTrendDay, totalRecentTokens, avgDailyTokens, peakTokenDay, maxSmoothedDailyTokens } = useMemo(() => {
+        const recentTokenDays = (tokenStats?.dailyModelTokens || []).slice(-30);
+        const _dailyTotals = recentTokenDays.map(d => ({
+            date: d.date,
+            total: Object.values(d.tokensByModel).reduce((s, v) => s + v, 0),
+        }));
+        const _smoothed = smoothDailyTotals(_dailyTotals);
+        const maxSmoothed = Math.max(..._smoothed.map(d => d.total), 1);
 
-    const trendPoints: ChartPoint[] = smoothedDailyTotals.map((day, index) => {
-        const x = smoothedDailyTotals.length <= 1 ? 50 : 6 + (index / (smoothedDailyTotals.length - 1)) * 88;
-        const y = 86 - (day.total / maxSmoothedDailyTokens) * 70;
-        return { x, y: Math.min(Math.max(y, 12), 86) };
-    });
-    const trendLinePath = buildSmoothPath(trendPoints);
-    const trendAreaPath = trendLinePath && trendPoints.length > 0
-        ? `${trendLinePath} L ${trendPoints[trendPoints.length - 1].x} 86 L ${trendPoints[0].x} 86 Z`
-        : '';
+        const _trendPoints: ChartPoint[] = _smoothed.map((day, index) => {
+            const x = _smoothed.length <= 1 ? 50 : 6 + (index / (_smoothed.length - 1)) * 88;
+            const y = 86 - (day.total / maxSmoothed) * 70;
+            return { x, y: Math.min(Math.max(y, 12), 86) };
+        });
+        const _trendLinePath = buildSmoothPath(_trendPoints);
+        const _trendAreaPath = _trendLinePath && _trendPoints.length > 0
+            ? `${_trendLinePath} L ${_trendPoints[_trendPoints.length - 1].x} 86 L ${_trendPoints[0].x} 86 Z`
+            : '';
+        const _midTrendDay = _dailyTotals.length > 0 ? _dailyTotals[Math.floor((_dailyTotals.length - 1) / 2)] : null;
+        const _totalRecentTokens = _dailyTotals.reduce((sum, day) => sum + day.total, 0);
+        const _avgDailyTokens = _dailyTotals.length > 0 ? Math.round(_totalRecentTokens / _dailyTotals.length) : 0;
+        const _peakTokenDay = _dailyTotals.length > 0
+            ? _dailyTotals.reduce((peak, current) => (current.total > peak.total ? current : peak), _dailyTotals[0])
+            : null;
+
+        return {
+            dailyTotals: _dailyTotals,
+            trendPoints: _trendPoints,
+            trendLinePath: _trendLinePath,
+            trendAreaPath: _trendAreaPath,
+            midTrendDay: _midTrendDay,
+            totalRecentTokens: _totalRecentTokens,
+            avgDailyTokens: _avgDailyTokens,
+            peakTokenDay: _peakTokenDay,
+            maxSmoothedDailyTokens: maxSmoothed,
+        };
+    }, [tokenStats]);
+
     const hoveredTrendPoint = hoveredTrendIndex !== null ? trendPoints[hoveredTrendIndex] : null;
     const hoveredTrendDay = hoveredTrendIndex !== null ? dailyTotals[hoveredTrendIndex] : null;
     const hoveredTrendLabelX = hoveredTrendPoint ? Math.min(Math.max(hoveredTrendPoint.x, 10), 90) : 50;
-    const midTrendDay = dailyTotals.length > 0 ? dailyTotals[Math.floor((dailyTotals.length - 1) / 2)] : null;
 
-    const totalRecentTokens = dailyTotals.reduce((sum, day) => sum + day.total, 0);
-    const avgDailyTokens = dailyTotals.length > 0 ? Math.round(totalRecentTokens / dailyTotals.length) : 0;
-    const peakTokenDay = dailyTotals.length > 0
-        ? dailyTotals.reduce((peak, current) => (current.total > peak.total ? current : peak), dailyTotals[0])
-        : null;
+    const { hourData, maxHourCount } = useMemo(() => {
+        const _hourData = Array.from({ length: 24 }, (_, i) => ({
+            hour: i,
+            count: tokenStats?.hourCounts?.[String(i)] || 0,
+        }));
+        return { hourData: _hourData, maxHourCount: Math.max(..._hourData.map(h => h.count), 1) };
+    }, [tokenStats]);
 
-    const hourData = Array.from({ length: 24 }, (_, i) => ({
-        hour: i,
-        count: tokenStats?.hourCounts?.[String(i)] || 0,
-    }));
-    const maxHourCount = Math.max(...hourData.map(h => h.count), 1);
-
-    const topModels = [...modelEntries]
+    const topModels = useMemo(() => [...modelEntries]
         .sort(([, a], [, b]) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens))
-        .slice(0, 10);
+        .slice(0, 10), [modelEntries]);
 
-    const topProjects = [...projectTokenStats]
-        .sort((a, b) => b.total_tokens - a.total_tokens)
-        .slice(0, 12);
-    const maxProjectTokens = Math.max(...topProjects.map(p => p.total_tokens), 1);
+    const { topProjects, maxProjectTokens } = useMemo(() => {
+        const _topProjects = [...projectTokenStats]
+            .sort((a, b) => b.total_tokens - a.total_tokens)
+            .slice(0, 12);
+        return { topProjects: _topProjects, maxProjectTokens: Math.max(..._topProjects.map(p => p.total_tokens), 1) };
+    }, [projectTokenStats]);
 
-    const pieColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#22c55e', '#94a3b8'];
-    const primaryPieData: PieShareItem[] = topModels.slice(0, 5).map(([name, usage], index) => ({
-        name,
-        tokens: usage.inputTokens + usage.outputTokens,
-        color: pieColors[index],
-    }));
-    const primaryPieTokens = primaryPieData.reduce((sum, item) => sum + item.tokens, 0);
-    const othersTokens = Math.max(totalTokens - primaryPieTokens, 0);
-    const pieData: PieShareItem[] = othersTokens > 0
-        ? [...primaryPieData, { name: t('common.unknown', 'Others'), tokens: othersTokens, color: pieColors[5] }]
-        : primaryPieData;
-    const donutRadius = 34;
-    const donutCircumference = 2 * Math.PI * donutRadius;
-    const donutSegments = buildDonutSegments(pieData, totalTokens, donutCircumference);
+    const { pieData, donutSegments, donutRadius, donutCircumference } = useMemo(() => {
+        const pieColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#22c55e', '#94a3b8'];
+        const primaryPieData: PieShareItem[] = topModels.slice(0, 5).map(([name, usage], index) => ({
+            name,
+            tokens: usage.inputTokens + usage.outputTokens,
+            color: pieColors[index],
+        }));
+        const primaryPieTokens = primaryPieData.reduce((sum, item) => sum + item.tokens, 0);
+        const othersTokens = Math.max(totalTokens - primaryPieTokens, 0);
+        const _pieData: PieShareItem[] = othersTokens > 0
+            ? [...primaryPieData, { name: t('common.unknown', 'Others'), tokens: othersTokens, color: pieColors[5] }]
+            : primaryPieData;
+        const donutRadius = 34;
+        const donutCircumference = 2 * Math.PI * donutRadius;
+        return { pieData: _pieData, donutSegments: buildDonutSegments(_pieData, totalTokens, donutCircumference), donutRadius, donutCircumference };
+    }, [topModels, totalTokens, t]);
+
     const hoveredPieItem = hoveredPieName ? pieData.find(item => item.name === hoveredPieName) || null : null;
     const hoveredPieShare = hoveredPieItem && totalTokens > 0
         ? ((hoveredPieItem.tokens / totalTokens) * 100).toFixed(1)
@@ -211,7 +154,7 @@ function Dashboard() {
                         </p>
                     </div>
                     <button
-                        onClick={loadData}
+                        onClick={() => loadData(true)}
                         disabled={loading}
                         className="btn btn-ghost btn-sm hover:bg-base-200 transition-all duration-200 hover:-translate-y-0.5"
                         title={t('common.refresh')}

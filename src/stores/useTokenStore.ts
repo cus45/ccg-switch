@@ -4,10 +4,11 @@ import { ApiToken } from '../types/token';
 
 interface TokenState {
     tokens: ApiToken[];
+    hasLoaded: boolean;
     loading: boolean;
     error: string | null;
 
-    loadTokens: () => Promise<void>;
+    loadTokens: (force?: boolean) => Promise<void>;
     addToken: (token: Omit<ApiToken, 'id' | 'createdAt' | 'isActive' | 'lastUsed'>) => Promise<void>;
     updateToken: (id: string, tokenData: Omit<ApiToken, 'id' | 'createdAt' | 'isActive' | 'lastUsed'>) => Promise<void>;
     switchToken: (tokenId: string) => Promise<void>;
@@ -18,14 +19,18 @@ interface TokenState {
 
 export const useTokenStore = create<TokenState>((set, get) => ({
     tokens: [],
+    hasLoaded: false,
     loading: false,
     error: null,
 
-    loadTokens: async () => {
+    loadTokens: async (force = false) => {
+        if (!force && get().hasLoaded) {
+            return;
+        }
         set({ loading: true, error: null });
         try {
             const tokens = await invoke<ApiToken[]>('get_tokens');
-            set({ tokens, loading: false });
+            set({ tokens, loading: false, hasLoaded: true });
         } catch (error) {
             set({ error: String(error), loading: false });
         }
@@ -41,7 +46,7 @@ export const useTokenStore = create<TokenState>((set, get) => ({
                 createdAt: new Date().toISOString(),
             };
             await invoke('add_api_token', { token: newToken });
-            await get().loadTokens();
+            await get().loadTokens(true);
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;
@@ -66,7 +71,7 @@ export const useTokenStore = create<TokenState>((set, get) => ({
             };
 
             await invoke('update_api_token', { tokenId: id, token: updatedToken });
-            await get().loadTokens();
+            await get().loadTokens(true);
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;
@@ -77,7 +82,7 @@ export const useTokenStore = create<TokenState>((set, get) => ({
         set({ loading: true, error: null });
         try {
             await invoke('switch_api_token', { tokenId });
-            await get().loadTokens();
+            await get().loadTokens(true);
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;
@@ -88,7 +93,7 @@ export const useTokenStore = create<TokenState>((set, get) => ({
         set({ loading: true, error: null });
         try {
             await invoke('delete_api_token', { tokenId });
-            await get().loadTokens();
+            await get().loadTokens(true);
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;
@@ -99,7 +104,7 @@ export const useTokenStore = create<TokenState>((set, get) => ({
         set({ loading: true, error: null });
         try {
             await invoke('move_api_token', { tokenId, targetIndex });
-            await get().loadTokens();
+            await get().loadTokens(true);
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;
