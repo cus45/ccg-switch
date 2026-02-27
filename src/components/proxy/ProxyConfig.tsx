@@ -60,7 +60,7 @@ export default function ProxyConfig() {
                         value={localHost}
                         onChange={(e) => setLocalHost(e.target.value)}
                         disabled={running}
-                        placeholder="127.0.0.1"
+                        placeholder="0.0.0.0"
                         className={`input input-bordered input-sm w-full ${!hostValid && localHost.length > 0 ? 'input-error' : ''} disabled:opacity-60`}
                     />
                 </div>

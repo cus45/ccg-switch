@@ -4,7 +4,7 @@ import { ProxyConfig, ProxyState } from '../types/proxy';
 
 const DEFAULT_CONFIG: ProxyConfig = {
     port: 8080,
-    host: '127.0.0.1',
+    host: '0.0.0.0',
     enabled: false,
     takeoverMode: false,
 };
@@ -71,7 +71,10 @@ export const useProxyStore = create<ProxyStoreState>((set, get) => {
         startProxy: async (host, port) => {
             set({ loading: true, error: null });
             try {
-                await invoke('start_proxy', { host, port });
+                const currentConfig = get().config;
+                await invoke('start_proxy', {
+                    config: { ...currentConfig, host, port, enabled: true },
+                });
                 await get().loadStatus();
                 startPolling();
             } catch (error) {

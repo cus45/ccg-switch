@@ -16,7 +16,7 @@ pub struct ProxyConfig {
 }
 
 fn default_port() -> u16 { 8080 }
-fn default_host() -> String { "127.0.0.1".to_string() }
+fn default_host() -> String { "0.0.0.0".to_string() }
 
 impl Default for ProxyConfig {
     fn default() -> Self {

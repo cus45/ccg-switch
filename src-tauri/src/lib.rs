@@ -8,6 +8,7 @@ mod utils;
 use commands::provider_commands;
 use commands::proxy_commands;
 use commands::utility_commands;
+use commands::advanced_commands;
 
 use models::config::Config;
 use models::mcp::McpServer;
@@ -305,6 +306,12 @@ pub fn run() {
             utility_commands::get_global_proxy,
             utility_commands::set_global_proxy,
             utility_commands::check_env,
+            // Advanced 命令
+            advanced_commands::get_webdav_config,
+            advanced_commands::save_webdav_config,
+            advanced_commands::get_auto_launch_status,
+            advanced_commands::set_auto_launch,
+            advanced_commands::get_usage_summaries,
         ])
         .setup(|app| {
             let _ = tray::setup_tray(app);

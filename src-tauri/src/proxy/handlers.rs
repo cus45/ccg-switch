@@ -6,6 +6,7 @@ use crate::proxy::error::ProxyError;
 use crate::proxy::http_client;
 use crate::proxy::provider_router;
 use crate::proxy::server;
+use crate::proxy::thinking_rectifier;
 
 /// 代理请求处理器：转发所有请求到上游 provider
 pub async fn proxy_handler(req: Request<Body>) -> Result<Response, ProxyError> {
@@ -21,6 +22,12 @@ pub async fn proxy_handler(req: Request<Body>) -> Result<Response, ProxyError> {
     let body_bytes = axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024)
         .await
         .map_err(|e| ProxyError::InvalidRequest(e.to_string()))?;
+
+    // 预处理：将 thinking.type "adaptive" 转为 "enabled"（兼容第三方反代）
+    let body_bytes = match thinking_rectifier::normalize_thinking_type(&body_bytes) {
+        Ok(Some(fixed)) => fixed.into(),
+        _ => body_bytes,
+    };
 
     // 解析上游路由
     let route = provider_router::resolve_upstream(&request_path)?;

@@ -19,6 +19,7 @@ const SubagentsPage = lazy(() => import('./pages/SubagentsPage'));
 const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage'));
 const Settings = lazy(() => import('./pages/Settings'));
 const ProxyPage = lazy(() => import('./pages/ProxyPage'));
+const UsagePage = lazy(() => import('./pages/UsagePage'));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><span className="loading loading-spinner loading-sm"></span></div>}>{children}</Suspense>;
@@ -64,6 +65,10 @@ const router = createHashRouter([
       {
         path: 'subagents',
         element: <SuspenseWrapper><SubagentsPage /></SuspenseWrapper>,
+      },
+      {
+        path: 'usage',
+        element: <SuspenseWrapper><UsagePage /></SuspenseWrapper>,
       },
       {
         path: 'settings',

@@ -17,3 +17,5 @@ pub mod speedtest_service;
 pub mod stream_check_service;
 pub mod global_proxy_service;
 pub mod env_checker_service;
+pub mod webdav_service;
+pub mod auto_launch_service;

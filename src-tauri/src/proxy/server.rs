@@ -20,7 +20,7 @@ impl ProxyServer {
         Self {
             shutdown_tx: None,
             port: 8080,
-            host: "127.0.0.1".to_string(),
+            host: "0.0.0.0".to_string(),
         }
     }
 
@@ -58,7 +58,7 @@ pub fn get_state() -> ProxyState {
             ProxyState {
                 running: false,
                 port: 8080,
-                host: "127.0.0.1".to_string(),
+                host: "0.0.0.0".to_string(),
                 request_count: REQUEST_COUNT.load(Ordering::Relaxed),
             }
         }

@@ -47,6 +47,44 @@ pub fn is_thinking_error(status: u16, body: &[u8]) -> bool {
     false
 }
 
+/// 预处理请求体：将 thinking.type: "adaptive" 转为 "enabled"
+///
+/// 第三方反代通常只支持 "disabled" | "enabled"，
+/// Claude Code 新版发送 "adaptive" 会导致 400 错误。
+pub fn normalize_thinking_type(body: &[u8]) -> Result<Option<Vec<u8>>, ProxyError> {
+    let mut val: Value = serde_json::from_slice(body)
+        .map_err(|e| ProxyError::InvalidRequest(format!("JSON parse error: {e}")))?;
+
+    let mut modified = false;
+
+    // 先读取 max_tokens（避免后续可变借用冲突）
+    let max_tokens = val.get("max_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(16384);
+
+    if let Some(thinking) = val.get_mut("thinking") {
+        if let Some(t) = thinking.get("type").and_then(|v| v.as_str()) {
+            if t == "adaptive" {
+                thinking["type"] = Value::String("enabled".to_string());
+                // "enabled" 模式要求 budget_tokens，未提供时补默认值
+                if thinking.get("budget_tokens").is_none() {
+                    let budget = (max_tokens * 4 / 5).max(1024);
+                    thinking["budget_tokens"] = Value::Number(budget.into());
+                }
+                modified = true;
+            }
+        }
+    }
+
+    if modified {
+        let bytes = serde_json::to_vec(&val)
+            .map_err(|e| ProxyError::Internal(format!("JSON serialize error: {e}")))?;
+        Ok(Some(bytes))
+    } else {
+        Ok(None)
+    }
+}
+
 /// 修复请求体：移除可能导致 thinking 签名错误的相关字段
 ///
 /// 移除策略：
