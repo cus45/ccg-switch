@@ -145,6 +145,8 @@ pub fn move_provider(provider_id: &str, target_index: usize) -> Result<(), io::E
 fn sync_provider_to_app_config(provider: &Provider) -> Result<(), io::Error> {
     match provider.app_type {
         AppType::Claude => sync_to_claude_settings(provider),
+        AppType::Codex => sync_to_codex_config(provider),
+        AppType::Gemini => sync_to_gemini_config(provider),
         _ => sync_to_generic_settings(provider),
     }
 }
@@ -244,4 +246,102 @@ fn sync_to_generic_settings(provider: &Provider) -> Result<(), io::Error> {
     }
 
     json_store::write_json(&config_path, &settings)
+}
+
+fn normalize_codex_base_url(url: &str) -> String {
+    url.trim_end_matches('/').to_string()
+}
+
+fn sync_to_codex_config(provider: &Provider) -> Result<(), io::Error> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+    let codex_dir = home.join(".codex");
+    fs::create_dir_all(&codex_dir)?;
+
+    let auth_path = codex_dir.join("auth.json");
+    let auth = serde_json::json!({ "OPENAI_API_KEY": provider.api_key });
+    json_store::write_json(&auth_path, &auth)?;
+
+    if let Some(ref url) = provider.url {
+        let base_url = normalize_codex_base_url(url);
+        let model = provider.default_sonnet_model.as_deref().unwrap_or("o4-mini");
+        let config_path = codex_dir.join("config.toml");
+
+        let existing = if config_path.exists() {
+            fs::read_to_string(&config_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        let mut doc: toml::Value = if existing.is_empty() {
+            toml::Value::Table(toml::Table::new())
+        } else {
+            toml::from_str(&existing)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?
+        };
+
+        if let toml::Value::Table(ref mut t) = doc {
+            t.insert("model_provider".into(), toml::Value::String("newapi".into()));
+            t.insert("model".into(), toml::Value::String(model.into()));
+
+            let mp = t.entry("model_providers")
+                .or_insert(toml::Value::Table(toml::Table::new()));
+            if let toml::Value::Table(ref mut mp_table) = mp {
+                let newapi = mp_table.entry("newapi")
+                    .or_insert(toml::Value::Table(toml::Table::new()));
+                if let toml::Value::Table(ref mut newapi_table) = newapi {
+                    newapi_table.insert("base_url".into(), toml::Value::String(base_url));
+                    newapi_table.entry("name")
+                        .or_insert(toml::Value::String("Custom".into()));
+                    newapi_table.entry("wire_api")
+                        .or_insert(toml::Value::String("responses".into()));
+                    newapi_table.entry("requires_openai_auth")
+                        .or_insert(toml::Value::Boolean(true));
+                }
+            }
+        }
+
+        let toml_str = toml::to_string_pretty(&doc)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        fs::write(&config_path, toml_str.as_bytes())?;
+    }
+
+    Ok(())
+}
+
+fn sync_to_gemini_config(provider: &Provider) -> Result<(), io::Error> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+    let gemini_dir = home.join(".gemini");
+    fs::create_dir_all(&gemini_dir)?;
+
+    let mut env_lines: Vec<String> = Vec::new();
+    if let Some(ref url) = provider.url {
+        if !url.trim().is_empty() {
+            env_lines.push(format!("GOOGLE_GEMINI_BASE_URL={}", url.trim()));
+        }
+    }
+    if !provider.api_key.is_empty() {
+        env_lines.push(format!("GEMINI_API_KEY={}", provider.api_key.trim()));
+    }
+    if let Some(ref model) = provider.default_sonnet_model {
+        if !model.trim().is_empty() {
+            env_lines.push(format!("GEMINI_MODEL={}", model.trim()));
+        }
+    }
+    let env_content = env_lines.join("\n");
+    let env_path = gemini_dir.join(".env");
+    fs::write(&env_path, env_content.as_bytes())?;
+
+    let settings_path = gemini_dir.join("settings.json");
+    let mut settings: serde_json::Value = if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)?;
+        serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    settings["security"]["auth"]["selectedType"] = serde_json::json!("gemini-api-key");
+    json_store::write_json(&settings_path, &settings)?;
+
+    Ok(())
 }
