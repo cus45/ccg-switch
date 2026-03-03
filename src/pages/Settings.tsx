@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon, Sun, Moon, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, Sun, Moon, Globe, PanelLeft, PanelRight, PanelTop } from 'lucide-react';
 import { useConfigStore } from '../stores/useConfigStore';
+import { SidebarPosition } from '../types/config';
 import ImportExportPanel from '../components/settings/ImportExportPanel';
 import SpeedTestPanel from '../components/settings/SpeedTestPanel';
 import StreamCheckPanel from '../components/settings/StreamCheckPanel';
@@ -13,22 +14,25 @@ function Settings() {
 
     const handleThemeChange = async (theme: 'light' | 'dark') => {
         if (!config) return;
-        await saveConfig({
-            ...config,
-            theme,
-            language: config.language
-        });
+        await saveConfig({ ...config, theme });
     };
 
     const handleLanguageChange = async (language: 'zh' | 'en') => {
         if (!config) return;
-        await saveConfig({
-            ...config,
-            theme: config.theme,
-            language
-        });
+        await saveConfig({ ...config, language });
         i18n.changeLanguage(language);
     };
+
+    const handleSidebarChange = async (sidebarPosition: SidebarPosition) => {
+        if (!config) return;
+        await saveConfig({ ...config, sidebarPosition });
+    };
+
+    const sidebarOptions: { value: SidebarPosition; label: string; icon: typeof PanelLeft }[] = [
+        { value: 'left', label: t('settings.sidebarLeft', '左侧'), icon: PanelLeft },
+        { value: 'right', label: t('settings.sidebarRight', '右侧'), icon: PanelRight },
+        { value: 'top', label: t('settings.sidebarTop', '顶部'), icon: PanelTop },
+    ];
 
     return (
         <div className="h-full w-full overflow-y-auto">
@@ -70,7 +74,7 @@ function Settings() {
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between py-3">
+                    <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-base-200">
                         <div className="flex items-center gap-3">
                             <Globe className="w-5 h-5 text-green-500" />
                             <span className="text-gray-700 dark:text-gray-300">{t('settings.language')}</span>
@@ -88,6 +92,34 @@ function Settings() {
                             >
                                 English
                             </button>
+                        </div>
+                    </div>
+
+                    {/* 导航栏位置 */}
+                    <div className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-3">
+                            <PanelLeft className="w-5 h-5 text-purple-500" />
+                            <span className="text-gray-700 dark:text-gray-300">{t('settings.sidebarPosition', '导航栏位置')}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            {sidebarOptions.map(opt => {
+                                const Icon = opt.icon;
+                                const active = (config?.sidebarPosition || 'left') === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => handleSidebarChange(opt.value)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                            active
+                                                ? 'bg-blue-500 text-white'
+                                                : 'bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300'
+                                        }`}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

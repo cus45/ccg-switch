@@ -1,6 +1,9 @@
+export type SidebarPosition = 'left' | 'right' | 'top';
+
 export interface Config {
     theme: 'light' | 'dark';
     language: 'en' | 'zh';
+    sidebarPosition: SidebarPosition;
 }
 
 export interface ApiConfig {
