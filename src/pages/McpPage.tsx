@@ -35,7 +35,7 @@ function McpServerRowCard({ server, onEdit, onDelete, onToggleApp }: {
                         )}
                         {cfg.url && (
                             <p className="text-gray-600 dark:text-gray-400">
-                                <span className="font-medium">URL:</span> {cfg.url}
+                                <span className="font-medium">{t('mcp.url')}:</span> {cfg.url}
                             </p>
                         )}
                     </div>
@@ -111,7 +111,7 @@ function McpPage() {
     const handleImport = async () => {
         try {
             const count = await importFromApps();
-            showToast(`已导入 ${count} 个 MCP 服务器`, 'success');
+            showToast(t('mcp.import_success', { count }), 'success');
         } catch (e) {
             showToast(String(e), 'error');
         }
@@ -154,7 +154,7 @@ function McpPage() {
                             className="px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1.5 disabled:opacity-50"
                         >
                             <Download className="w-4 h-4" />
-                            从应用导入
+                            {t('mcp.import_from_apps')}
                         </button>
                         <button
                             onClick={() => loadServers()}
@@ -178,7 +178,7 @@ function McpPage() {
                         <Server className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                         <p className="text-gray-500 dark:text-gray-400">{t('mcp.empty')}</p>
                         <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                            点击"添加"创建新服务器，或"从应用导入"将现有配置导入
+                            {t('mcp.empty_hint')}
                         </p>
                     </div>
                 ) : (

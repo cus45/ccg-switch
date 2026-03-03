@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, Upload, Loader2 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { exportConfigToFile, importConfigFromFile } from '../../services/configTransferService';
 
 function ImportExportPanel() {
     const { t } = useTranslation();
@@ -12,14 +12,7 @@ function ImportExportPanel() {
         setLoading(true);
         setMessage(null);
         try {
-            const data = await invoke('export_config');
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `cc-switch-backup-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            await exportConfigToFile();
             setMessage({ type: 'success', text: t('settings.exportSuccess') });
         } catch (e) {
             setMessage({ type: 'error', text: String(e) });
@@ -29,26 +22,19 @@ function ImportExportPanel() {
     };
 
     const handleImport = async () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = async (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-            setLoading(true);
-            setMessage(null);
-            try {
-                const text = await file.text();
-                const data = JSON.parse(text);
-                const imported: string[] = await invoke('import_config', { data });
-                setMessage({ type: 'success', text: `${t('settings.importSuccess')}: ${imported.join(', ')}` });
-            } catch (e) {
-                setMessage({ type: 'error', text: String(e) });
-            } finally {
-                setLoading(false);
+        setLoading(true);
+        setMessage(null);
+        try {
+            const result = await importConfigFromFile();
+            if (result.cancelled) {
+                return;
             }
-        };
-        input.click();
+            setMessage({ type: 'success', text: `${t('settings.importSuccess')}: ${result.importedFiles.join(', ')}` });
+        } catch (e) {
+            setMessage({ type: 'error', text: String(e) });
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

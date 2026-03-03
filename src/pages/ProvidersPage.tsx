@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useProviderStore } from '../stores/useProviderStore';
 import { Provider } from '../types/provider';
 import { APP_TYPES, APP_LABELS, AppType } from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
+import { exportConfigToFile, importConfigFromFile } from '../services/configTransferService';
 import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
@@ -27,6 +28,7 @@ function ProvidersPage() {
     const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
     const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
+    const [ioLoading, setIoLoading] = useState(false);
 
     // 拖拽状态
     const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -74,9 +76,9 @@ function ProvidersPage() {
         if (!provider) return;
         try {
             await switchProvider(provider.appType, providerId);
-            showToast(t('providers.switch_success', 'Provider 切换成功'), 'success');
+            showToast(t('providers.switch_success'), 'success');
         } catch (error) {
-            showToast('切换失败: ' + error, 'error');
+            showToast(t('providers.switch_failed', { error: String(error) }), 'error');
         }
     };
 
@@ -84,13 +86,45 @@ function ProvidersPage() {
         setDeleteModal({ isOpen: true, id, name });
     };
 
+    const handleExportConfig = async () => {
+        setIoLoading(true);
+        try {
+            await exportConfigToFile();
+            showToast(
+                `${t('providers.export_success')} · ${t('providers.import_export_scope')}`,
+                'success'
+            );
+        } catch (error) {
+            showToast(`${t('providers.export_failed')}: ${String(error)}`, 'error');
+        } finally {
+            setIoLoading(false);
+        }
+    };
+
+    const handleImportConfig = async () => {
+        setIoLoading(true);
+        try {
+            const result = await importConfigFromFile();
+            if (result.cancelled) {
+                return;
+            }
+            await loadAllProviders(true);
+            const importedFilesText = result.importedFiles.length > 0 ? ` (${result.importedFiles.join(', ')})` : '';
+            showToast(`${t('providers.import_success')}${importedFilesText}`, 'success');
+        } catch (error) {
+            showToast(`${t('providers.import_failed')}: ${String(error)}`, 'error');
+        } finally {
+            setIoLoading(false);
+        }
+    };
+
     const confirmDelete = async () => {
         try {
             await deleteProvider(deleteModal.id);
             setDeleteModal({ isOpen: false, id: '', name: '' });
-            showToast(t('providers.delete_success', 'Provider 删除成功'), 'success');
+            showToast(t('providers.delete_success'), 'success');
         } catch (error) {
-            showToast('删除失败: ' + error, 'error');
+            showToast(t('providers.delete_failed', { error: String(error) }), 'error');
         }
     };
 
@@ -151,9 +185,9 @@ function ProvidersPage() {
             const tgtIdx = getProviderIndex(targetId);
             if (srcIdx < 0 || tgtIdx < 0 || srcIdx === tgtIdx) return;
             void moveProvider(sourceId, tgtIdx).then(() => {
-                showToast('已更新排序', 'success');
+                showToast(t('providers.sort_updated'), 'success');
             }).catch((err) => {
-                showToast('排序失败: ' + err, 'error');
+                showToast(t('providers.sort_failed', { error: String(err) }), 'error');
             });
         };
         window.addEventListener('pointermove', onMove);
@@ -176,7 +210,7 @@ function ProvidersPage() {
                             <Layers className="w-5 h-5 text-white" />
                         </div>
                         <h1 className="text-xl font-bold text-gray-900 dark:text-base-content">
-                            {t('providers.title', 'Providers')}
+                            {t('providers.title')}
                         </h1>
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                             ({filteredProviders.length} / {providers.length})
@@ -187,32 +221,53 @@ function ProvidersPage() {
                             <button
                                 onClick={() => setViewMode('table')}
                                 className={`btn btn-sm ${viewMode === 'table' ? 'btn-active' : 'btn-ghost'}`}
-                                title="表格视图"
+                                title={t('providers.table_view')}
                             >
                                 <List className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={() => setViewMode('card')}
                                 className={`btn btn-sm ${viewMode === 'card' ? 'btn-active' : 'btn-ghost'}`}
-                                title="卡片视图"
+                                title={t('providers.card_view')}
                             >
                                 <LayoutGrid className="w-4 h-4" />
                             </button>
                         </div>
+                        <span className="hidden lg:flex items-center text-xs text-base-content/60 px-1">
+                            {t('providers.import_export_scope')}
+                        </span>
+                        <button
+                            onClick={handleExportConfig}
+                            disabled={loading || ioLoading}
+                            className="btn btn-ghost btn-sm gap-2"
+                            title={t('providers.import_export_scope')}
+                        >
+                            {ioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {t('providers.export_config')}
+                        </button>
+                        <button
+                            onClick={handleImportConfig}
+                            disabled={loading || ioLoading}
+                            className="btn btn-ghost btn-sm gap-2"
+                            title={t('providers.import_export_scope')}
+                        >
+                            {ioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            {t('providers.import_config')}
+                        </button>
                         <button
                             onClick={() => loadAllProviders(true)}
-                            disabled={loading}
+                            disabled={loading || ioLoading}
                             className="btn btn-ghost btn-sm gap-2"
                         >
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                            {t('common.refresh', '刷新')}
+                            {t('common.refresh')}
                         </button>
                         <button
                             onClick={handleAdd}
                             className="btn bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-none btn-sm gap-2"
                         >
                             <Plus className="w-4 h-4" />
-                            {t('providers.add_btn', '添加 Provider')}
+                            {t('providers.add_btn')}
                         </button>
                     </div>
                 </div>
@@ -223,7 +278,7 @@ function ProvidersPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
                         <input
                             type="text"
-                            placeholder={t('providers.search_placeholder', '搜索名称、API Key、URL 或描述...')}
+                            placeholder={t('providers.search_placeholder')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="input input-bordered input-sm w-full pl-9"
@@ -234,7 +289,7 @@ function ProvidersPage() {
                         value={filterApp}
                         onChange={(e) => setFilterApp(e.target.value as AppType | 'all')}
                     >
-                        <option value="all">{t('providers.filter_all', '全部类型')}</option>
+                        <option value="all">{t('providers.filter_all')}</option>
                         {APP_TYPES.map(type => (
                             <option key={type} value={type}>{APP_LABELS[type]}</option>
                         ))}
@@ -247,23 +302,23 @@ function ProvidersPage() {
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 flex items-center justify-center mx-auto mb-4">
                             <Layers className="w-10 h-10 text-blue-500" />
                         </div>
-                        <h3 className="text-lg font-semibold mb-2">{t('providers.empty_title', '还没有 Provider')}</h3>
+                        <h3 className="text-lg font-semibold mb-2">{t('providers.empty_title')}</h3>
                         <p className="text-base-content/60 mb-4 text-sm">
-                            {t('providers.empty_desc', '添加您的第一个 Provider 开始使用')}
+                            {t('providers.empty_desc')}
                         </p>
                         <button
                             onClick={handleAdd}
                             className="btn bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-none gap-2 btn-sm"
                         >
                             <Plus className="w-4 h-4" />
-                            {t('providers.add_first', '添加第一个 Provider')}
+                            {t('providers.add_first')}
                         </button>
                     </div>
                 )}
 
                 {filteredProviders.length === 0 && providers.length > 0 && (
                     <div className="text-center py-16">
-                        <p className="text-base-content/60">{t('providers.no_match', '没有找到匹配的 Provider')}</p>
+                        <p className="text-base-content/60">{t('providers.no_match')}</p>
                     </div>
                 )}
 
@@ -293,11 +348,11 @@ function ProvidersPage() {
                             <thead>
                                 <tr className="border-b border-base-300">
                                     <th className="bg-base-200 w-14"></th>
-                                    <th className="bg-base-200 w-48">{t('providers.col_name', '名称')}</th>
-                                    <th className="bg-base-200 w-28">{t('providers.col_type', '类型')}</th>
+                                    <th className="bg-base-200 w-48">{t('providers.col_name')}</th>
+                                    <th className="bg-base-200 w-28">{t('providers.col_type')}</th>
                                     <th className="bg-base-200 w-48">API Key</th>
                                     <th className="bg-base-200 w-64">URL</th>
-                                    <th className="bg-base-200 text-right w-40 sticky right-0 z-20">{t('common.action', '操作')}</th>
+                                    <th className="bg-base-200 text-right w-40 sticky right-0 z-20">{t('common.action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -333,7 +388,7 @@ function ProvidersPage() {
                                                         {provider.isActive && (
                                                             <span className="badge badge-sm bg-green-500 text-white border-none gap-1 shrink-0">
                                                                 <Zap className="w-3 h-3" fill="currentColor" />
-                                                                Active
+                                                                {t('providers.active_badge')}
                                                             </span>
                                                         )}
                                                     </div>
@@ -400,8 +455,8 @@ function ProvidersPage() {
             {/* 删除确认 */}
             <ModalDialog
                 isOpen={deleteModal.isOpen}
-                title={t('providers.delete_title', '删除 Provider')}
-                message={t('providers.delete_confirm', `确定要删除 "${deleteModal.name}" 吗？此操作不可撤销。`)}
+                title={t('providers.delete_title')}
+                message={t('providers.delete_confirm', { name: deleteModal.name })}
                 type="confirm"
                 isDestructive
                 onConfirm={confirmDelete}

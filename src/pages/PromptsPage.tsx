@@ -30,7 +30,7 @@ function PromptsPage() {
                 <div className="p-6 space-y-4 max-w-7xl mx-auto">
                     <div className="flex justify-between items-center">
                         <h1 className="text-xl font-bold text-gray-900 dark:text-base-content">
-                            {editPrompt.id ? '编辑 Prompt' : '新建 Prompt'}
+                            {editPrompt.id ? t('prompts.edit_title') : t('prompts.new_title')}
                         </h1>
                         <div className="flex gap-2">
                             <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-base-100 transition-colors">
@@ -51,7 +51,7 @@ function PromptsPage() {
                                         updatedAt: now,
                                     });
                                     setIsEditing(false);
-                                    showToast('保存成功', 'success');
+                                    showToast(t('prompts.save_success'), 'success');
                                 } catch (e) { showToast(String(e), 'error'); }
                             }} className="px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors">
                                 {t('common.save')}
@@ -62,21 +62,21 @@ function PromptsPage() {
                         type="text"
                         value={editPrompt.name || ''}
                         onChange={(e) => setEditPrompt({ ...editPrompt, name: e.target.value })}
-                        placeholder="Prompt 名称"
+                        placeholder={t('prompts.name_placeholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900 dark:text-base-content"
                     />
                     <input
                         type="text"
                         value={editPrompt.description || ''}
                         onChange={(e) => setEditPrompt({ ...editPrompt, description: e.target.value })}
-                        placeholder="描述（可选）"
+                        placeholder={t('prompts.description_placeholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900 dark:text-base-content"
                     />
                     <textarea
                         value={editPrompt.content || ''}
                         onChange={(e) => setEditPrompt({ ...editPrompt, content: e.target.value })}
                         rows={20}
-                        placeholder="Prompt 内容"
+                        placeholder={t('prompts.content_placeholder')}
                         className="w-full px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900 dark:text-base-content font-mono text-sm"
                     />
                 </div>
@@ -128,8 +128,8 @@ function PromptsPage() {
                 ) : v2Store.prompts.length === 0 ? (
                     <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
                         <FileText className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                        <p className="text-gray-500 dark:text-gray-400">暂无 Prompt 预设</p>
-                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">点击"添加"创建新预设，或"从文件导入"导入现有配置</p>
+                        <p className="text-gray-500 dark:text-gray-400">{t('prompts.empty')}</p>
+                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">{t('prompts.empty_hint')}</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -142,7 +142,7 @@ function PromptsPage() {
                                             {prompt.enabled && (
                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
                                                     <CheckCircle className="w-3 h-3" />
-                                                    已启用
+                                                    {t('prompts.enabled')}
                                                 </span>
                                             )}
                                         </div>
@@ -152,11 +152,11 @@ function PromptsPage() {
                                     <div className="flex gap-2 ml-4 flex-shrink-0">
                                         {prompt.enabled ? (
                                             <button onClick={() => v2Store.disablePrompt(prompt.id, currentApp)} className="px-3 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-400 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors">
-                                                禁用
+                                                {t('prompts.disable')}
                                             </button>
                                         ) : (
                                             <button onClick={() => v2Store.enablePrompt(prompt.id, currentApp)} className="px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
-                                                启用
+                                                {t('prompts.enable')}
                                             </button>
                                         )}
                                         <button onClick={() => { setEditPrompt(prompt); setIsEditing(true); }} className="p-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
@@ -178,27 +178,27 @@ function PromptsPage() {
                         onClick={async () => {
                             try {
                                 await v2Store.importFromFile(currentApp);
-                                showToast('导入成功', 'success');
+                                showToast(t('prompts.import_success'), 'success');
                             } catch (e) { showToast(String(e), 'error'); }
                         }}
                         className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-base-200 rounded-lg hover:bg-gray-200 dark:hover:bg-base-100 transition-colors flex items-center gap-2"
                     >
                         <Download className="w-4 h-4" />
-                        从 {PROMPT_APPS.find(a => a.key === currentApp)?.file} 导入
+                        {t('prompts.import_from_file', { file: PROMPT_APPS.find(a => a.key === currentApp)?.file || '' })}
                     </button>
                 </div>
 
                 {/* 删除确认对话框 */}
                 <ModalDialog
                     isOpen={deleteModal.isOpen}
-                    title="删除 Prompt"
-                    message="确认删除此 Prompt？此操作不可恢复。"
+                    title={t('prompts.delete_title')}
+                    message={t('prompts.delete_confirm')}
                     type="confirm"
                     isDestructive={true}
                     onConfirm={async () => {
                         try {
                             await v2Store.deletePrompt(deleteModal.id, deleteModal.appType);
-                            showToast('删除成功', 'success');
+                            showToast(t('prompts.delete_success'), 'success');
                         } catch (e) { showToast(String(e), 'error'); }
                         finally { setDeleteModal({ isOpen: false, id: '', appType: '' }); }
                     }}

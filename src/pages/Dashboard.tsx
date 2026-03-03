@@ -108,7 +108,7 @@ function Dashboard() {
         const primaryPieTokens = primaryPieData.reduce((sum, item) => sum + item.tokens, 0);
         const othersTokens = Math.max(totalTokens - primaryPieTokens, 0);
         const _pieData: PieShareItem[] = othersTokens > 0
-            ? [...primaryPieData, { name: t('common.unknown', 'Others'), tokens: othersTokens, color: pieColors[5] }]
+            ? [...primaryPieData, { name: t('token_usage.others'), tokens: othersTokens, color: pieColors[5] }]
             : primaryPieData;
         const donutRadius = 34;
         const donutCircumference = 2 * Math.PI * donutRadius;
@@ -264,17 +264,17 @@ function Dashboard() {
                                     onClick={() => refreshStatsCache()}
                                     disabled={refreshingStats}
                                     className="ml-auto px-2 py-1 text-xs bg-gray-100 dark:bg-base-200 text-gray-600 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-base-100 transition-colors flex items-center gap-1 disabled:opacity-50"
-                                    title="重新计算统计数据"
+                                    title={t('token_usage.refresh_stats_title')}
                                 >
                                     <RefreshCw className={`w-3 h-3 ${refreshingStats ? 'animate-spin' : ''}`} />
-                                    {refreshingStats ? '计算中...' : '刷新统计'}
+                                    {refreshingStats ? t('token_usage.refreshing_stats') : t('token_usage.refresh_stats')}
                                 </button>
                             </div>
 
                             <div className="grid grid-cols-3 gap-2 mb-4">
                                 <TrendMetric label={t('token_usage.total_tokens')} value={formatCompactTokens(totalRecentTokens)} />
-                                <TrendMetric label="Avg / Day" value={formatCompactTokens(avgDailyTokens)} />
-                                <TrendMetric label="Peak" value={peakTokenDay ? formatCompactTokens(peakTokenDay.total) : '0'} />
+                                <TrendMetric label={t('token_usage.avg_per_day')} value={formatCompactTokens(avgDailyTokens)} />
+                                <TrendMetric label={t('token_usage.peak')} value={peakTokenDay ? formatCompactTokens(peakTokenDay.total) : '0'} />
                             </div>
 
                             <div className="rounded-lg border border-[#1f355e] bg-[#0d1833]/60 p-3">
@@ -364,7 +364,7 @@ function Dashboard() {
                     <div className={`bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${dailyTotals.length === 0 ? 'xl:col-span-3' : ''}`}>
                         <div className="flex items-center gap-2 mb-4">
                             <PieChart className="w-5 h-5 text-teal-500" />
-                            <h2 className="font-semibold text-gray-900 dark:text-base-content">{'\u6a21\u578b Token \u5360\u6bd4'}</h2>
+                            <h2 className="font-semibold text-gray-900 dark:text-base-content">{t('token_usage.model_share_title')}</h2>
                         </div>
 
                         {pieData.length === 0 ? (
@@ -411,7 +411,7 @@ function Dashboard() {
                                         </svg>
                                         <div className="absolute inset-[24%] rounded-full bg-white dark:bg-base-100 border border-gray-100 dark:border-base-300 flex items-center justify-center">
                                             <div className="text-center">
-                                                <div className="text-[10px] text-gray-500">{hoveredPieItem ? 'Current Model' : 'Total Tokens'}</div>
+                                                <div className="text-[10px] text-gray-500">{hoveredPieItem ? t('token_usage.current_model') : t('token_usage.total_tokens')}</div>
                                                 <div className="text-xs font-semibold text-gray-900 dark:text-base-content px-2">
                                                     {hoveredPieItem ? truncateText(hoveredPieItem.name, 20) : formatCompactTokens(totalTokens)}
                                                 </div>
@@ -495,11 +495,11 @@ function Dashboard() {
                         <div className="flex items-center gap-2 mb-4">
                             <FolderOpen className="w-5 h-5 text-cyan-500" />
                             <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                                {t('dashboard.project_token_title', 'Project Token Ranking')}
+                                {t('dashboard.project_token_title')}
                             </h2>
                         </div>
                         {topProjects.length === 0 ? (
-                            <div className="text-sm text-gray-400">{t('dashboard.project_token_empty', 'No project token data')}</div>
+                            <div className="text-sm text-gray-400">{t('dashboard.project_token_empty')}</div>
                         ) : (
                             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                                 {topProjects.map((project) => (

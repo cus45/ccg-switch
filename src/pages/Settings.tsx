@@ -80,7 +80,7 @@ function Settings() {
                                 onClick={() => handleLanguageChange('zh')}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${config?.language === 'zh' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300'}`}
                             >
-                                中文
+                                {t('settings.zh_label')}
                             </button>
                             <button
                                 onClick={() => handleLanguageChange('en')}
