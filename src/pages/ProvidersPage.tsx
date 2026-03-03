@@ -3,10 +3,10 @@ import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Ey
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useProviderStore } from '../stores/useProviderStore';
 import { Provider } from '../types/provider';
-import { APP_TYPES, APP_LABELS, AppType } from '../types/app';
+import { VISIBLE_APP_TYPES, APP_LABELS, AppType } from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
-import { exportConfigToFile, importConfigFromFile } from '../services/configTransferService';
+import { exportProvidersConfigToFile, importProvidersConfigFromFile } from '../services/configTransferService';
 import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
@@ -28,7 +28,8 @@ function ProvidersPage() {
     const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
     const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
-    const [ioLoading, setIoLoading] = useState(false);
+    const [exportLoading, setExportLoading] = useState(false);
+    const [importLoading, setImportLoading] = useState(false);
 
     // 拖拽状态
     const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -87,34 +88,34 @@ function ProvidersPage() {
     };
 
     const handleExportConfig = async () => {
-        setIoLoading(true);
+        setExportLoading(true);
         try {
-            await exportConfigToFile();
+            const result = await exportProvidersConfigToFile();
             showToast(
-                `${t('providers.export_success')} · ${t('providers.import_export_scope')}`,
+                `${t('providers.exportSuccess')} · ${t('providers.exportLocationHint', { fileName: result.fileName })}`,
                 'success'
             );
         } catch (error) {
-            showToast(`${t('providers.export_failed')}: ${String(error)}`, 'error');
+            showToast(`${t('providers.exportFailed')}: ${String(error)}`, 'error');
         } finally {
-            setIoLoading(false);
+            setExportLoading(false);
         }
     };
 
     const handleImportConfig = async () => {
-        setIoLoading(true);
+        setImportLoading(true);
         try {
-            const result = await importConfigFromFile();
+            const result = await importProvidersConfigFromFile();
             if (result.cancelled) {
                 return;
             }
             await loadAllProviders(true);
             const importedFilesText = result.importedFiles.length > 0 ? ` (${result.importedFiles.join(', ')})` : '';
-            showToast(`${t('providers.import_success')}${importedFilesText}`, 'success');
+            showToast(`${t('providers.importSuccess')}${importedFilesText}`, 'success');
         } catch (error) {
-            showToast(`${t('providers.import_failed')}: ${String(error)}`, 'error');
+            showToast(`${t('providers.importFailed')}: ${String(error)}`, 'error');
         } finally {
-            setIoLoading(false);
+            setImportLoading(false);
         }
     };
 
@@ -204,8 +205,8 @@ function ProvidersPage() {
         <div className="h-full w-full overflow-y-auto">
             <div className="p-6 space-y-4 max-w-7xl mx-auto">
                 {/* 标题栏 */}
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                    <div className="flex items-center gap-3 shrink-0">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-md">
                             <Layers className="w-5 h-5 text-white" />
                         </div>
@@ -216,7 +217,7 @@ function ProvidersPage() {
                             ({filteredProviders.length} / {providers.length})
                         </span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                         <div className="btn-group">
                             <button
                                 onClick={() => setViewMode('table')}
@@ -233,38 +234,38 @@ function ProvidersPage() {
                                 <LayoutGrid className="w-4 h-4" />
                             </button>
                         </div>
-                        <span className="hidden lg:flex items-center text-xs text-base-content/60 px-1">
-                            {t('providers.import_export_scope')}
+                        <span className="hidden lg:flex items-center text-xs text-base-content/60 px-1 whitespace-nowrap">
+                            {t('providers.importExportScope')}
                         </span>
                         <button
                             onClick={handleExportConfig}
-                            disabled={loading || ioLoading}
-                            className="btn btn-ghost btn-sm gap-2"
-                            title={t('providers.import_export_scope')}
+                            disabled={loading || exportLoading || importLoading}
+                            className="btn btn-ghost btn-sm gap-2 whitespace-nowrap"
+                            title={t('providers.importExportScope')}
                         >
-                            {ioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {exportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             {t('providers.export_config')}
                         </button>
                         <button
                             onClick={handleImportConfig}
-                            disabled={loading || ioLoading}
-                            className="btn btn-ghost btn-sm gap-2"
-                            title={t('providers.import_export_scope')}
+                            disabled={loading || exportLoading || importLoading}
+                            className="btn btn-ghost btn-sm gap-2 whitespace-nowrap"
+                            title={t('providers.importExportScope')}
                         >
-                            {ioLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                             {t('providers.import_config')}
                         </button>
                         <button
                             onClick={() => loadAllProviders(true)}
-                            disabled={loading || ioLoading}
-                            className="btn btn-ghost btn-sm gap-2"
+                            disabled={loading || exportLoading || importLoading}
+                            className="btn btn-ghost btn-sm gap-2 whitespace-nowrap"
                         >
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                             {t('common.refresh')}
                         </button>
                         <button
                             onClick={handleAdd}
-                            className="btn bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-none btn-sm gap-2"
+                            className="btn bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-none btn-sm gap-2 whitespace-nowrap"
                         >
                             <Plus className="w-4 h-4" />
                             {t('providers.add_btn')}
@@ -290,7 +291,7 @@ function ProvidersPage() {
                         onChange={(e) => setFilterApp(e.target.value as AppType | 'all')}
                     >
                         <option value="all">{t('providers.filter_all')}</option>
-                        {APP_TYPES.map(type => (
+                        {VISIBLE_APP_TYPES.map(type => (
                             <option key={type} value={type}>{APP_LABELS[type]}</option>
                         ))}
                     </select>

@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Zap, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { showToast } from '../common/ToastContainer';
-import { APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
+import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
 
 interface UniversalProviderConfig {
     name: string;
@@ -24,7 +24,7 @@ export default function UniversalProviderPanel({ onClose }: UniversalProviderPan
     const [apiKey, setApiKey] = useState('');
     const [url, setUrl] = useState('');
     const [description, setDescription] = useState('');
-    const [targetApps, setTargetApps] = useState<AppType[]>([...APP_TYPES]);
+    const [targetApps, setTargetApps] = useState<AppType[]>([...VISIBLE_APP_TYPES]);
     const [showKey, setShowKey] = useState(false);
     const [applying, setApplying] = useState(false);
 
@@ -149,7 +149,7 @@ export default function UniversalProviderPanel({ onClose }: UniversalProviderPan
                     {t('providers.universal.target_apps', '目标应用')} <span className="text-red-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
-                    {APP_TYPES.map((app) => {
+                    {VISIBLE_APP_TYPES.map((app) => {
                         const checked = targetApps.includes(app);
                         const color = APP_COLORS[app];
                         return (

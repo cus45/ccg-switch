@@ -15,8 +15,6 @@ const APP_DISPLAY: Record<string, { label: string; color: string }> = {
     claude: { label: 'Claude', color: 'bg-orange-500' },
     codex: { label: 'Codex', color: 'bg-blue-500' },
     gemini: { label: 'Gemini', color: 'bg-purple-500' },
-    opencode: { label: 'OpenCode', color: 'bg-green-500' },
-    openclaw: { label: 'OpenClaw', color: 'bg-red-500' },
 };
 
 function MultiAppStatsCard() {

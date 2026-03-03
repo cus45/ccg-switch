@@ -285,11 +285,14 @@ pub fn run() {
             // Utility 命令
             utility_commands::export_config,
             utility_commands::import_config,
+            utility_commands::export_providers_config,
+            utility_commands::import_providers_config,
             utility_commands::test_endpoint_speed,
             utility_commands::check_stream_connectivity,
             utility_commands::get_global_proxy,
             utility_commands::set_global_proxy,
             utility_commands::check_env,
+            utility_commands::fetch_models,
             // Advanced 命令
             advanced_commands::get_webdav_config,
             advanced_commands::save_webdav_config,

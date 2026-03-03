@@ -277,9 +277,9 @@ function Dashboard() {
                                 <TrendMetric label={t('token_usage.peak')} value={peakTokenDay ? formatCompactTokens(peakTokenDay.total) : '0'} />
                             </div>
 
-                            <div className="rounded-lg border border-[#1f355e] bg-[#0d1833]/60 p-3">
+                            <div className="rounded-lg border border-gray-200 dark:border-[#1f355e] bg-gray-50/60 dark:bg-[#0d1833]/60 p-3">
                                 <div className="flex">
-                                    <div className="w-12 h-52 pr-2 text-[10px] text-slate-400/90 flex flex-col justify-between">
+                                    <div className="w-12 h-52 pr-2 text-[10px] text-gray-400 dark:text-slate-400/90 flex flex-col justify-between">
                                         <span>{formatCompactTokens(maxSmoothedDailyTokens)}</span>
                                         <span>{formatCompactTokens(Math.round(maxSmoothedDailyTokens / 2))}</span>
                                         <span>0</span>
@@ -305,7 +305,8 @@ function Dashboard() {
                                                     y1={y}
                                                     x2="100"
                                                     y2={y}
-                                                    stroke="#22365a"
+                                                    stroke="currentColor"
+                                                    className="text-gray-200 dark:text-[#22365a]"
                                                     strokeWidth="0.5"
                                                     vectorEffect="non-scaling-stroke"
                                                 />
@@ -385,7 +386,8 @@ function Dashboard() {
                                                 cy="50"
                                                 r={donutRadius}
                                                 fill="none"
-                                                stroke="#1f2f4d"
+                                                stroke="currentColor"
+                                                className="text-gray-200 dark:text-[#1f2f4d]"
                                                 strokeWidth="16"
                                             />
                                             {donutSegments.map((segment) => {
@@ -565,9 +567,9 @@ function StatCard({
 
 function TrendMetric({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-md border border-[#28426c] bg-[#0f1d39]/70 px-3 py-2">
-            <div className="text-[11px] text-slate-300/90">{label}</div>
-            <div className="text-sm font-semibold text-cyan-300">{value}</div>
+        <div className="rounded-md border border-gray-200 dark:border-[#28426c] bg-gray-100/70 dark:bg-[#0f1d39]/70 px-3 py-2">
+            <div className="text-[11px] text-gray-500 dark:text-slate-300/90">{label}</div>
+            <div className="text-sm font-semibold text-emerald-600 dark:text-cyan-300">{value}</div>
         </div>
     );
 }
