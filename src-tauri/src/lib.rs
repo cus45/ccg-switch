@@ -169,6 +169,11 @@ fn get_stats_cache_data() -> Result<StatsCache, String> {
     stats_service::get_stats_cache().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn refresh_stats_cache() -> Result<StatsCache, String> {
+    stats_service::refresh_stats_cache().map_err(|e| e.to_string())
+}
+
 // 工作区会话列表命令
 #[tauri::command]
 fn get_project_sessions(project_path: String) -> Result<Vec<SessionInfo>, String> {
@@ -257,6 +262,7 @@ pub fn run() {
             get_activity_history,
             get_project_token_stats,
             get_stats_cache_data,
+            refresh_stats_cache,
             get_project_sessions,
             open_in_terminal,
             // Provider 命令

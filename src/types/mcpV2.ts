@@ -6,6 +6,7 @@ export interface McpServerConfig {
     env?: Record<string, string>;
     type?: string;
     url?: string;
+    headers?: Record<string, string>;
     [key: string]: unknown;
 }
 
@@ -15,6 +16,8 @@ export interface McpServerRow {
     serverConfig: McpServerConfig;
     description: string | null;
     tags: string[];
+    homepage?: string;
+    docs?: string;
     enabledClaude: boolean;
     enabledCodex: boolean;
     enabledGemini: boolean;

@@ -50,8 +50,10 @@ interface DashboardState {
     projectTokenStats: ProjectTokenStat[];
     hasLoaded: boolean;
     loading: boolean;
+    refreshingStats: boolean;
 
     loadData: (force?: boolean) => Promise<void>;
+    refreshStatsCache: () => Promise<void>;
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
@@ -61,6 +63,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     projectTokenStats: [],
     hasLoaded: false,
     loading: false,
+    refreshingStats: false,
 
     loadData: async (force = false) => {
         if (!force && get().hasLoaded) {
@@ -83,5 +86,15 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             loading: false,
             hasLoaded: true,
         });
+    },
+
+    refreshStatsCache: async () => {
+        set({ refreshingStats: true });
+        try {
+            const newStats = await invoke<StatsCache>('refresh_stats_cache');
+            set({ tokenStats: newStats });
+        } finally {
+            set({ refreshingStats: false });
+        }
     },
 }));

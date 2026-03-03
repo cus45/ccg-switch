@@ -21,7 +21,7 @@ interface DonutSegment extends PieShareItem {
 
 function Dashboard() {
     const { t } = useTranslation();
-    const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData } = useDashboardStore();
+    const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData, refreshStatsCache, refreshingStats } = useDashboardStore();
     const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
 
@@ -259,7 +259,16 @@ function Dashboard() {
                                 <h2 className="font-semibold text-gray-900 dark:text-base-content">
                                     {t('token_usage.daily_trend_title')}
                                 </h2>
-                                <span className="text-xs text-gray-400 ml-auto">{dailyTotals.length} days</span>
+                                <span className="text-xs text-gray-400">{dailyTotals.length} days</span>
+                                <button
+                                    onClick={() => refreshStatsCache()}
+                                    disabled={refreshingStats}
+                                    className="ml-auto px-2 py-1 text-xs bg-gray-100 dark:bg-base-200 text-gray-600 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-base-100 transition-colors flex items-center gap-1 disabled:opacity-50"
+                                    title="重新计算统计数据"
+                                >
+                                    <RefreshCw className={`w-3 h-3 ${refreshingStats ? 'animate-spin' : ''}`} />
+                                    {refreshingStats ? '计算中...' : '刷新统计'}
+                                </button>
                             </div>
 
                             <div className="grid grid-cols-3 gap-2 mb-4">

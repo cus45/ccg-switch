@@ -66,13 +66,79 @@
         "app_enabled": "Enabled",
         "app_disabled": "Disabled",
         "app_switches": "App Switches",
-        "app_switches_hint": "Control whether this MCP server is enabled per app; enabled by default"
+        "app_switches_hint": "Control whether this MCP server is enabled per app; enabled by default",
+        "form": {
+            "title": "Server ID",
+            "titlePlaceholder": "Enter unique identifier",
+            "name": "Display Name",
+            "namePlaceholder": "Enter display name",
+            "description": "Description",
+            "descriptionPlaceholder": "Enter description",
+            "enabledApps": "Enable for Apps",
+            "jsonConfig": "JSON Configuration",
+            "jsonPlaceholder": "Paste or edit JSON configuration",
+            "useWizard": "Use Wizard",
+            "additionalInfo": "Additional Info",
+            "homepage": "Homepage",
+            "homepagePlaceholder": "https://example.com",
+            "docs": "Documentation",
+            "docsPlaceholder": "https://example.com/docs",
+            "tags": "Tags",
+            "tagsPlaceholder": "Comma separated"
+        },
+        "wizard": {
+            "title": "MCP Configuration Wizard",
+            "hint": "Quickly generate MCP configuration with wizard",
+            "type": "Connection Type",
+            "typeStdio": "Local Command (stdio)",
+            "typeHttp": "HTTP Service",
+            "typeSse": "SSE Service",
+            "command": "Command",
+            "commandPlaceholder": "npx, uvx, node...",
+            "args": "Arguments",
+            "argsPlaceholder": "One argument per line",
+            "env": "Environment Variables",
+            "envPlaceholder": "KEY=value format, one per line",
+            "url": "URL",
+            "urlPlaceholder": "http://localhost:3000",
+            "urlRequired": "URL is required for HTTP/SSE type",
+            "headers": "Headers",
+            "headersPlaceholder": "KEY: value format, one per line",
+            "preview": "Configuration Preview",
+            "apply": "Apply Configuration"
+        },
+        "presets": {
+            "title": "Select Preset",
+            "custom": "Custom",
+            "fetch": {
+                "description": "HTTP request tool"
+            },
+            "time": {
+                "description": "Time utility"
+            },
+            "memory": {
+                "description": "Knowledge graph memory"
+            },
+            "sequential-thinking": {
+                "description": "Sequential thinking tool"
+            },
+            "context7": {
+                "description": "Documentation search tool"
+            }
+        },
+        "error": {
+            "idRequired": "Server ID is required",
+            "idExists": "Server ID already exists",
+            "commandRequired": "Command is required for stdio type",
+            "jsonInvalid": "Invalid JSON format",
+            "saveFailed": "Save failed"
+        }
     },
     "dashboard": {
         "hello": "Hello, User 👋",
         "refresh_quota": "Refresh Quota",
         "refreshing": "Refreshing...",
-        "welcome": "Welcome to CC Switch",
+        "welcome": "Welcome to CCG Switch",
         "subtitle": "Manage Your Claude Code Configuration",
         "mcp_desc": "Manage MCP server configurations",
         "prompts_desc": "Manage and switch CLAUDE.md presets",

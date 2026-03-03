@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useProviderStore } from '../stores/useProviderStore';
-import { useAppStore } from '../stores/useAppStore';
 import { Provider } from '../types/provider';
 import { APP_TYPES, APP_LABELS, AppType } from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
@@ -21,7 +20,6 @@ function maskApiKey(key: string) {
 function ProvidersPage() {
     const { t } = useTranslation();
     const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider } = useProviderStore();
-    const { currentApp } = useAppStore();
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterApp, setFilterApp] = useState<AppType | 'all'>('all');
@@ -396,7 +394,7 @@ function ProvidersPage() {
                 isOpen={isFormOpen}
                 editingProvider={editingProvider}
                 onClose={() => { setIsFormOpen(false); setEditingProvider(null); }}
-                defaultAppType={currentApp}
+                defaultAppType={filterApp === 'all' ? 'claude' : filterApp}
             />
 
             {/* 删除确认 */}

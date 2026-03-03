@@ -55,10 +55,76 @@
         "app_enabled": "已启用",
         "app_disabled": "已禁用",
         "app_switches": "应用开关",
-        "app_switches_hint": "控制此 MCP 服务器在各应用中是否启用；默认全部启用"
+        "app_switches_hint": "控制此 MCP 服务器在各应用中是否启用；默认全部启用",
+        "form": {
+            "title": "服务器 ID",
+            "titlePlaceholder": "输入唯一标识符",
+            "name": "显示名称",
+            "namePlaceholder": "输入显示名称",
+            "description": "描述",
+            "descriptionPlaceholder": "输入描述信息",
+            "enabledApps": "启用到应用",
+            "jsonConfig": "JSON 配置",
+            "jsonPlaceholder": "粘贴或编辑 JSON 配置",
+            "useWizard": "使用向导",
+            "additionalInfo": "附加信息",
+            "homepage": "主页",
+            "homepagePlaceholder": "https://example.com",
+            "docs": "文档",
+            "docsPlaceholder": "https://example.com/docs",
+            "tags": "标签",
+            "tagsPlaceholder": "用逗号分隔"
+        },
+        "wizard": {
+            "title": "MCP 配置向导",
+            "hint": "通过向导快速生成 MCP 配置",
+            "type": "连接类型",
+            "typeStdio": "本地命令 (stdio)",
+            "typeHttp": "HTTP 服务",
+            "typeSse": "SSE 服务",
+            "command": "命令",
+            "commandPlaceholder": "npx, uvx, node...",
+            "args": "参数",
+            "argsPlaceholder": "每行一个参数",
+            "env": "环境变量",
+            "envPlaceholder": "KEY=value 格式，每行一个",
+            "url": "URL",
+            "urlPlaceholder": "http://localhost:3000",
+            "urlRequired": "HTTP/SSE 类型必须填写 URL",
+            "headers": "请求头",
+            "headersPlaceholder": "KEY: value 格式，每行一个",
+            "preview": "配置预览",
+            "apply": "应用配置"
+        },
+        "presets": {
+            "title": "选择预设",
+            "custom": "自定义",
+            "fetch": {
+                "description": "HTTP 请求工具"
+            },
+            "time": {
+                "description": "时间工具"
+            },
+            "memory": {
+                "description": "知识图谱记忆"
+            },
+            "sequential-thinking": {
+                "description": "顺序思考工具"
+            },
+            "context7": {
+                "description": "文档搜索工具"
+            }
+        },
+        "error": {
+            "idRequired": "服务器 ID 不能为空",
+            "idExists": "服务器 ID 已存在",
+            "commandRequired": "stdio 类型必须填写命令",
+            "jsonInvalid": "JSON 格式无效",
+            "saveFailed": "保存失败"
+        }
     },
     "dashboard": {
-        "welcome": "欢迎使用 CC Switch",
+        "welcome": "欢迎使用 CCG Switch",
         "subtitle": "管理您的 Claude Code 配置",
         "mcp_desc": "管理 MCP 服务器配置",
         "prompts_desc": "管理和切换 Prompt 预设",

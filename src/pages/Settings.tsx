@@ -99,7 +99,7 @@ function Settings() {
                 <EnvCheckerPanel />
 
                 <div className="text-center text-sm text-gray-400 dark:text-gray-500">
-                    CC Switch v1.0.0
+                    CCG Switch v1.0.0
                 </div>
             </div>
         </div>
