@@ -1,0 +1,8 @@
+C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\deps\serde_with_macros-42879f030891b20a.d: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\apply.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\lazy_bool.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\utils.rs
+
+C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\deps\serde_with_macros-42879f030891b20a.dll: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\apply.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\lazy_bool.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\utils.rs
+
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\apply.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\lazy_bool.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.16.1\src\utils.rs:

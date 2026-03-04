@@ -1,0 +1,10 @@
+C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\deps\ahash-9dd721c86dd65184.d: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\convert.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\fallback_hash.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\operations.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\random_state.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\specialize.rs
+
+C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\deps\libahash-9dd721c86dd65184.rmeta: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\convert.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\fallback_hash.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\operations.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\random_state.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\specialize.rs
+
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\convert.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\fallback_hash.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\operations.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\random_state.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ahash-0.8.12\src\specialize.rs:

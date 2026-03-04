@@ -1,0 +1,18 @@
+cargo:rerun-if-env-changed=TAURI_CONFIG
+cargo:rustc-check-cfg=cfg(desktop)
+cargo:rustc-cfg=desktop
+cargo:rustc-check-cfg=cfg(mobile)
+cargo:rerun-if-changed=C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\tauri.conf.json
+cargo:rustc-env=TAURI_ANDROID_PACKAGE_NAME_APP_NAME=tauri_app
+cargo:rustc-env=TAURI_ANDROID_PACKAGE_NAME_PREFIX=com_administrator
+cargo:rustc-check-cfg=cfg(dev)
+cargo:rustc-cfg=dev
+cargo:PERMISSION_FILES_PATH=C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\build\tauri-app-9caf22b2ddf89140\out\app-manifest\__app__-permission-files
+cargo:rerun-if-changed=capabilities
+cargo:rerun-if-env-changed=REMOVE_UNUSED_COMMANDS
+cargo:rustc-env=TAURI_ENV_TARGET_TRIPLE=x86_64-pc-windows-msvc
+package.metadata does not exist
+Microsoft (R) Windows (R) Resource Compiler Version 10.0.10011.16384
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+cargo:rustc-link-arg-bins=C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\build\tauri-app-9caf22b2ddf89140\out\resource.lib
