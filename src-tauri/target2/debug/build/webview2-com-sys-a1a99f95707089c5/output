@@ -1,0 +1,2 @@
+cargo:rustc-link-search=native=C:\guodevelop\claude-switch-v1\claude-switch-1.0\src-tauri\target2\debug\build\webview2-com-sys-a1a99f95707089c5\out\x64
+cargo:rustc-link-lib=advapi32
