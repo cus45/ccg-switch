@@ -453,6 +453,13 @@ pub fn run() {
             let _ = tray::setup_tray(app);
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // 点击 X 按钮时隐藏窗口到托盘，而不是退出进程
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

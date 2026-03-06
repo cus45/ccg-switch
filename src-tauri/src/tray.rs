@@ -1,4 +1,5 @@
 use tauri::{
+    image::Image,
     tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent},
     menu::MenuBuilder,
     Manager,
@@ -30,10 +31,15 @@ fn show_main_window(app_handle: &tauri::AppHandle) {
 pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_tray_menu(app.handle())?;
 
+    // 加载托盘图标（使用 app icon）
+    let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
+
     let _tray = TrayIconBuilder::new()
-        .tooltip("CC Switch")
+        .tooltip("CCG Switch")
+        .icon(icon)
+        .icon_as_template(false)
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        .show_menu_on_left_click(false)
         .on_menu_event(|app_handle, event| {
             let id = event.id().as_ref();
             match id {
@@ -68,7 +74,7 @@ fn build_tray_menu(
     let mut builder = MenuBuilder::new(handle);
 
     // 标题
-    builder = builder.text("title", "CC Switch");
+    builder = builder.text("title", "CCG Switch");
     builder = builder.separator();
 
     // 每个应用显示当前活跃的 Provider
