@@ -276,6 +276,34 @@ async fn open_external(app: tauri::AppHandle, url: String) -> Result<bool, Strin
     Ok(true)
 }
 
+// 用系统默认编辑器打开配置文件
+#[tauri::command]
+async fn open_config_file(app: tauri::AppHandle, path: String) -> Result<bool, String> {
+    use tauri_plugin_opener::OpenerExt;
+    let full_path = if path.starts_with("~/") || path.starts_with("~\\") {
+        let home = dirs::home_dir().ok_or("Home directory not found".to_string())?;
+        home.join(&path[2..])
+    } else {
+        std::path::PathBuf::from(&path)
+    };
+
+    if !full_path.exists() {
+        // 确保父目录存在
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("创建目录失败: {e}"))?;
+        }
+        // 创建空文件
+        std::fs::write(&full_path, if path.ends_with(".json") { "{}" } else { "" })
+            .map_err(|e| format!("创建文件失败: {e}"))?;
+    }
+
+    app.opener()
+        .open_path(full_path.to_string_lossy().as_ref(), None::<String>)
+        .map_err(|e| format!("打开文件失败: {e}"))?;
+    Ok(true)
+}
+
 // Universal Provider 命令
 #[tauri::command]
 fn apply_universal_provider(config: UniversalProviderConfig) -> Result<Vec<String>, String> {
@@ -332,6 +360,7 @@ pub fn run() {
             open_in_terminal,
             launch_resume_session,
             open_external,
+            open_config_file,
             // Provider 命令
             provider_commands::get_providers,
             provider_commands::get_all_providers,

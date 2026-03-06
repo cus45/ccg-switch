@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, FileText } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useProviderStore } from '../stores/useProviderStore';
 import { Provider } from '../types/provider';
 import { VISIBLE_APP_TYPES, APP_LABELS, AppType } from '../types/app';
@@ -307,6 +308,41 @@ function ProvidersPage() {
                             <option key={type} value={type}>{APP_LABELS[type]}</option>
                         ))}
                     </select>
+                </div>
+
+                {/* 快捷打开配置文件 */}
+                <div className="flex items-center gap-4 flex-wrap text-xs">
+                    {[
+                        { app: 'Claude', dot: 'bg-orange-400', files: [
+                            { label: 'settings.json', path: '~/.claude/settings.json' },
+                            { label: '.claude.json', path: '~/.claude.json' },
+                        ]},
+                        { app: 'Codex', dot: 'bg-emerald-400', files: [
+                            { label: 'auth.json', path: '~/.codex/auth.json' },
+                            { label: 'config.toml', path: '~/.codex/config.toml' },
+                        ]},
+                        { app: 'Gemini', dot: 'bg-blue-400', files: [
+                            { label: '.env', path: '~/.gemini/.env' },
+                            { label: 'settings.json', path: '~/.gemini/settings.json' },
+                        ]},
+                    ].map(group => (
+                        <div key={group.app} className="inline-flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-base-content/50">
+                                <span className={`w-1.5 h-1.5 rounded-full ${group.dot}`} />
+                                {group.app}
+                            </span>
+                            {group.files.map(file => (
+                                <button
+                                    key={file.path}
+                                    onClick={() => invoke('open_config_file', { path: file.path }).catch(e => showToast(String(e), 'error'))}
+                                    className="px-2 py-0.5 rounded bg-base-200/60 hover:bg-base-200 text-base-content/70 hover:text-base-content transition-colors font-mono"
+                                    title={file.path}
+                                >
+                                    {file.label}
+                                </button>
+                            ))}
+                        </div>
+                    ))}
                 </div>
 
                 {/* 标签筛选 */}
