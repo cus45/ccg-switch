@@ -1,4 +1,4 @@
-import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink } from 'lucide-react';
+import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { Provider } from '../../types/provider';
 import { APP_LABELS } from '../../types/app';
@@ -10,6 +10,7 @@ interface ProviderCardProps {
     isDragOver?: boolean;
     onSwitch: (id: string) => void;
     onEdit: (provider: Provider) => void;
+    onClone: (provider: Provider) => void;
     onDelete: (id: string, name: string) => void;
     onPointerDragStart: (e: React.PointerEvent<HTMLElement>) => void;
     onPointerOver: () => void;
@@ -26,6 +27,7 @@ export default function ProviderCard({
     isDragOver,
     onSwitch,
     onEdit,
+    onClone,
     onDelete,
     onPointerDragStart,
     onPointerOver,
@@ -165,6 +167,13 @@ export default function ProviderCard({
                         title="编辑"
                     >
                         <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => onClone(provider)}
+                        className="btn btn-ghost btn-xs gap-1"
+                        title="克隆"
+                    >
+                        <Copy className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => onDelete(provider.id, provider.name)}

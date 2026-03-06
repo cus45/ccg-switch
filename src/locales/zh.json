@@ -226,6 +226,8 @@
         "delete_confirm": "确定要删除服务商 \"{{name}}\" 吗？",
         "delete_success": "删除成功",
         "delete_failed": "删除失败：{{error}}",
+        "clone_success": "克隆成功",
+        "clone_failed": "克隆失败：{{error}}",
         "sort_updated": "排序已更新",
         "sort_failed": "排序更新失败：{{error}}",
         "export_config": "导出配置",

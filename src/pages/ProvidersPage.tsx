@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, FileText } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, FileText, Copy } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useProviderStore } from '../stores/useProviderStore';
@@ -21,7 +21,7 @@ function maskApiKey(key: string) {
 
 function ProvidersPage() {
     const { t } = useTranslation();
-    const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider } = useProviderStore();
+    const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider, addProvider } = useProviderStore();
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterApp, setFilterApp] = useState<AppType | 'all'>('all');
@@ -98,6 +98,16 @@ function ProvidersPage() {
 
     const handleDelete = (id: string, name: string) => {
         setDeleteModal({ isOpen: true, id, name });
+    };
+
+    const handleClone = async (provider: Provider) => {
+        const { id, createdAt, isActive, lastUsed, inFailoverQueue, ...data } = provider;
+        try {
+            await addProvider({ ...data, name: `${data.name} (Copy)` });
+            showToast(t('providers.clone_success'), 'success');
+        } catch (error) {
+            showToast(t('providers.clone_failed', { error: String(error) }), 'error');
+        }
     };
 
     const handleExportConfig = async () => {
@@ -402,6 +412,7 @@ function ProvidersPage() {
                                 isDragOver={dragOverId === provider.id && draggingId !== provider.id}
                                 onSwitch={handleSwitch}
                                 onEdit={handleEdit}
+                                onClone={handleClone}
                                 onDelete={handleDelete}
                                 onPointerDragStart={handlePointerDragStart(provider.id)}
                                 onPointerOver={handlePointerOver(provider.id)}
@@ -496,6 +507,9 @@ function ProvidersPage() {
                                                 </button>
                                                 <button onClick={() => handleEdit(provider)} className="btn btn-ghost btn-xs">
                                                     <Edit2 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button onClick={() => handleClone(provider)} className="btn btn-ghost btn-xs">
+                                                    <Copy className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(provider.id, provider.name)}

@@ -339,6 +339,8 @@
         "delete_confirm": "Are you sure you want to delete provider \"{{name}}\"?",
         "delete_success": "Deleted successfully",
         "delete_failed": "Delete failed: {{error}}",
+        "clone_success": "Cloned successfully",
+        "clone_failed": "Clone failed: {{error}}",
         "sort_updated": "Sort order updated",
         "sort_failed": "Sort update failed: {{error}}",
         "export_config": "Export Configuration",
