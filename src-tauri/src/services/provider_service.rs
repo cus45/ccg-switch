@@ -57,6 +57,55 @@ pub fn list_all_providers() -> Result<Vec<Provider>, io::Error> {
     load_providers()
 }
 
+/// 获取指定应用的物理配置文件原始内容（读取供前端展示）
+pub fn get_provider_config_files(app: AppType) -> Result<Vec<(String, String)>, io::Error> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+    
+    let mut files = Vec::new();
+
+    match app {
+        AppType::Claude => {
+            let path = home.join(".claude").join("settings.json");
+            let content = if path.exists() {
+                fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string())
+            } else {
+                "{}".to_string()
+            };
+            files.push((".claude/settings.json".to_string(), content));
+        }
+        AppType::Codex => {
+            let auth_path = home.join(".codex").join("auth.json");
+            let auth_content = if auth_path.exists() {
+                fs::read_to_string(&auth_path).unwrap_or_else(|_| "{}".to_string())
+            } else {
+                "{}".to_string()
+            };
+            files.push((".codex/auth.json".to_string(), auth_content));
+
+            let config_path = home.join(".codex").join("config.toml");
+            let config_content = if config_path.exists() {
+                fs::read_to_string(&config_path).unwrap_or_else(|_| "".to_string())
+            } else {
+                "".to_string()
+            };
+            files.push((".codex/config.toml".to_string(), config_content));
+        }
+        AppType::Gemini => {
+            let env_path = home.join(".gemini").join(".env");
+            let env_content = if env_path.exists() {
+                fs::read_to_string(&env_path).unwrap_or_else(|_| "".to_string())
+            } else {
+                "".to_string()
+            };
+            files.push((".gemini/.env".to_string(), env_content));
+        }
+        _ => {}
+    }
+
+    Ok(files)
+}
+
 /// 获取单个 provider
 pub fn get_provider(id: &str) -> Result<Provider, io::Error> {
     let all = load_providers()?;
@@ -150,6 +199,269 @@ pub fn move_provider(provider_id: &str, target_index: usize) -> Result<(), io::E
     save_providers(&all)
 }
 
+// ── settingsConfig 中需要映射为 env 变量的字段 ─────────────
+
+/// settingsConfig 中某些字段不是 settings.json 顶层配置，
+/// 而是需要映射为 env 环境变量。
+/// 本函数从 settings 中提取这些字段，写入 env 并从顶层移除。
+fn remap_settings_to_env(settings: &mut serde_json::Value) {
+    // teammatesMode → env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+    let teammates_enabled = settings.get("teammatesMode")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // 从顶层移除（不属于 settings.json 原生字段）
+    if let Some(obj) = settings.as_object_mut() {
+        obj.remove("teammatesMode");
+    }
+
+    // 写入 env
+    if let Some(env) = settings.get_mut("env").and_then(|e| e.as_object_mut()) {
+        if teammates_enabled {
+            env.insert(
+                "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS".to_string(),
+                serde_json::Value::String("1".to_string()),
+            );
+        } else {
+            env.remove("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS");
+        }
+    }
+}
+
+// ── 配置预览（不写入文件） ──────────────────────────────────
+
+/// 预览 provider 切换后的完整配置文件内容（不写入磁盘）
+/// 返回 Vec<(文件标题, 预览内容, 基线内容)>，基线是同一序列化器处理的原始文件，确保 diff 只反映真实差异
+pub fn preview_provider_sync(provider: &Provider) -> Result<Vec<(String, String, String)>, io::Error> {
+    match provider.app_type {
+        AppType::Claude => preview_claude_settings(provider),
+        AppType::Codex => preview_codex_config(provider),
+        AppType::Gemini => preview_gemini_config(provider),
+        _ => preview_generic_settings(provider),
+    }
+}
+
+/// 预览 Claude settings.json 合并结果
+fn preview_claude_settings(provider: &Provider) -> Result<Vec<(String, String, String)>, io::Error> {
+    let settings_path = get_claude_settings_path()?;
+    let mut settings: serde_json::Value = if settings_path.exists() {
+        let content = fs::read_to_string(&settings_path)?;
+        serde_json::from_str(&content)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+    } else {
+        serde_json::json!({})
+    };
+
+    // 基线：用同一序列化器格式化原始内容（修改前快照）
+    let baseline = serde_json::to_string_pretty(&settings)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    // 合并 settingsConfig 顶层字段
+    if let Some(ref sc) = provider.settings_config {
+        if let Some(obj) = sc.as_object() {
+            for (k, v) in obj {
+                settings[k] = v.clone();
+            }
+        }
+    }
+
+    // 确保 env 对象存在
+    if settings.get("env").is_none() {
+        settings["env"] = serde_json::json!({});
+    }
+    let env = settings["env"].as_object_mut()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "env is not an object"))?;
+
+    env.insert(
+        "ANTHROPIC_AUTH_TOKEN".to_string(),
+        serde_json::Value::String(provider.api_key.clone()),
+    );
+
+    let optional_fields = [
+        ("ANTHROPIC_BASE_URL", &provider.url),
+        ("ANTHROPIC_DEFAULT_SONNET_MODEL", &provider.default_sonnet_model),
+        ("ANTHROPIC_DEFAULT_OPUS_MODEL", &provider.default_opus_model),
+        ("ANTHROPIC_DEFAULT_HAIKU_MODEL", &provider.default_haiku_model),
+        ("ANTHROPIC_REASONING_MODEL", &provider.default_reasoning_model),
+    ];
+    for (key, value) in optional_fields {
+        match value {
+            Some(v) => { env.insert(key.to_string(), serde_json::Value::String(v.clone())); }
+            None => { env.remove(key); }
+        }
+    }
+
+    if let Some(ref params) = provider.custom_params {
+        for (key, value) in params {
+            env.insert(key.clone(), value.clone());
+        }
+    }
+
+    // 将 settingsConfig 中的特殊字段映射到 env（如 teammatesMode → CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）
+    remap_settings_to_env(&mut settings);
+
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    Ok(vec![(".claude/settings.json".to_string(), content, baseline)])
+}
+
+/// 预览 Codex 配置合并结果
+fn preview_codex_config(provider: &Provider) -> Result<Vec<(String, String, String)>, io::Error> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+    let codex_dir = home.join(".codex");
+
+    // auth.json - 基线
+    let auth_path = codex_dir.join("auth.json");
+    let auth_baseline: serde_json::Value = if auth_path.exists() {
+        let c = fs::read_to_string(&auth_path).unwrap_or_else(|_| "{}".to_string());
+        serde_json::from_str(&c).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    let auth_baseline_str = serde_json::to_string_pretty(&auth_baseline)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    // auth.json - 预览
+    let auth = serde_json::json!({ "OPENAI_API_KEY": provider.api_key });
+    let auth_content = serde_json::to_string_pretty(&auth)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    let mut files = vec![(".codex/auth.json".to_string(), auth_content, auth_baseline_str)];
+
+    // config.toml
+    if let Some(ref url) = provider.url {
+        let base_url = normalize_codex_base_url(url);
+        let model = provider.default_sonnet_model.as_deref().unwrap_or("o4-mini");
+        let config_path = codex_dir.join("config.toml");
+
+        let existing = if config_path.exists() {
+            fs::read_to_string(&config_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        // config.toml 基线
+        let toml_baseline = if existing.is_empty() {
+            String::new()
+        } else {
+            let baseline_doc: toml::Value = toml::from_str(&existing)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+            toml::to_string_pretty(&baseline_doc)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
+        };
+
+        let mut doc: toml::Value = if existing.is_empty() {
+            toml::Value::Table(toml::Table::new())
+        } else {
+            toml::from_str(&existing)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?
+        };
+
+        if let toml::Value::Table(ref mut t) = doc {
+            t.insert("model_provider".into(), toml::Value::String("newapi".into()));
+            t.insert("model".into(), toml::Value::String(model.into()));
+
+            let mp = t.entry("model_providers")
+                .or_insert(toml::Value::Table(toml::Table::new()));
+            if let toml::Value::Table(ref mut mp_table) = mp {
+                let newapi = mp_table.entry("newapi")
+                    .or_insert(toml::Value::Table(toml::Table::new()));
+                if let toml::Value::Table(ref mut newapi_table) = newapi {
+                    newapi_table.insert("base_url".into(), toml::Value::String(base_url));
+                    newapi_table.entry("name")
+                        .or_insert(toml::Value::String("Custom".into()));
+                    newapi_table.entry("wire_api")
+                        .or_insert(toml::Value::String("responses".into()));
+                    newapi_table.entry("requires_openai_auth")
+                        .or_insert(toml::Value::Boolean(true));
+                }
+            }
+        }
+
+        let toml_str = toml::to_string_pretty(&doc)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        files.push((".codex/config.toml".to_string(), toml_str, toml_baseline));
+    }
+
+    Ok(files)
+}
+
+/// 预览 Gemini 配置合并结果
+fn preview_gemini_config(provider: &Provider) -> Result<Vec<(String, String, String)>, io::Error> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+
+    // 基线：读取原始 .env
+    let env_path = home.join(".gemini").join(".env");
+    let baseline = if env_path.exists() {
+        fs::read_to_string(&env_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let mut env_lines: Vec<String> = Vec::new();
+    if let Some(ref url) = provider.url {
+        if !url.trim().is_empty() {
+            env_lines.push(format!("GOOGLE_GEMINI_BASE_URL={}", url.trim()));
+        }
+    }
+    if !provider.api_key.is_empty() {
+        env_lines.push(format!("GEMINI_API_KEY={}", provider.api_key.trim()));
+    }
+    if let Some(ref model) = provider.default_sonnet_model {
+        if !model.trim().is_empty() {
+            env_lines.push(format!("GEMINI_MODEL={}", model.trim()));
+        }
+    }
+    Ok(vec![(".gemini/.env".to_string(), env_lines.join("\n"), baseline)])
+}
+
+/// 预览通用应用配置合并结果
+fn preview_generic_settings(provider: &Provider) -> Result<Vec<(String, String, String)>, io::Error> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+    let config_dir = home.join(format!(".{}", provider.app_type.as_str()));
+    let config_path = config_dir.join(provider.app_type.config_file_name());
+
+    let mut settings: serde_json::Value = if config_path.exists() {
+        let content = fs::read_to_string(&config_path)?;
+        serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let baseline = serde_json::to_string_pretty(&settings)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    if settings.get("env").is_none() {
+        settings["env"] = serde_json::json!({});
+    }
+
+    let prefix = provider.app_type.env_prefix();
+    let env = settings["env"].as_object_mut()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "env is not an object"))?;
+
+    env.insert(
+        format!("{}_AUTH_TOKEN", prefix),
+        serde_json::Value::String(provider.api_key.clone()),
+    );
+
+    if let Some(ref url) = provider.url {
+        env.insert(
+            format!("{}_BASE_URL", prefix),
+            serde_json::Value::String(url.clone()),
+        );
+    } else {
+        env.remove(&format!("{}_BASE_URL", prefix));
+    }
+
+    let title = format!(".{}/{}", provider.app_type.as_str(), provider.app_type.config_file_name());
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    Ok(vec![(title, content, baseline)])
+}
+
 // ── 配置同步 ──────────────────────────────────────────────
 
 /// 将 provider 配置同步到对应应用的配置文件
@@ -216,6 +528,9 @@ fn sync_to_claude_settings(provider: &Provider) -> Result<(), io::Error> {
             env.insert(key.clone(), value.clone());
         }
     }
+
+    // 将 settingsConfig 中的特殊字段映射到 env（如 teammatesMode → CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）
+    remap_settings_to_env(&mut settings);
 
     json_store::write_json(&settings_path, &settings)
 }

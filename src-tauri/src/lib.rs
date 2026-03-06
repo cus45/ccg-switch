@@ -340,6 +340,8 @@ pub fn run() {
             provider_commands::delete_provider,
             provider_commands::switch_provider,
             provider_commands::move_provider,
+            provider_commands::get_provider_config_files,
+            provider_commands::preview_provider_sync,
             // Proxy 命令
             proxy_commands::start_proxy,
             proxy_commands::stop_proxy,

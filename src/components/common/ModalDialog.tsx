@@ -17,6 +17,7 @@ interface ModalDialogProps {
     cancelText?: string;
     confirmClass?: string;
     isDestructive?: boolean;
+    maxWidthClass?: string;
 }
 
 export default function ModalDialog({
@@ -31,7 +32,8 @@ export default function ModalDialog({
     confirmText,
     cancelText,
     confirmClass,
-    isDestructive = false
+    isDestructive = false,
+    maxWidthClass
 }: ModalDialogProps) {
     const { t } = useTranslation();
     const finalConfirmText = confirmText || t('common.confirm');
@@ -70,7 +72,7 @@ export default function ModalDialog({
             {/* Draggable Top Region */}
             <div data-tauri-drag-region className="fixed top-0 left-0 right-0 h-8 z-[110]" />
 
-            <div className={`modal-box relative ${children ? 'max-w-md' : 'max-w-sm'} bg-white dark:bg-base-100 shadow-2xl rounded-2xl p-0 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col`}>
+            <div className={`modal-box relative ${maxWidthClass || (children ? 'max-w-md' : 'max-w-sm')} bg-white dark:bg-base-100 shadow-2xl rounded-2xl p-0 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col`}>
                 <div className={`flex flex-col ${children ? 'items-start' : 'items-center text-center'} p-6 pt-8 ${children ? 'overflow-y-auto flex-1' : ''}`}>
                     {!children && (
                         <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-sm ${getIconBg()}`}>

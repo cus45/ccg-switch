@@ -16,7 +16,8 @@
       "Bash(node:*)",
       "Bash(npm:*)",
       "Bash(python:*)",
-      "Bash(\"C:/Users/Administrator/.claude/bin/codeagent-wrapper.exe\":*)"
+      "Bash(\"C:/Users/Administrator/.claude/bin/codeagent-wrapper.exe\":*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
