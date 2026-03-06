@@ -1,10 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, FileText, Copy } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, FileText, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useProviderStore } from '../stores/useProviderStore';
 import { Provider } from '../types/provider';
-import { VISIBLE_APP_TYPES, APP_LABELS, AppType } from '../types/app';
+import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
 import { exportProvidersConfigToFile, importProvidersConfigFromFile } from '../services/configTransferService';
@@ -479,7 +479,10 @@ function ProvidersPage() {
                                             </div>
                                         </td>
                                         <td className="w-28">
-                                            <span className="badge badge-sm badge-outline">{APP_LABELS[provider.appType]}</span>
+                                            <span className="inline-flex items-center gap-1.5 text-xs text-base-content/70">
+                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: APP_COLORS[provider.appType] }} />
+                                                {APP_LABELS[provider.appType]}
+                                            </span>
                                         </td>
                                         <td className="w-48">
                                             <div className="flex items-center gap-2">
@@ -492,9 +495,20 @@ function ProvidersPage() {
                                             </div>
                                         </td>
                                         <td className="w-64">
-                                            <code className="font-mono text-xs text-base-content/70 truncate block max-w-[240px]" title={provider.url || ''}>
-                                                {provider.url || '-'}
-                                            </code>
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.url || ''}>
+                                                    {provider.url || '-'}
+                                                </code>
+                                                {provider.url && (provider.url.startsWith('http://') || provider.url.startsWith('https://')) && (
+                                                    <button
+                                                        onClick={() => invoke('open_external', { url: provider.url!.trim() }).catch(() => {})}
+                                                        className="shrink-0 p-0.5 text-blue-400/60 hover:text-blue-400 transition-colors"
+                                                        title="在浏览器中打开"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="w-40 sticky right-0 z-20">
                                             <div className="flex items-center justify-end gap-1">

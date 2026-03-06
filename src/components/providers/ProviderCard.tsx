@@ -1,5 +1,6 @@
 import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink, Copy } from 'lucide-react';
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Provider } from '../../types/provider';
 import { APP_LABELS } from '../../types/app';
 import ProviderIcon from './ProviderIcon';
@@ -95,12 +96,10 @@ export default function ProviderCard({
                             title="在浏览器中打开"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                try {
-                                    const u = provider.url!.trim();
-                                    if (u.startsWith('http://') || u.startsWith('https://')) {
-                                        window.open(u, '_blank');
-                                    }
-                                } catch { /* ignore */ }
+                                const u = provider.url!.trim();
+                                if (u.startsWith('http://') || u.startsWith('https://')) {
+                                    invoke('open_external', { url: u }).catch(() => {});
+                                }
                             }}
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
