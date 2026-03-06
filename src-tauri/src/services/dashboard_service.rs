@@ -717,3 +717,75 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
 
     out
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionMessage {
+    pub role: String,
+    pub content: String,
+    pub ts: Option<String>,
+}
+
+/// 读取会话 JSONL 文件中的所有消息
+pub fn get_session_messages(file_path: &str) -> Result<Vec<SessionMessage>, io::Error> {
+    let path = Path::new(file_path);
+    if !path.exists() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Session file not found"));
+    }
+
+    let file = fs::File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut messages = Vec::new();
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let json: serde_json::Value = match serde_json::from_str(trimmed) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        // 跳过 meta 行
+        if json.get("isMeta").and_then(|v| v.as_bool()) == Some(true) {
+            continue;
+        }
+
+        let msg_type = json.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+        if msg_type != "user" && msg_type != "assistant" {
+            continue;
+        }
+
+        let message_content = match json.get("message").and_then(|v| v.get("content")) {
+            Some(content) => content,
+            None => continue,
+        };
+
+        let raw_text = match extract_message_text(message_content) {
+            Some(text) => text,
+            None => continue,
+        };
+        let clean_text = sanitize_session_text(&raw_text);
+        if clean_text.is_empty() {
+            continue;
+        }
+
+        let ts = json
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        messages.push(SessionMessage {
+            role: msg_type.to_string(),
+            content: clean_text,
+            ts,
+        });
+    }
+
+    Ok(messages)
+}

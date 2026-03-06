@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Settings as SettingsIcon, Sun, Moon, Globe, PanelLeft, PanelRight, PanelTop } from 'lucide-react';
+import { Settings as SettingsIcon, Sun, Moon, Globe, PanelLeft, PanelRight, PanelTop, Terminal } from 'lucide-react';
 import { useConfigStore } from '../stores/useConfigStore';
-import { SidebarPosition } from '../types/config';
+import { SidebarPosition, TerminalType } from '../types/config';
 import ImportExportPanel from '../components/settings/ImportExportPanel';
 import SpeedTestPanel from '../components/settings/SpeedTestPanel';
 import StreamCheckPanel from '../components/settings/StreamCheckPanel';
@@ -28,10 +28,21 @@ function Settings() {
         await saveConfig({ ...config, sidebarPosition });
     };
 
+    const handleTerminalChange = async (preferredTerminal: TerminalType) => {
+        if (!config) return;
+        await saveConfig({ ...config, preferredTerminal });
+    };
+
     const sidebarOptions: { value: SidebarPosition; label: string; icon: typeof PanelLeft }[] = [
         { value: 'left', label: t('settings.sidebarLeft', '左侧'), icon: PanelLeft },
         { value: 'right', label: t('settings.sidebarRight', '右侧'), icon: PanelRight },
         { value: 'top', label: t('settings.sidebarTop', '顶部'), icon: PanelTop },
+    ];
+
+    const terminalOptions: { value: TerminalType; label: string }[] = [
+        { value: 'cmd', label: t('settings.terminal_cmd', '命令提示符') },
+        { value: 'powershell', label: 'PowerShell' },
+        { value: 'wt', label: 'Windows Terminal' },
     ];
 
     return (
@@ -116,6 +127,35 @@ function Settings() {
                                         }`}
                                     >
                                         <Icon className="w-4 h-4" />
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* 启动终端 */}
+                    <div className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-3">
+                            <Terminal className="w-5 h-5 text-orange-500" />
+                            <div>
+                                <span className="text-gray-700 dark:text-gray-300">{t('settings.preferredTerminal', '启动终端')}</span>
+                                <p className="text-xs text-gray-400 mt-0.5">{t('settings.preferredTerminalHint', '恢复会话时使用的终端')}</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            {terminalOptions.map(opt => {
+                                const active = (config?.preferredTerminal || 'powershell') === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => handleTerminalChange(opt.value)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                            active
+                                                ? 'bg-blue-500 text-white'
+                                                : 'bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300'
+                                        }`}
+                                    >
                                         {opt.label}
                                     </button>
                                 );

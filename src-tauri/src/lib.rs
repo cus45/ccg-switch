@@ -22,7 +22,7 @@ use models::prompt::PromptPreset;
 use models::skill::{Skill, SkillApps};
 use models::subagent::Subagent;
 use models::token::ApiToken;
-use services::dashboard_service::{DashboardStats, HistoryEntry, ProjectInfo, ProjectTokenStat, SessionInfo};
+use services::dashboard_service::{DashboardStats, HistoryEntry, ProjectInfo, ProjectTokenStat, SessionInfo, SessionMessage};
 use services::stats_service::StatsCache;
 use services::{config_service, dashboard_service, prompt_service, skill_service, stats_service, subagent_service, token_service, universal_provider_service};
 use services::universal_provider_service::UniversalProviderConfig;
@@ -180,6 +180,11 @@ fn get_project_sessions(project_path: String) -> Result<Vec<SessionInfo>, String
     dashboard_service::get_project_sessions(&project_path).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_session_messages(file_path: String) -> Result<Vec<SessionMessage>, String> {
+    dashboard_service::get_session_messages(&file_path).map_err(|e| e.to_string())
+}
+
 // 在终端中打开目录
 #[tauri::command]
 async fn open_in_terminal(app: tauri::AppHandle, path: String) -> Result<(), String> {
@@ -210,6 +215,50 @@ async fn open_in_terminal(app: tauri::AppHandle, path: String) -> Result<(), Str
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+// 在终端中恢复会话
+#[tauri::command]
+async fn launch_resume_session(command: String, cwd: Option<String>) -> Result<bool, String> {
+    use std::process::Command;
+
+    if command.trim().is_empty() {
+        return Err("Resume command is empty".to_string());
+    }
+
+    let config = config_service::load_config().unwrap_or_default();
+    let terminal = config.preferred_terminal;
+
+    let work_dir = cwd.as_deref().unwrap_or(".");
+
+    match terminal.as_str() {
+        "cmd" => {
+            Command::new("cmd")
+                .args(["/c", "start", "cmd", "/k", &command])
+                .current_dir(work_dir)
+                .spawn()
+                .map_err(|e| format!("Failed to launch cmd: {e}"))?;
+        }
+        "powershell" => {
+            Command::new("cmd")
+                .args(["/c", "start", "powershell", "-NoExit", "-Command",
+                       &format!("Set-Location '{}'; {}", work_dir.replace('\'', "''"), command)])
+                .spawn()
+                .map_err(|e| format!("Failed to launch PowerShell: {e}"))?;
+        }
+        "wt" => {
+            // Windows Terminal
+            Command::new("wt")
+                .args(["new-tab", "-d", work_dir, "cmd", "/k", &command])
+                .spawn()
+                .map_err(|e| format!("Failed to launch Windows Terminal: {e}"))?;
+        }
+        other => {
+            return Err(format!("Unsupported terminal: {}. Supported: cmd, powershell, wt", other));
+        }
+    }
+
+    Ok(true)
 }
 
 // 打开外部链接
@@ -279,7 +328,9 @@ pub fn run() {
             get_stats_cache_data,
             refresh_stats_cache,
             get_project_sessions,
+            get_session_messages,
             open_in_terminal,
+            launch_resume_session,
             open_external,
             // Provider 命令
             provider_commands::get_providers,
