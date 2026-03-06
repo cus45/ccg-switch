@@ -26,6 +26,7 @@ use services::dashboard_service::{DashboardStats, HistoryEntry, ProjectInfo, Pro
 use services::stats_service::StatsCache;
 use services::{config_service, dashboard_service, prompt_service, skill_service, stats_service, subagent_service, token_service, universal_provider_service};
 use services::universal_provider_service::UniversalProviderConfig;
+use services::tool_version_service::ToolVersion;
 
 // 配置管理命令
 #[tauri::command]
@@ -310,6 +311,22 @@ fn apply_universal_provider(config: UniversalProviderConfig) -> Result<Vec<Strin
     universal_provider_service::apply_universal_provider(config).map_err(|e| e.to_string())
 }
 
+// 工具版本检测
+#[tauri::command]
+async fn get_tool_versions(tools: Option<Vec<String>>) -> Result<Vec<ToolVersion>, String> {
+    Ok(services::tool_version_service::get_tool_versions(tools).await)
+}
+
+// 检查更新（打开 GitHub releases 页面）
+#[tauri::command]
+async fn check_for_updates(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url("https://github.com/cus45/ccg-switch/releases/latest", None::<String>)
+        .map_err(|e| format!("打开更新页面失败: {e}"))?;
+    Ok(true)
+}
+
 // Prompt 同步命令
 #[tauri::command]
 fn sync_prompt_to_app(name: String, app: String) -> Result<(), String> {
@@ -381,6 +398,9 @@ pub fn run() {
             // Prompt 同步
             sync_prompt_to_app,
             get_prompt_sync_status,
+            // 工具版本 & 更新
+            get_tool_versions,
+            check_for_updates,
             // Utility 命令
             utility_commands::export_config,
             utility_commands::import_config,

@@ -42,4 +42,5 @@ futures = "0.3"
 toml = "0.8"
 serde_yaml = "0.9"
 regex = "1"
+once_cell = "1"
 

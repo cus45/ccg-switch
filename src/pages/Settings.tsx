@@ -7,6 +7,7 @@ import SpeedTestPanel from '../components/settings/SpeedTestPanel';
 import StreamCheckPanel from '../components/settings/StreamCheckPanel';
 import GlobalProxyPanel from '../components/settings/GlobalProxyPanel';
 import EnvCheckerPanel from '../components/settings/EnvCheckerPanel';
+import AboutPanel from '../components/settings/AboutPanel';
 
 function Settings() {
     const { t, i18n } = useTranslation();
@@ -170,9 +171,7 @@ function Settings() {
                 <GlobalProxyPanel />
                 <EnvCheckerPanel />
 
-                <div className="text-center text-sm text-gray-400 dark:text-gray-500">
-                    CCG Switch v1.0.0
-                </div>
+                <AboutPanel />
             </div>
         </div>
     );
