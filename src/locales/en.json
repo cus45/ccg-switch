@@ -825,7 +825,8 @@
         "content_placeholder": "Enter skill content (Markdown format)",
         "all_apps": "All",
         "app_enabled": "Enabled",
-        "app_disabled": "Disabled"
+        "app_disabled": "Disabled",
+        "search_placeholder": "Search skills..."
     },
     "workspaces": {
         "title": "Workspaces",

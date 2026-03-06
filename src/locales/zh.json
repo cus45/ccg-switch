@@ -195,7 +195,8 @@
         "content_placeholder": "输入技能内容（Markdown 格式）",
         "all_apps": "全部",
         "app_enabled": "已启用",
-        "app_disabled": "已禁用"
+        "app_disabled": "已禁用",
+        "search_placeholder": "搜索技能..."
     },
     "subagents": {
         "title": "子代理管理",

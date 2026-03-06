@@ -13,6 +13,7 @@ const ALL_TAB = 'all';
 function SkillsPage() {
     const { t } = useTranslation();
     const [pageTab, setPageTab] = useState<'legacy' | 'discover' | 'installed' | 'repos'>('installed');
+    const [searchQuery, setSearchQuery] = useState('');
 
     // ---- Legacy ----
     const { skills, loading, loadSkills, saveSkill, deleteSkill, currentApp, setCurrentApp, toggleSkillForApp } = useSkillStore();
@@ -76,16 +77,6 @@ function SkillsPage() {
         }
     };
 
-    // 按当前选中应用过滤列表
-    const filteredSkills = currentApp && currentApp !== ALL_TAB
-        ? skills.filter((s) => {
-            if (!s.apps || Object.keys(s.apps).length === 0) {
-                return true;
-            }
-            return s.apps[currentApp] !== false;
-        })
-        : skills;
-
     // 获取技能在当前应用下的启用状态
     const getAppEnabled = (skillApps: Record<string, boolean> | undefined, app: string): boolean => {
         if (!skillApps || Object.keys(skillApps).length === 0) return true;
@@ -140,14 +131,26 @@ function SkillsPage() {
         <div className="h-full w-full overflow-y-auto">
             <div className="p-6 space-y-4 max-w-7xl mx-auto">
                 {/* 标题栏 */}
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="flex items-center gap-3">
                         <Zap className="w-6 h-6 text-purple-500" />
                         <h1 className="text-xl font-bold text-gray-900 dark:text-base-content">
                             {t('skills.title')}
                         </h1>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+                        {/* 搜索框 */}
+                        <div className="relative flex-1 sm:flex-none sm:min-w-[200px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder={t('skills.search_placeholder')}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-base-200 border border-gray-200 dark:border-base-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-base-content"
+                            />
+                        </div>
+                        {/* 操作按钮 */}
                         {pageTab === 'legacy' && (
                             <>
                                 <button onClick={() => loadSkills()} disabled={loading} className="px-3 py-1.5 bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-base-100 transition-colors flex items-center gap-1.5 disabled:opacity-50">
@@ -234,15 +237,25 @@ function SkillsPage() {
                             <RefreshCw className="w-8 h-8 text-purple-500 mx-auto mb-2 animate-spin" />
                             <p className="text-gray-500 dark:text-gray-400">{t('common.loading')}</p>
                         </div>
-                    ) : installed.length === 0 ? (
-                        <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
-                            <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-500 dark:text-gray-400">暂无已安装的技能</p>
-                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">切换到"发现"标签安装新技能</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {installed.map((skill) => (
+                    ) : (() => {
+                        const query = searchQuery.trim().toLowerCase();
+                        const filtered = query
+                            ? installed.filter(s =>
+                                s.name.toLowerCase().includes(query) ||
+                                (s.description?.toLowerCase().includes(query)) ||
+                                (s.repoOwner?.toLowerCase().includes(query)) ||
+                                (s.repoName?.toLowerCase().includes(query))
+                            )
+                            : installed;
+                        return filtered.length === 0 ? (
+                            <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
+                                <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的技能' : '暂无已安装的技能'}</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">{query ? '尝试其他关键词' : '切换到"发现"标签安装新技能'}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {filtered.map((skill) => (
                                 <div key={skill.id} className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200">
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -267,7 +280,8 @@ function SkillsPage() {
                                 </div>
                             ))}
                         </div>
-                    )
+                        );
+                    })()
                 )}
 
                 {/* ===== 发现 (v2) ===== */}
@@ -277,14 +291,24 @@ function SkillsPage() {
                             <Search className="w-8 h-8 text-purple-500 mx-auto mb-2 animate-spin" />
                             <p className="text-gray-500 dark:text-gray-400">正在从 GitHub 仓库发现技能...</p>
                         </div>
-                    ) : discoverable.length === 0 ? (
-                        <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
-                            <Search className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-500 dark:text-gray-400">点击"发现技能"从 GitHub 仓库获取可安装的技能</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {discoverable.map((skill) => {
+                    ) : (() => {
+                        const query = searchQuery.trim().toLowerCase();
+                        const filtered = query
+                            ? discoverable.filter(s =>
+                                s.name.toLowerCase().includes(query) ||
+                                (s.description?.toLowerCase().includes(query)) ||
+                                (s.repoOwner?.toLowerCase().includes(query)) ||
+                                (s.repoName?.toLowerCase().includes(query))
+                            )
+                            : discoverable;
+                        return filtered.length === 0 ? (
+                            <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
+                                <Search className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的技能' : '点击"发现技能"从 GitHub 仓库获取可安装的技能'}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {filtered.map((skill) => {
                                 const isInstalled = installed.some((s) => s.directory === skill.directory);
                                 return (
                                     <div key={skill.key} className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200">
@@ -322,19 +346,28 @@ function SkillsPage() {
                                 );
                             })}
                         </div>
-                    )
+                        );
+                    })()
                 )}
 
                 {/* ===== 仓库管理 ===== */}
                 {pageTab === 'repos' && (
-                    repos.length === 0 ? (
-                        <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
-                            <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-500 dark:text-gray-400">暂无技能仓库</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {repos.map((repo) => (
+                    (() => {
+                        const query = searchQuery.trim().toLowerCase();
+                        const filtered = query
+                            ? repos.filter(r =>
+                                r.owner.toLowerCase().includes(query) ||
+                                r.name.toLowerCase().includes(query)
+                            )
+                            : repos;
+                        return filtered.length === 0 ? (
+                            <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
+                                <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的仓库' : '暂无技能仓库'}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {filtered.map((repo) => (
                                 <div key={`${repo.owner}/${repo.name}`} className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200">
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1">
@@ -356,11 +389,28 @@ function SkillsPage() {
                                 </div>
                             ))}
                         </div>
-                    )
+                        );
+                    })()
                 )}
 
                 {/* ===== 本地文件 (Legacy) ===== */}
                 {pageTab === 'legacy' && (
+                    (() => {
+                        // 组合应用过滤和搜索过滤
+                        const query = searchQuery.trim().toLowerCase();
+                        let result = currentApp && currentApp !== ALL_TAB
+                            ? skills.filter((s) => {
+                                if (!s.apps || Object.keys(s.apps).length === 0) return true;
+                                return s.apps[currentApp] !== false;
+                            })
+                            : skills;
+                        if (query) {
+                            result = result.filter(s =>
+                                s.name.toLowerCase().includes(query) ||
+                                s.content.toLowerCase().includes(query)
+                            );
+                        }
+                        return (
                     <>
                         {/* 应用过滤标签 */}
                         <div className="flex gap-2 flex-wrap">
@@ -374,15 +424,15 @@ function SkillsPage() {
                             ))}
                         </div>
 
-                        {filteredSkills.length === 0 ? (
+                        {result.length === 0 ? (
                             <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
                                 <Zap className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                <p className="text-gray-500 dark:text-gray-400">{t('skills.empty')}</p>
-                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('skills.empty_hint')}</p>
+                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的技能' : t('skills.empty')}</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{query ? '尝试其他关键词' : t('skills.empty_hint')}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {filteredSkills.map((skill) => (
+                                {result.map((skill) => (
                                     <div key={skill.name} className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200">
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1 min-w-0">
@@ -415,6 +465,8 @@ function SkillsPage() {
                             </div>
                         )}
                     </>
+                        );
+                    })()
                 )}
 
                 {/* 删除确认（v1）*/}
