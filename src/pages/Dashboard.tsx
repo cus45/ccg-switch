@@ -1,12 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Activity, BarChart3, Clock, Coins, FolderOpen, Hash, MessageSquare, PieChart, RefreshCw } from 'lucide-react';
-import { useState, useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
+import { Activity, BarChart3, Clock, Coins, FolderOpen, Hash, MessageSquare, PieChart, RefreshCw, TrendingUp } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import { useDashboardStore } from '../stores/useDashboardStore';
-
-interface ChartPoint {
-    x: number;
-    y: number;
-}
 
 interface PieShareItem {
     name: string;
@@ -22,7 +17,6 @@ interface DonutSegment extends PieShareItem {
 function Dashboard() {
     const { t } = useTranslation();
     const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData, refreshStatsCache, refreshingStats } = useDashboardStore();
-    const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
 
     useEffect(() => {
@@ -37,47 +31,20 @@ function Dashboard() {
     const modelEntries = useMemo(() => tokenStats ? Object.entries(tokenStats.modelUsage) : [], [tokenStats]);
     const totalTokens = useMemo(() => modelEntries.reduce((sum, [, u]) => sum + u.inputTokens + u.outputTokens, 0), [modelEntries]);
 
-    const { dailyTotals, trendPoints, trendLinePath, trendAreaPath, midTrendDay, totalRecentTokens, avgDailyTokens, peakTokenDay, maxSmoothedDailyTokens } = useMemo(() => {
+    const { dailyTotals, totalRecentTokens, avgDailyTokens, peakTokenDay, maxDailyTokens } = useMemo(() => {
         const recentTokenDays = (tokenStats?.dailyModelTokens || []).slice(-30);
         const _dailyTotals = recentTokenDays.map(d => ({
             date: d.date,
             total: Object.values(d.tokensByModel).reduce((s, v) => s + v, 0),
         }));
-        const _smoothed = smoothDailyTotals(_dailyTotals);
-        const maxSmoothed = Math.max(..._smoothed.map(d => d.total), 1);
-
-        const _trendPoints: ChartPoint[] = _smoothed.map((day, index) => {
-            const x = _smoothed.length <= 1 ? 50 : 6 + (index / (_smoothed.length - 1)) * 88;
-            const y = 86 - (day.total / maxSmoothed) * 70;
-            return { x, y: Math.min(Math.max(y, 12), 86) };
-        });
-        const _trendLinePath = buildSmoothPath(_trendPoints);
-        const _trendAreaPath = _trendLinePath && _trendPoints.length > 0
-            ? `${_trendLinePath} L ${_trendPoints[_trendPoints.length - 1].x} 86 L ${_trendPoints[0].x} 86 Z`
-            : '';
-        const _midTrendDay = _dailyTotals.length > 0 ? _dailyTotals[Math.floor((_dailyTotals.length - 1) / 2)] : null;
+        const _maxDailyTokens = Math.max(..._dailyTotals.map(d => d.total), 1);
         const _totalRecentTokens = _dailyTotals.reduce((sum, day) => sum + day.total, 0);
         const _avgDailyTokens = _dailyTotals.length > 0 ? Math.round(_totalRecentTokens / _dailyTotals.length) : 0;
         const _peakTokenDay = _dailyTotals.length > 0
             ? _dailyTotals.reduce((peak, current) => (current.total > peak.total ? current : peak), _dailyTotals[0])
             : null;
-
-        return {
-            dailyTotals: _dailyTotals,
-            trendPoints: _trendPoints,
-            trendLinePath: _trendLinePath,
-            trendAreaPath: _trendAreaPath,
-            midTrendDay: _midTrendDay,
-            totalRecentTokens: _totalRecentTokens,
-            avgDailyTokens: _avgDailyTokens,
-            peakTokenDay: _peakTokenDay,
-            maxSmoothedDailyTokens: maxSmoothed,
-        };
+        return { dailyTotals: _dailyTotals, totalRecentTokens: _totalRecentTokens, avgDailyTokens: _avgDailyTokens, peakTokenDay: _peakTokenDay, maxDailyTokens: _maxDailyTokens };
     }, [tokenStats]);
-
-    const hoveredTrendPoint = hoveredTrendIndex !== null ? trendPoints[hoveredTrendIndex] : null;
-    const hoveredTrendDay = hoveredTrendIndex !== null ? dailyTotals[hoveredTrendIndex] : null;
-    const hoveredTrendLabelX = hoveredTrendPoint ? Math.min(Math.max(hoveredTrendPoint.x, 10), 90) : 50;
 
     const { hourData, maxHourCount } = useMemo(() => {
         const _hourData = Array.from({ length: 24 }, (_, i) => ({
@@ -110,9 +77,9 @@ function Dashboard() {
         const _pieData: PieShareItem[] = othersTokens > 0
             ? [...primaryPieData, { name: t('token_usage.others'), tokens: othersTokens, color: pieColors[5] }]
             : primaryPieData;
-        const donutRadius = 34;
-        const donutCircumference = 2 * Math.PI * donutRadius;
-        return { pieData: _pieData, donutSegments: buildDonutSegments(_pieData, totalTokens, donutCircumference), donutRadius, donutCircumference };
+        const _donutRadius = 34;
+        const _donutCircumference = 2 * Math.PI * _donutRadius;
+        return { pieData: _pieData, donutSegments: buildDonutSegments(_pieData, totalTokens, _donutCircumference), donutRadius: _donutRadius, donutCircumference: _donutCircumference };
     }, [topModels, totalTokens, t]);
 
     const hoveredPieItem = hoveredPieName ? pieData.find(item => item.name === hoveredPieName) || null : null;
@@ -120,26 +87,70 @@ function Dashboard() {
         ? ((hoveredPieItem.tokens / totalTokens) * 100).toFixed(1)
         : null;
 
-    const handleTrendMouseMove = (event: ReactMouseEvent<SVGSVGElement>) => {
-        if (trendPoints.length === 0) {
+    // 趋势图日期标签：每隔 N 个显示一个，最多显示 ~6 个
+    const trendLabelInterval = Math.max(1, Math.ceil(dailyTotals.length / 6));
+
+    // 趋势曲线图 hover 状态
+    const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
+
+    const handleTrendMouseMove = useCallback((e: ReactMouseEvent<SVGSVGElement>) => {
+        if (dailyTotals.length === 0) return;
+        const svg = e.currentTarget;
+        const rect = svg.getBoundingClientRect();
+        const relativeX = e.clientX - rect.left;
+        const svgWidth = rect.width;
+        if (relativeX < 0 || relativeX > svgWidth) {
+            setHoveredTrendIndex(null);
             return;
         }
-        const rect = event.currentTarget.getBoundingClientRect();
-        if (rect.width <= 0) {
-            return;
-        }
-        const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
-        let nearestIndex = 0;
-        let minDistance = Number.POSITIVE_INFINITY;
-        trendPoints.forEach((point, index) => {
-            const distance = Math.abs(point.x - xPercent);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestIndex = index;
+        const ratio = relativeX / svgWidth;
+        const idx = Math.round(ratio * (dailyTotals.length - 1));
+        setHoveredTrendIndex(Math.max(0, Math.min(idx, dailyTotals.length - 1)));
+    }, [dailyTotals]);
+
+    // 构建平滑 SVG 路径（纯图表区域，无内边距，配合 preserveAspectRatio="none"）
+    const TREND_VB_W = 1000;
+    const TREND_VB_H = 140;
+
+    const { trendLinePath, trendAreaPath, trendPoints } = useMemo(() => {
+        if (dailyTotals.length === 0) return { trendLinePath: '', trendAreaPath: '', trendPoints: [] };
+
+        const pad = 6;
+        const w = TREND_VB_W - pad * 2;
+        const h = TREND_VB_H - pad * 2 - 6; // 底部额外留 6px 防止曲线溢出
+        const clampY = (y: number) => Math.max(0, Math.min(TREND_VB_H - 2, y));
+
+        const points = dailyTotals.map((day, i) => ({
+            x: pad + (dailyTotals.length === 1 ? w / 2 : (i / (dailyTotals.length - 1)) * w),
+            y: clampY(pad + h - (day.total / maxDailyTokens) * h),
+            pct: dailyTotals.length === 1 ? 50 : (i / (dailyTotals.length - 1)) * 100,
+        }));
+
+        let linePath = `M ${points[0].x},${points[0].y}`;
+        if (points.length === 1) {
+            linePath = `M ${points[0].x - 2},${points[0].y} L ${points[0].x + 2},${points[0].y}`;
+        } else if (points.length === 2) {
+            linePath += ` L ${points[1].x},${points[1].y}`;
+        } else {
+            for (let i = 0; i < points.length - 1; i++) {
+                const p0 = points[Math.max(0, i - 1)];
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                const p3 = points[Math.min(points.length - 1, i + 2)];
+                const tension = 0.3;
+                const cp1x = p1.x + (p2.x - p0.x) * tension;
+                const cp1y = clampY(p1.y + (p2.y - p0.y) * tension);
+                const cp2x = p2.x - (p3.x - p1.x) * tension;
+                const cp2y = clampY(p2.y - (p3.y - p1.y) * tension);
+                linePath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
             }
-        });
-        setHoveredTrendIndex(nearestIndex);
-    };
+        }
+
+        const bottomY = TREND_VB_H;
+        const areaPath = `${linePath} L ${points[points.length - 1].x},${bottomY} L ${points[0].x},${bottomY} Z`;
+
+        return { trendLinePath: linePath, trendAreaPath: areaPath, trendPoints: points };
+    }, [dailyTotals, maxDailyTokens]);
 
     return (
         <div className="h-full w-full overflow-y-auto">
@@ -251,19 +262,20 @@ function Dashboard() {
                     </div>
                 </div>
 
+                {/* Token 每日趋势 + 模型占比 */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                     {dailyTotals.length > 0 && (
-                        <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+                        <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col overflow-hidden">
                             <div className="flex items-center gap-2 mb-4">
-                                <BarChart3 className="w-5 h-5 text-emerald-500" />
+                                <TrendingUp className="w-5 h-5 text-emerald-500" />
                                 <h2 className="font-semibold text-gray-900 dark:text-base-content">
                                     {t('token_usage.daily_trend_title')}
                                 </h2>
-                                <span className="text-xs text-gray-400">{dailyTotals.length} days</span>
+                                <span className="text-xs text-gray-400 tabular-nums">{dailyTotals.length}d</span>
                                 <button
                                     onClick={() => refreshStatsCache()}
                                     disabled={refreshingStats}
-                                    className="ml-auto px-2 py-1 text-xs bg-gray-100 dark:bg-base-200 text-gray-600 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-base-100 transition-colors flex items-center gap-1 disabled:opacity-50"
+                                    className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-gray-200 dark:border-base-300 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-base-300 transition-colors disabled:opacity-50"
                                     title={t('token_usage.refresh_stats_title')}
                                 >
                                     <RefreshCw className={`w-3 h-3 ${refreshingStats ? 'animate-spin' : ''}`} />
@@ -271,93 +283,107 @@ function Dashboard() {
                                 </button>
                             </div>
 
+                            {/* 摘要指标 */}
                             <div className="grid grid-cols-3 gap-2 mb-4">
                                 <TrendMetric label={t('token_usage.total_tokens')} value={formatCompactTokens(totalRecentTokens)} />
                                 <TrendMetric label={t('token_usage.avg_per_day')} value={formatCompactTokens(avgDailyTokens)} />
                                 <TrendMetric label={t('token_usage.peak')} value={peakTokenDay ? formatCompactTokens(peakTokenDay.total) : '0'} />
                             </div>
 
-                            <div className="rounded-lg border border-gray-200 dark:border-[#1f355e] bg-gray-50/60 dark:bg-[#0d1833]/60 p-3">
-                                <div className="flex">
-                                    <div className="w-12 h-52 pr-2 text-[10px] text-gray-400 dark:text-slate-400/90 flex flex-col justify-between">
-                                        <span>{formatCompactTokens(maxSmoothedDailyTokens)}</span>
-                                        <span>{formatCompactTokens(Math.round(maxSmoothedDailyTokens / 2))}</span>
+                            {/* SVG 曲线面积图 */}
+                            <div className="relative flex-1 min-h-0 flex flex-col">
+                                <div className="flex flex-1 min-h-0">
+                                    {/* Y 轴标签 */}
+                                    <div className="flex flex-col justify-between pr-2 text-[10px] text-gray-400 dark:text-gray-500 shrink-0 tabular-nums text-right w-9">
+                                        <span>{formatCompactTokens(maxDailyTokens)}</span>
+                                        <span>{formatCompactTokens(Math.round(maxDailyTokens / 2))}</span>
                                         <span>0</span>
                                     </div>
-                                    <div className="flex-1 h-52 relative">
+                                    {/* 图表 SVG */}
+                                    <div className="flex-1 min-w-0 relative overflow-hidden">
                                         <svg
-                                            viewBox="0 0 100 90"
+                                            viewBox={`0 0 ${TREND_VB_W} ${TREND_VB_H}`}
                                             preserveAspectRatio="none"
-                                            className="w-full h-full cursor-crosshair"
+                                            className="w-full h-full select-none block"
                                             onMouseMove={handleTrendMouseMove}
                                             onMouseLeave={() => setHoveredTrendIndex(null)}
                                         >
                                             <defs>
-                                                <linearGradient id="trendAreaFill" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.18" />
-                                                    <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.00" />
+                                                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+                                                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
                                                 </linearGradient>
                                             </defs>
-                                            {[16, 32, 48, 64, 80].map(y => (
-                                                <line
-                                                    key={y}
-                                                    x1="0"
-                                                    y1={y}
-                                                    x2="100"
-                                                    y2={y}
-                                                    stroke="currentColor"
-                                                    className="text-gray-200 dark:text-[#22365a]"
-                                                    strokeWidth="0.5"
-                                                    vectorEffect="non-scaling-stroke"
+
+                                            {/* 水平参考线 */}
+                                            {[0.25, 0.5, 0.75].map((ratio) => (
+                                                <line key={ratio}
+                                                    x1="0" y1={TREND_VB_H * (1 - ratio)} x2={TREND_VB_W} y2={TREND_VB_H * (1 - ratio)}
+                                                    stroke="currentColor" className="text-gray-100 dark:text-base-300"
+                                                    strokeWidth="1" strokeDasharray="4,4" vectorEffect="non-scaling-stroke"
                                                 />
                                             ))}
-                                            {trendAreaPath && (
-                                                <path d={trendAreaPath} fill="url(#trendAreaFill)" />
-                                            )}
-                                            {trendLinePath && (
-                                                <path
-                                                    d={trendLinePath}
-                                                    fill="none"
-                                                    stroke="#14b8a6"
-                                                    strokeWidth="1.6"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    vectorEffect="non-scaling-stroke"
-                                                />
-                                            )}
-                                            {hoveredTrendPoint && (
-                                                <>
-                                                    <line
-                                                        x1={hoveredTrendPoint.x}
-                                                        y1="12"
-                                                        x2={hoveredTrendPoint.x}
-                                                        y2="86"
-                                                        stroke="#22d3ee"
-                                                        strokeOpacity="0.45"
-                                                        strokeWidth="0.8"
-                                                        strokeDasharray="1.8 1.8"
-                                                        vectorEffect="non-scaling-stroke"
-                                                    />
-                                                </>
-                                            )}
+
+                                            {/* 面积填充 */}
+                                            <path d={trendAreaPath} fill="url(#trendFill)" />
+
+                                            {/* 曲线 */}
+                                            <path d={trendLinePath} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                                         </svg>
-                                        {hoveredTrendPoint && hoveredTrendDay && (
-                                            <div
-                                                className="absolute -top-2 -translate-y-full px-2 py-1 rounded-md text-xs bg-slate-900/95 border border-slate-700 text-slate-100 pointer-events-none whitespace-nowrap"
-                                                style={{ left: `${hoveredTrendLabelX}%`, transform: 'translate(-50%, -100%)' }}
-                                            >
-                                                <div className="text-slate-300">{formatDateFull(hoveredTrendDay.date)}</div>
-                                                <div className="font-semibold text-cyan-300">{hoveredTrendDay.total.toLocaleString()}</div>
-                                            </div>
+
+                                        {/* Hover 指示器（HTML 覆盖层，避免 preserveAspectRatio 变形） */}
+                                        {hoveredTrendIndex !== null && trendPoints[hoveredTrendIndex] && (
+                                            <>
+                                                {/* 垂直线 */}
+                                                <div
+                                                    className="absolute top-0 h-full w-px bg-emerald-500/40 pointer-events-none"
+                                                    style={{ left: `${trendPoints[hoveredTrendIndex].pct}%` }}
+                                                />
+                                                {/* 圆点 */}
+                                                <div
+                                                    className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-base-100 shadow pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                                                    style={{
+                                                        left: `${trendPoints[hoveredTrendIndex].pct}%`,
+                                                        top: `${(trendPoints[hoveredTrendIndex].y / TREND_VB_H) * 100}%`,
+                                                    }}
+                                                />
+                                                {/* 光晕 */}
+                                                <div
+                                                    className="absolute w-5 h-5 rounded-full bg-emerald-500/15 pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                                                    style={{
+                                                        left: `${trendPoints[hoveredTrendIndex].pct}%`,
+                                                        top: `${(trendPoints[hoveredTrendIndex].y / TREND_VB_H) * 100}%`,
+                                                    }}
+                                                />
+                                                {/* Tooltip：跟随曲线点，保持在可视区域内 */}
+                                                <div
+                                                    className="absolute pointer-events-none z-10 bg-gray-800 dark:bg-slate-700 text-white text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
+                                                    style={{
+                                                        left: `${trendPoints[hoveredTrendIndex].pct}%`,
+                                                        top: `${(trendPoints[hoveredTrendIndex].y / TREND_VB_H) * 100}%`,
+                                                        transform: `translateX(${trendPoints[hoveredTrendIndex].pct > 80 ? '-100%' : trendPoints[hoveredTrendIndex].pct < 15 ? '0%' : '-50%'}) translateY(${(trendPoints[hoveredTrendIndex].y / TREND_VB_H) < 0.3 ? '8px' : '-100%'})`,
+                                                    }}
+                                                >
+                                                    <div className="text-gray-300 text-[10px]">{formatDateFull(dailyTotals[hoveredTrendIndex].date)}</div>
+                                                    <div className="font-semibold">{dailyTotals[hoveredTrendIndex].total.toLocaleString()} tokens</div>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="mt-2 grid grid-cols-3 text-[11px] text-gray-400">
-                                <span className="justify-self-start whitespace-nowrap">{formatDateFull(dailyTotals[0]?.date)}</span>
-                                <span className="justify-self-center whitespace-nowrap">{formatDateFull(midTrendDay?.date)}</span>
-                                <span className="justify-self-end whitespace-nowrap">{formatDateFull(dailyTotals[dailyTotals.length - 1]?.date)}</span>
+                                {/* X 轴日期标签 */}
+                                <div className="flex mt-1 mb-2 pl-9 shrink-0">
+                                    {dailyTotals.map((day, i) => (
+                                        <div key={i} className="flex-1 text-center overflow-hidden">
+                                            <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                                                {i % trendLabelInterval === 0 || i === dailyTotals.length - 1
+                                                    ? formatDateLabel(day.date)
+                                                    : ''}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -567,105 +593,50 @@ function StatCard({
 
 function TrendMetric({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-md border border-gray-200 dark:border-[#28426c] bg-gray-100/70 dark:bg-[#0f1d39]/70 px-3 py-2">
-            <div className="text-[11px] text-gray-500 dark:text-slate-300/90">{label}</div>
-            <div className="text-sm font-semibold text-emerald-600 dark:text-cyan-300">{value}</div>
+        <div className="rounded-lg border border-gray-100 dark:border-base-300 bg-gray-50 dark:bg-base-200 px-3 py-2">
+            <div className="text-[11px] text-gray-400">{label}</div>
+            <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{value}</div>
         </div>
     );
-}
-
-function smoothDailyTotals(dailyTotals: Array<{ date: string; total: number }>) {
-    return dailyTotals.map((day, index, allDays) => {
-        const prev = allDays[index - 1]?.total ?? day.total;
-        const next = allDays[index + 1]?.total ?? day.total;
-        return {
-            date: day.date,
-            total: Math.round((prev + day.total + next) / 3),
-        };
-    });
-}
-
-function buildSmoothPath(points: ChartPoint[]) {
-    if (points.length === 0) {
-        return '';
-    }
-    if (points.length === 1) {
-        return `M ${points[0].x} ${points[0].y}`;
-    }
-
-    const [firstPoint, ...restPoints] = points;
-    let path = `M ${firstPoint.x} ${firstPoint.y}`;
-    for (let index = 0; index < restPoints.length; index++) {
-        const currentPoint = restPoints[index];
-        const previousPoint = points[index];
-        const controlX = (previousPoint.x + currentPoint.x) / 2;
-        path += ` Q ${controlX} ${previousPoint.y}, ${currentPoint.x} ${currentPoint.y}`;
-    }
-    return path;
 }
 
 function buildDonutSegments(items: PieShareItem[], total: number, circumference: number): DonutSegment[] {
     if (items.length === 0 || total <= 0 || circumference <= 0) {
         return [];
     }
-
     let offset = 0;
     return items.map((item) => {
         const ratio = item.tokens / total;
         const dash = ratio * circumference;
-        const segment: DonutSegment = {
-            ...item,
-            dash,
-            offset,
-        };
+        const segment: DonutSegment = { ...item, dash, offset };
         offset += dash;
         return segment;
     });
 }
 
 function truncateText(text: string, maxLength: number) {
-    if (text.length <= maxLength) {
-        return text;
-    }
-    return `${text.slice(0, Math.max(maxLength - 3, 1))}...`;
+    return text.length <= maxLength ? text : `${text.slice(0, Math.max(maxLength - 3, 1))}...`;
 }
 
 function formatCompactTokens(value: number) {
-    if (value >= 1_000_000_000) {
-        return `${(value / 1_000_000_000).toFixed(1)}B`;
-    }
-    if (value >= 1_000_000) {
-        return `${(value / 1_000_000).toFixed(1)}M`;
-    }
-    if (value >= 1_000) {
-        return `${(value / 1_000).toFixed(1)}K`;
-    }
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
     return value.toLocaleString();
 }
 
 function formatDateLabel(rawDate?: string) {
-    if (!rawDate) {
-        return '';
-    }
+    if (!rawDate) return '';
     const parsed = new Date(rawDate);
-    if (Number.isNaN(parsed.getTime())) {
-        return rawDate;
-    }
+    if (Number.isNaN(parsed.getTime())) return rawDate;
     return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
 }
 
 function formatDateFull(rawDate?: string) {
-    if (!rawDate) {
-        return '';
-    }
+    if (!rawDate) return '';
     const parsed = new Date(rawDate);
-    if (Number.isNaN(parsed.getTime())) {
-        return rawDate;
-    }
-    const year = parsed.getFullYear();
-    const month = String(parsed.getMonth() + 1).padStart(2, '0');
-    const day = String(parsed.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    if (Number.isNaN(parsed.getTime())) return rawDate;
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
 }
 
 export default Dashboard;

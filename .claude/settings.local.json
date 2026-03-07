@@ -21,7 +21,8 @@
       "Bash(python3:*)",
       "Bash(npx vite:*)",
       "Bash(gh run:*)",
-      "Bash(where gh:*)"
+      "Bash(where gh:*)",
+      "Bash(npx tauri:*)"
     ]
   }
 }

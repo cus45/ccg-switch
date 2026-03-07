@@ -78,10 +78,19 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
             invoke<ProjectTokenStat[]>('get_project_token_stats'),
         ]);
 
+        let tokenStats = tokenResult.status === 'fulfilled' ? tokenResult.value : get().tokenStats;
+
+        // 缓存为空或 modelUsage 无数据时，自动触发重新计算
+        if (!tokenStats || Object.keys(tokenStats.modelUsage || {}).length === 0) {
+            try {
+                tokenStats = await invoke<StatsCache>('refresh_stats_cache');
+            } catch { /* 静默失败，使用空缓存 */ }
+        }
+
         set({
             stats: statsResult.status === 'fulfilled' ? statsResult.value : get().stats,
             activity: activityResult.status === 'fulfilled' ? activityResult.value : get().activity,
-            tokenStats: tokenResult.status === 'fulfilled' ? tokenResult.value : get().tokenStats,
+            tokenStats,
             projectTokenStats: projectResult.status === 'fulfilled' ? projectResult.value : get().projectTokenStats,
             loading: false,
             hasLoaded: true,

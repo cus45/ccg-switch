@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc, Timelike};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -97,6 +97,22 @@ pub fn get_stats_cache() -> Result<StatsCache, io::Error> {
     Ok(cache)
 }
 
+/// 递归收集目录下所有 .jsonl 文件路径（包括 subagents/ 等子目录）
+fn collect_jsonl_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_jsonl_files(&path, out);
+        } else if path.extension().map_or(false, |ext| ext == "jsonl") {
+            out.push(path);
+        }
+    }
+}
+
 /// 刷新统计缓存 - 遍历所有会话文件重新计算
 pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
     let home = dirs::home_dir()
@@ -128,17 +144,13 @@ pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
             continue;
         }
 
-        // 遍历项目中的所有 JSONL 文件
-        for file_entry in fs::read_dir(&project_path)? {
-            let file_entry = file_entry?;
-            let file_path = file_entry.path();
+        // 递归遍历项目中的所有 JSONL 文件（包括 subagents/ 子目录）
+        let mut jsonl_files = Vec::new();
+        collect_jsonl_files(&project_path, &mut jsonl_files);
 
-            if file_path.extension().map_or(true, |ext| ext != "jsonl") {
-                continue;
-            }
-
+        for file_path in &jsonl_files {
             // 解析 JSONL 文件
-            if let Ok(file) = fs::File::open(&file_path) {
+            if let Ok(file) = fs::File::open(file_path) {
                 let reader = BufReader::new(file);
 
                 for line in reader.lines() {
@@ -205,7 +217,15 @@ pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
                     }
 
                     // 提取 usage 和 model 信息
-                    if let (Some(usage), Some(model)) = (json.get("usage"), json.get("model").and_then(|v| v.as_str())) {
+                    // Claude Code JSONL: usage 和 model 嵌套在 message 对象内
+                    // 同时兼容顶层字段的格式
+                    let message = json.get("message");
+                    let usage = json.get("usage")
+                        .or_else(|| message.and_then(|m| m.get("usage")));
+                    let model = json.get("model").and_then(|v| v.as_str())
+                        .or_else(|| message.and_then(|m| m.get("model")).and_then(|v| v.as_str()));
+
+                    if let (Some(usage), Some(model)) = (usage, model) {
                         let input_tokens = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
                         let output_tokens = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
                         let cache_read = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
