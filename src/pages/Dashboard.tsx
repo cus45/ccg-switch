@@ -194,14 +194,14 @@ function Dashboard() {
                                     {t('dashboard.activity_title')}
                                 </h2>
                             </div>
-                            <div className="flex flex-1 min-h-0">
+                            <div className="flex flex-1 min-h-[14rem]">
                                 <div className="flex flex-col justify-between pr-2 text-xs text-gray-400 shrink-0">
                                     <span>{maxCount}</span>
                                     <span>{Math.round(maxCount / 2)}</span>
                                     <span>0</span>
                                 </div>
-                                <div className="flex-1 flex flex-col min-h-0">
-                                    <div className="flex items-end gap-1 flex-1 min-h-0">
+                                <div className="flex-1 flex flex-col">
+                                    <div className="flex items-end gap-1 flex-1 min-h-[14rem]">
                                         {recentActivity.map((entry, i) => {
                                             const height = Math.max((entry.count / maxCount) * 100, 4);
                                             return (
