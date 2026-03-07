@@ -18,7 +18,7 @@ html {
 }
 
 html.dark {
-  background-color: #1d232a;
+  background-color: #0d1117;
 }
 
 /* 全局样式 */
@@ -34,8 +34,7 @@ body {
 
 /* Dark mode override for body strictly */
 .dark body {
-  background-color: #1d232a;
-  /* matches base-300 commonly used */
+  background-color: #0d1117;
 }
 
 #root {

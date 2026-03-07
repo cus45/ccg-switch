@@ -30,9 +30,9 @@ export default {
                     "secondary": "#94a3b8",
                     "accent": "#10b981",
                     "neutral": "#1f2937",
-                    "base-100": "#0f172a", // Slate-900
-                    "base-200": "#1e293b", // Slate-800
-                    "base-300": "#334155", // Slate-700
+                    "base-100": "#161b22", // 卡片/表面
+                    "base-200": "#21262d", // 次级表面/边框
+                    "base-300": "#0d1117", // 主背景（最深）
                     "info": "#0ea5e9",
                     "success": "#10b981",
                     "warning": "#f59e0b",

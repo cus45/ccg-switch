@@ -217,13 +217,14 @@ pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
                     }
 
                     // 提取 usage 和 model 信息
-                    // Claude Code JSONL: usage 和 model 嵌套在 message 对象内
-                    // 同时兼容顶层字段的格式
+                    // Claude Code JSONL: usage 和 model 嵌套在 message 对象内（优先）
+                    // 顶层 model 字段可能为无效值（如字面量 "model"），仅作回退
                     let message = json.get("message");
-                    let usage = json.get("usage")
-                        .or_else(|| message.and_then(|m| m.get("usage")));
-                    let model = json.get("model").and_then(|v| v.as_str())
-                        .or_else(|| message.and_then(|m| m.get("model")).and_then(|v| v.as_str()));
+                    let usage = message.and_then(|m| m.get("usage"))
+                        .or_else(|| json.get("usage"));
+                    let model = message.and_then(|m| m.get("model")).and_then(|v| v.as_str())
+                        .or_else(|| json.get("model").and_then(|v| v.as_str()))
+                        .filter(|m| !m.is_empty() && *m != "model");
 
                     if let (Some(usage), Some(model)) = (usage, model) {
                         let input_tokens = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
