@@ -1,5 +1,6 @@
-import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink } from 'lucide-react';
+import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink, Copy } from 'lucide-react';
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Provider } from '../../types/provider';
 import { APP_LABELS } from '../../types/app';
 import ProviderIcon from './ProviderIcon';
@@ -10,6 +11,7 @@ interface ProviderCardProps {
     isDragOver?: boolean;
     onSwitch: (id: string) => void;
     onEdit: (provider: Provider) => void;
+    onClone: (provider: Provider) => void;
     onDelete: (id: string, name: string) => void;
     onPointerDragStart: (e: React.PointerEvent<HTMLElement>) => void;
     onPointerOver: () => void;
@@ -26,6 +28,7 @@ export default function ProviderCard({
     isDragOver,
     onSwitch,
     onEdit,
+    onClone,
     onDelete,
     onPointerDragStart,
     onPointerOver,
@@ -93,12 +96,10 @@ export default function ProviderCard({
                             title="在浏览器中打开"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                try {
-                                    const u = provider.url!.trim();
-                                    if (u.startsWith('http://') || u.startsWith('https://')) {
-                                        window.open(u, '_blank');
-                                    }
-                                } catch { /* ignore */ }
+                                const u = provider.url!.trim();
+                                if (u.startsWith('http://') || u.startsWith('https://')) {
+                                    invoke('open_external', { url: u }).catch(() => {});
+                                }
                             }}
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -121,6 +122,11 @@ export default function ProviderCard({
                     <span className="text-xs text-base-content/40">Haiku</span>
                     {provider.defaultHaikuModel
                         ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultHaikuModel}>{provider.defaultHaikuModel}</code>
+                        : <span className="text-xs text-base-content/25 italic">默认</span>
+                    }
+                    <span className="text-xs text-base-content/40">Thinking</span>
+                    {provider.defaultReasoningModel
+                        ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultReasoningModel}>{provider.defaultReasoningModel}</code>
                         : <span className="text-xs text-base-content/25 italic">默认</span>
                     }
                 </div>
@@ -160,6 +166,13 @@ export default function ProviderCard({
                         title="编辑"
                     >
                         <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => onClone(provider)}
+                        className="btn btn-ghost btn-xs gap-1"
+                        title="克隆"
+                    >
+                        <Copy className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => onDelete(provider.id, provider.name)}
