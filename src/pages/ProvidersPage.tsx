@@ -1,10 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, Copy, ExternalLink, Terminal } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, ChevronRight, Copy, ExternalLink, LayoutList, Minimize2 } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useProviderStore } from '../stores/useProviderStore';
 import { Provider } from '../types/provider';
-import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../types/app';
+import { VISIBLE_APP_TYPES, APP_LABELS, AppType } from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
 import { exportProvidersConfigToFile, importProvidersConfigFromFile } from '../services/configTransferService';
@@ -12,7 +11,7 @@ import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
 
-type ViewMode = 'card' | 'table';
+type ViewMode = 'card' | 'table' | 'detail';
 
 function maskApiKey(key: string) {
     if (key.length <= 10) return '***';
@@ -21,7 +20,7 @@ function maskApiKey(key: string) {
 
 function ProvidersPage() {
     const { t } = useTranslation();
-    const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider, addProvider } = useProviderStore();
+    const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider, updateProvider } = useProviderStore();
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterApp, setFilterApp] = useState<AppType | 'all'>('all');
@@ -32,6 +31,10 @@ function ProvidersPage() {
     const [exportLoading, setExportLoading] = useState(false);
     const [importLoading, setImportLoading] = useState(false);
     const [filterTag, setFilterTag] = useState<string | null>(null);
+    const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<Partial<Provider> | null>(null);
+    const [saving, setSaving] = useState(false);
 
     // 拖拽状态
     const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -100,16 +103,6 @@ function ProvidersPage() {
         setDeleteModal({ isOpen: true, id, name });
     };
 
-    const handleClone = async (provider: Provider) => {
-        const { id, createdAt, isActive, lastUsed, inFailoverQueue, ...data } = provider;
-        try {
-            await addProvider({ ...data, name: `${data.name} (Copy)` });
-            showToast(t('providers.clone_success'), 'success');
-        } catch (error) {
-            showToast(t('providers.clone_failed', { error: String(error) }), 'error');
-        }
-    };
-
     const handleExportConfig = async () => {
         setExportLoading(true);
         try {
@@ -152,19 +145,60 @@ function ProvidersPage() {
         }
     };
 
-    const handleLaunchTerminal = async (command: string) => {
+    const toggleShowKey = (id: string) => {
+        setShowKeys(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const toggleExpandedRow = (id: string) => {
+        setExpandedRowId(expandedRowId === id ? null : id);
+    };
+
+    const copyToClipboard = async (text: string, successMsg: string) => {
         try {
-            const { homeDir } = await import('@tauri-apps/api/path');
-            const home = await homeDir();
-            await invoke('launch_resume_session', { command, cwd: home });
-            showToast(`已启动 ${command} 终端`, 'success');
-        } catch (error) {
-            showToast('启动终端失败: ' + error, 'error');
+            await navigator.clipboard.writeText(text);
+            showToast(successMsg, 'success');
+        } catch {
+            showToast('Copy failed', 'error');
         }
     };
 
-    const toggleShowKey = (id: string) => {
-        setShowKeys(prev => ({ ...prev, [id]: !prev[id] }));
+    // 行内编辑功能
+    const startEditing = (provider: Provider) => {
+        setEditingId(provider.id);
+        setEditForm({ ...provider });
+    };
+
+    const cancelEditing = () => {
+        setEditingId(null);
+        setEditForm(null);
+    };
+
+    const saveEditing = async () => {
+        if (!editForm || !editingId) return;
+        setSaving(true);
+        try {
+            await updateProvider(editingId, {
+                name: editForm.name,
+                apiKey: editForm.apiKey,
+                url: editForm.url,
+                defaultSonnetModel: editForm.defaultSonnetModel,
+                defaultOpusModel: editForm.defaultOpusModel,
+                defaultHaikuModel: editForm.defaultHaikuModel,
+                description: editForm.description,
+            });
+            setEditingId(null);
+            setEditForm(null);
+            showToast(t('providers.update_success'), 'success');
+            await loadAllProviders(true);
+        } catch (error) {
+            showToast(t('providers.update_failed', { error: String(error) }), 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const updateEditForm = (key: keyof Provider, value: any) => {
+        setEditForm(prev => prev ? { ...prev, [key]: value } : null);
     };
 
     // 拖拽逻辑
@@ -261,6 +295,13 @@ function ProvidersPage() {
                                 <List className="w-4 h-4" />
                             </button>
                             <button
+                                onClick={() => setViewMode('detail')}
+                                className={`btn btn-sm ${viewMode === 'detail' ? 'btn-active' : 'btn-ghost'}`}
+                                title={t('providers.detail_view')}
+                            >
+                                <LayoutList className="w-4 h-4" />
+                            </button>
+                            <button
                                 onClick={() => setViewMode('card')}
                                 className={`btn btn-sm ${viewMode === 'card' ? 'btn-active' : 'btn-ghost'}`}
                                 title={t('providers.card_view')}
@@ -331,48 +372,6 @@ function ProvidersPage() {
                     </select>
                 </div>
 
-                {/* 快捷打开配置文件 + 启动终端 */}
-                <div className="flex items-center gap-4 flex-wrap text-xs">
-                    {[
-                        { app: 'Claude', cli: 'claude', dot: 'bg-orange-400', termClass: 'text-orange-500 hover:bg-orange-500/10', files: [
-                            { label: 'settings.json', path: '~/.claude/settings.json' },
-                            { label: '.claude.json', path: '~/.claude.json' },
-                        ]},
-                        { app: 'Codex', cli: 'codex', dot: 'bg-emerald-400', termClass: 'text-emerald-500 hover:bg-emerald-500/10', files: [
-                            { label: 'auth.json', path: '~/.codex/auth.json' },
-                            { label: 'config.toml', path: '~/.codex/config.toml' },
-                        ]},
-                        { app: 'Gemini', cli: 'gemini', dot: 'bg-blue-400', termClass: 'text-blue-500 hover:bg-blue-500/10', files: [
-                            { label: '.env', path: '~/.gemini/.env' },
-                            { label: 'settings.json', path: '~/.gemini/settings.json' },
-                        ]},
-                    ].map(group => (
-                        <div key={group.app} className="inline-flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 text-base-content/50">
-                                <span className={`w-1.5 h-1.5 rounded-full ${group.dot}`} />
-                                {group.app}
-                            </span>
-                            {group.files.map(file => (
-                                <button
-                                    key={file.path}
-                                    onClick={() => invoke('open_config_file', { path: file.path }).catch(e => showToast(String(e), 'error'))}
-                                    className="px-2 py-0.5 rounded bg-base-200/60 hover:bg-base-200 text-base-content/70 hover:text-base-content transition-colors font-mono"
-                                    title={file.path}
-                                >
-                                    {file.label}
-                                </button>
-                            ))}
-                            <button
-                                onClick={() => handleLaunchTerminal(group.cli)}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded transition-colors ${group.termClass}`}
-                                title={`启动 ${group.cli} 终端`}
-                            >
-                                <Terminal className="w-3 h-3" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-
                 {/* 标签筛选 */}
                 {allTags.length > 0 && (
                     <div className="flex items-center gap-2 flex-wrap">
@@ -430,7 +429,6 @@ function ProvidersPage() {
                                 isDragOver={dragOverId === provider.id && draggingId !== provider.id}
                                 onSwitch={handleSwitch}
                                 onEdit={handleEdit}
-                                onClone={handleClone}
                                 onDelete={handleDelete}
                                 onPointerDragStart={handlePointerDragStart(provider.id)}
                                 onPointerOver={handlePointerOver(provider.id)}
@@ -439,13 +437,14 @@ function ProvidersPage() {
                     </div>
                 )}
 
-                {/* 表格视图 */}
-                {viewMode === 'table' && filteredProviders.length > 0 && (
+                {/* 表格视图 / 详情视图 */}
+                {(viewMode === 'table' || viewMode === 'detail') && filteredProviders.length > 0 && (
                     <div className="overflow-x-auto bg-base-100 rounded-lg border border-base-300">
                         <table className="table table-fixed min-w-[1100px]">
                             <thead>
                                 <tr className="border-b border-base-300">
                                     <th className="bg-base-200 w-14"></th>
+                                    <th className="bg-base-200 w-12"></th>
                                     <th className="bg-base-200 w-48">{t('providers.col_name')}</th>
                                     <th className="bg-base-200 w-28">{t('providers.col_type')}</th>
                                     <th className="bg-base-200 w-48">API Key</th>
@@ -455,103 +454,254 @@ function ProvidersPage() {
                             </thead>
                             <tbody>
                                 {filteredProviders.map((provider) => (
-                                    <tr
-                                        key={provider.id}
-                                        data-provider-id={provider.id}
-                                        onPointerOver={handlePointerOver(provider.id)}
-                                        className={`border-b border-base-200 hover:bg-base-200/50 transition-colors ${
-                                            provider.isActive ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 border-l-4 border-l-green-500' : ''
-                                        } ${draggingId === provider.id ? 'opacity-60' : ''} ${
-                                            dragOverId === provider.id && draggingId !== provider.id ? 'bg-info/5' : ''
-                                        }`}
-                                    >
-                                        <td className="w-14">
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    type="button"
-                                                    onPointerDown={handlePointerDragStart(provider.id)}
-                                                    onClick={(e) => e.preventDefault()}
-                                                    className="inline-flex h-6 w-6 items-center justify-center rounded text-base-content/50 hover:bg-base-200 cursor-grab active:cursor-grabbing"
-                                                >
-                                                    <GripVertical className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td className="w-48">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <ProviderIcon appType={provider.appType} size="sm" />
-                                                <div className="flex flex-col min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-medium truncate">{provider.name}</span>
-                                                        {provider.isActive && (
-                                                            <span className="badge badge-sm bg-green-500 text-white border-none gap-1 shrink-0">
-                                                                <Zap className="w-3 h-3" fill="currentColor" />
-                                                                {t('providers.active_badge')}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {provider.description && (
-                                                        <span className="text-xs text-base-content/50 truncate">{provider.description}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="w-28">
-                                            <span className="inline-flex items-center gap-1.5 text-xs text-base-content/70">
-                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: APP_COLORS[provider.appType] }} />
-                                                {APP_LABELS[provider.appType]}
-                                            </span>
-                                        </td>
-                                        <td className="w-48">
-                                            <div className="flex items-center gap-2">
-                                                <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded truncate max-w-[140px]">
-                                                    {showKeys[provider.id] ? provider.apiKey : maskApiKey(provider.apiKey)}
-                                                </code>
-                                                <button onClick={() => toggleShowKey(provider.id)} className="btn btn-ghost btn-xs">
-                                                    {showKeys[provider.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td className="w-64">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.url || ''}>
-                                                    {provider.url || '-'}
-                                                </code>
-                                                {provider.url && (provider.url.startsWith('http://') || provider.url.startsWith('https://')) && (
+                                    <>
+                                        {/* 主行 - 加强边框和间距 */}
+                                        <tr
+                                            key={provider.id}
+                                            data-provider-id={provider.id}
+                                            onPointerOver={handlePointerOver(provider.id)}
+                                            className={`border-b-2 border-base-300 hover:bg-base-200/50 transition-colors ${
+                                                provider.isActive ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 border-l-4 border-l-green-500' : ''
+                                            } ${draggingId === provider.id ? 'opacity-60' : ''} ${
+                                                dragOverId === provider.id && draggingId !== provider.id ? 'bg-info/5' : ''
+                                            }`}
+                                        >
+                                            <td className="w-14">
+                                                <div className="flex items-center gap-1">
                                                     <button
-                                                        onClick={() => invoke('open_external', { url: provider.url!.trim() }).catch(() => {})}
-                                                        className="shrink-0 p-0.5 text-blue-400/60 hover:text-blue-400 transition-colors"
-                                                        title="在浏览器中打开"
+                                                        type="button"
+                                                        onPointerDown={handlePointerDragStart(provider.id)}
+                                                        onClick={(e) => e.preventDefault()}
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded text-base-content/50 hover:bg-base-200 cursor-grab active:cursor-grabbing"
                                                     >
-                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                        <GripVertical className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="w-12">
+                                                {viewMode === 'detail' ? (
+                                                    <button
+                                                        onClick={() => setExpandedRowId(null)}
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-base-200 transition-colors"
+                                                        title={t('providers.collapse_all')}
+                                                    >
+                                                        <Minimize2 className="w-4 h-4" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => toggleExpandedRow(provider.id)}
+                                                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-base-200 transition-colors"
+                                                    >
+                                                        {expandedRowId === provider.id ? (
+                                                            <ChevronRight className="w-4 h-4 rotate-90" />
+                                                        ) : (
+                                                            <ChevronRight className="w-4 h-4" />
+                                                        )}
                                                     </button>
                                                 )}
-                                            </div>
-                                        </td>
-                                        <td className="w-40 sticky right-0 z-20">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <button
-                                                    onClick={() => handleSwitch(provider.id)}
-                                                    className={`btn btn-xs gap-1 ${provider.isActive ? 'btn-disabled' : 'btn-ghost text-green-600'}`}
-                                                    disabled={provider.isActive}
-                                                >
-                                                    <Zap className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => handleEdit(provider)} className="btn btn-ghost btn-xs">
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => handleClone(provider)} className="btn btn-ghost btn-xs">
-                                                    <Copy className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(provider.id, provider.name)}
-                                                    className="btn btn-ghost btn-xs text-red-500"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                            <td className="w-48">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <ProviderIcon appType={provider.appType} size="sm" />
+                                                    <div className="flex flex-col min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-medium truncate">{provider.name}</span>
+                                                            {provider.isActive && (
+                                                                <span className="badge badge-sm bg-green-500 text-white border-none gap-1 shrink-0">
+                                                                    <Zap className="w-3 h-3" fill="currentColor" />
+                                                                    {t('providers.active_badge')}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {provider.description && (
+                                                            <span className="text-xs text-base-content/50 truncate">{provider.description}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="w-28">
+                                                <span className="badge badge-sm badge-outline">{APP_LABELS[provider.appType]}</span>
+                                            </td>
+                                            <td className="w-48">
+                                                <div className="flex items-center gap-2">
+                                                    <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded truncate max-w-[140px]">
+                                                        {showKeys[provider.id] ? provider.apiKey : maskApiKey(provider.apiKey)}
+                                                    </code>
+                                                    <button onClick={() => toggleShowKey(provider.id)} className="btn btn-ghost btn-xs">
+                                                        {showKeys[provider.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="w-64">
+                                                <code className="font-mono text-xs text-base-content/70 truncate block max-w-[240px]" title={provider.url || ''}>
+                                                    {provider.url || '-'}
+                                                </code>
+                                            </td>
+                                            <td className="w-40 sticky right-0 z-20">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                        onClick={() => handleSwitch(provider.id)}
+                                                        className={`btn btn-xs gap-1 ${provider.isActive ? 'btn-disabled' : 'btn-ghost text-green-600'}`}
+                                                        disabled={provider.isActive}
+                                                    >
+                                                        <Zap className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => handleEdit(provider)} className="btn btn-ghost btn-xs">
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(provider.id, provider.name)}
+                                                        className="btn btn-ghost btn-xs text-red-500"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {/* 展开详情行 - 详情视图模式下默认展开，表格视图模式下需要点击展开 */}
+                                        {(viewMode === 'detail' || expandedRowId === provider.id) && (
+                                            <tr className="bg-base-200/30 border-b-2 border-base-300">
+                                                <td colSpan={7} className="p-0">
+                                                    <div className="p-4 space-y-3">
+                                                        {/* 编辑模式 */}
+                                                        {editingId === provider.id && editForm ? (
+                                                            <div className="space-y-3">
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <EditableField
+                                                                        label={t('providers.col_name')}
+                                                                        value={editForm.name || ''}
+                                                                        onChange={(v) => updateEditForm('name', v)}
+                                                                    />
+                                                                    <EditableField
+                                                                        label={t('providers.col_type')}
+                                                                        value={APP_LABELS[editForm.appType!]}
+                                                                        disabled
+                                                                    />
+                                                                </div>
+                                                                <EditableField
+                                                                    label="API Key"
+                                                                    value={editForm.apiKey || ''}
+                                                                    onChange={(v) => updateEditForm('apiKey', v)}
+                                                                    type="textarea"
+                                                                />
+                                                                <EditableField
+                                                                    label="URL"
+                                                                    value={editForm.url || ''}
+                                                                    onChange={(v) => updateEditForm('url', v)}
+                                                                    placeholder="https://..."
+                                                                />
+                                                                <div className="grid grid-cols-3 gap-4">
+                                                                    <EditableField
+                                                                        label={t('providers.detail.default_sonnet')}
+                                                                        value={editForm.defaultSonnetModel || ''}
+                                                                        onChange={(v) => updateEditForm('defaultSonnetModel', v)}
+                                                                        placeholder="claude-sonnet-4-20250514"
+                                                                    />
+                                                                    <EditableField
+                                                                        label={t('providers.detail.default_opus')}
+                                                                        value={editForm.defaultOpusModel || ''}
+                                                                        onChange={(v) => updateEditForm('defaultOpusModel', v)}
+                                                                        placeholder="claude-opus-4-20250514"
+                                                                    />
+                                                                    <EditableField
+                                                                        label={t('providers.detail.default_haiku')}
+                                                                        value={editForm.defaultHaikuModel || ''}
+                                                                        onChange={(v) => updateEditForm('defaultHaikuModel', v)}
+                                                                        placeholder="claude-haiku-4-20250305"
+                                                                    />
+                                                                </div>
+                                                                <EditableField
+                                                                    label={t('providers.description')}
+                                                                    value={editForm.description || ''}
+                                                                    onChange={(v) => updateEditForm('description', v)}
+                                                                    type="textarea"
+                                                                    placeholder="描述（可选）"
+                                                                />
+                                                                <div className="flex gap-2 pt-2">
+                                                                    <button
+                                                                        onClick={saveEditing}
+                                                                        disabled={saving}
+                                                                        className="btn btn-sm btn-success gap-1"
+                                                                    >
+                                                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                                                                        {t('common.save')}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={cancelEditing}
+                                                                        className="btn btn-sm btn-ghost"
+                                                                    >
+                                                                        {t('common.cancel')}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            /* 只读模式 */
+                                                            <div className="space-y-3">
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <DetailItem label={t('providers.detail.created_at')} value={formatDate(provider.createdAt!)} />
+                                                                    <DetailItem label={t('providers.detail.last_used')} value={provider.lastUsed ? formatDate(provider.lastUsed) : '-'} />
+                                                                </div>
+                                                                <DetailItem label="API Key" value={provider.apiKey} onCopy={() => copyToClipboard(provider.apiKey, 'API Key copied')} showKey={showKeys[provider.id]} onToggleShowKey={() => toggleShowKey(provider.id)} />
+                                                                {provider.url && (
+                                                                    <DetailItem
+                                                                        label="URL"
+                                                                        value={provider.url}
+                                                                        onCopy={() => copyToClipboard(provider.url!, 'URL copied')}
+                                                                        onOpen={() => window.open(provider.url!, '_blank')}
+                                                                    />
+                                                                )}
+                                                                {provider.defaultSonnetModel && (
+                                                                    <DetailItem label={t('providers.detail.default_sonnet')} value={provider.defaultSonnetModel} />
+                                                                )}
+                                                                {provider.defaultOpusModel && (
+                                                                    <DetailItem label={t('providers.detail.default_opus')} value={provider.defaultOpusModel} />
+                                                                )}
+                                                                {provider.defaultHaikuModel && (
+                                                                    <DetailItem label={t('providers.detail.default_haiku')} value={provider.defaultHaikuModel} />
+                                                                )}
+                                                                {provider.customParams && Object.keys(provider.customParams).length > 0 && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500 mb-2">{t('providers.detail.custom_params')}</div>
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {Object.entries(provider.customParams).map(([key, value]) => (
+                                                                                <span key={key} className="badge badge-sm bg-base-100">
+                                                                                    {key}: {String(value)}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {provider.tags && provider.tags.length > 0 && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500 mb-2">{t('providers.tags')}</div>
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {provider.tags.map(tag => (
+                                                                                <span key={tag} className="badge badge-sm bg-blue-500/20 text-blue-400 border-blue-500/40">
+                                                                                    {tag}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {/* 操作按钮 - 只在非编辑模式显示 */}
+                                                        {editingId !== provider.id && (
+                                                            <div className="flex gap-2 pt-2 border-t border-base-300 mt-4">
+                                                                <button
+                                                                    onClick={() => startEditing(provider)}
+                                                                    className="btn btn-sm btn-primary gap-1"
+                                                                >
+                                                                    <Edit2 className="w-4 h-4" />
+                                                                    {t('common.edit')}
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </>
                                 ))}
                             </tbody>
                         </table>
@@ -577,6 +727,101 @@ function ProvidersPage() {
                 onConfirm={confirmDelete}
                 onCancel={() => setDeleteModal({ isOpen: false, id: '', name: '' })}
             />
+        </div>
+    );
+}
+
+function DetailItem({
+    label,
+    value,
+    onCopy,
+    onOpen,
+    showKey,
+    onToggleShowKey,
+}: {
+    label: string;
+    value: string;
+    onCopy?: () => void;
+    onOpen?: () => void;
+    showKey?: boolean;
+    onToggleShowKey?: () => void;
+}) {
+    return (
+        <div className="space-y-1">
+            <div className="text-xs font-medium text-gray-500">{label}</div>
+            <div className="flex items-center gap-2">
+                <code className="flex-1 text-sm bg-base-100 px-3 py-2 rounded border border-base-200 break-all">
+                    {value}
+                </code>
+                {onToggleShowKey && (
+                    <button onClick={onToggleShowKey} className="btn btn-ghost btn-sm">
+                        {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                )}
+                {onCopy && (
+                    <button onClick={onCopy} className="btn btn-ghost btn-sm">
+                        <Copy className="w-4 h-4" />
+                    </button>
+                )}
+                {onOpen && (
+                    <button onClick={onOpen} className="btn btn-ghost btn-sm">
+                        <ExternalLink className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function formatDate(dateStr: string): string {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function EditableField({
+    label,
+    value,
+    onChange,
+    disabled,
+    type = 'text',
+    placeholder,
+}: {
+    label: string;
+    value: string;
+    onChange?: (v: string) => void;
+    disabled?: boolean;
+    type?: 'text' | 'textarea';
+    placeholder?: string;
+}) {
+    return (
+        <div className="space-y-1">
+            <div className="text-xs font-medium text-gray-500">{label}</div>
+            {type === 'textarea' ? (
+                <textarea
+                    value={value}
+                    onChange={(e) => onChange?.(e.target.value)}
+                    disabled={disabled}
+                    placeholder={placeholder}
+                    className="textarea textarea-sm w-full font-mono text-xs min-h-[80px]"
+                />
+            ) : (
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => onChange?.(e.target.value)}
+                    disabled={disabled}
+                    placeholder={placeholder}
+                    className="input input-sm w-full font-mono text-xs"
+                />
+            )}
         </div>
     );
 }

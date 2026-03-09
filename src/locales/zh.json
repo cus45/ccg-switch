@@ -211,6 +211,13 @@
         "add_btn": "添加服务商",
         "table_view": "表格视图",
         "card_view": "卡片视图",
+        "detail_view": "详情视图",
+        "collapse_all": "折叠全部",
+        "edit_inline": "编辑",
+        "save": "保存",
+        "cancel": "取消",
+        "update_success": "更新成功",
+        "update_failed": "更新失败：{{error}}",
         "search_placeholder": "搜索服务商名称或 Key...",
         "filter_all": "全部",
         "empty_title": "暂无服务商",
@@ -226,8 +233,6 @@
         "delete_confirm": "确定要删除服务商 \"{{name}}\" 吗？",
         "delete_success": "删除成功",
         "delete_failed": "删除失败：{{error}}",
-        "clone_success": "克隆成功",
-        "clone_failed": "克隆失败：{{error}}",
         "sort_updated": "排序已更新",
         "sort_failed": "排序更新失败：{{error}}",
         "export_config": "导出配置",
@@ -253,7 +258,14 @@
         "tags": "标签",
         "tagPlaceholder": "输入标签后回车添加",
         "openUrl": "在浏览器中打开",
-        "reasoningModel": "推理模型 (Thinking)"
+        "detail": {
+            "created_at": "创建时间",
+            "last_used": "最后使用",
+            "default_sonnet": "默认 Sonnet 模型",
+            "default_opus": "默认 Opus 模型",
+            "default_haiku": "默认 Haiku 模型",
+            "custom_params": "自定义参数"
+        }
     },
     "settings": {
         "title": "设置",

@@ -324,6 +324,13 @@
         "add_btn": "Add Provider",
         "table_view": "Table View",
         "card_view": "Card View",
+        "detail_view": "Detail View",
+        "collapse_all": "Collapse All",
+        "edit_inline": "Edit",
+        "save": "Save",
+        "cancel": "Cancel",
+        "update_success": "Updated successfully",
+        "update_failed": "Update failed: {{error}}",
         "search_placeholder": "Search provider name or key...",
         "filter_all": "All",
         "empty_title": "No Providers",
@@ -339,8 +346,6 @@
         "delete_confirm": "Are you sure you want to delete provider \"{{name}}\"?",
         "delete_success": "Deleted successfully",
         "delete_failed": "Delete failed: {{error}}",
-        "clone_success": "Cloned successfully",
-        "clone_failed": "Clone failed: {{error}}",
         "sort_updated": "Sort order updated",
         "sort_failed": "Sort update failed: {{error}}",
         "export_config": "Export Configuration",
@@ -366,7 +371,14 @@
         "tags": "Tags",
         "tagPlaceholder": "Type a tag and press Enter to add",
         "openUrl": "Open in browser",
-        "reasoningModel": "Reasoning Model (Thinking)"
+        "detail": {
+            "created_at": "Created At",
+            "last_used": "Last Used",
+            "default_sonnet": "Default Sonnet Model",
+            "default_opus": "Default Opus Model",
+            "default_haiku": "Default Haiku Model",
+            "custom_params": "Custom Parameters"
+        }
     },
     "settings": {
         "title": "Settings",
