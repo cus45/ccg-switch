@@ -16,7 +16,7 @@ export function cn(...inputs: (string | undefined | null | false)[]) {
 
 function LabelText({ children, className }: { children: React.ReactNode, className?: string }) {
     return (
-        <label className={cn("text-sm font-medium leading-none text-slate-200", className)}>
+        <label className={cn("text-sm font-medium leading-none text-gray-700 dark:text-slate-200", className)}>
             {children}
         </label>
     );
@@ -25,7 +25,7 @@ function LabelText({ children, className }: { children: React.ReactNode, classNa
 function TextInput({ className, ...props }: any) {
     return (
         <input
-            className={cn("flex h-9 w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-1 text-sm text-slate-200 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50", className)}
+            className={cn("flex h-9 w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 py-1 text-sm text-gray-900 dark:text-slate-200 shadow-sm transition-colors placeholder:text-gray-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50", className)}
             {...props}
         />
     );
@@ -292,7 +292,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             key={preset.label}
                             type="button"
                             onClick={() => applyPreset(preset)}
-                            className="inline-flex h-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900/50 px-3 text-xs font-medium shadow-sm transition-colors hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                            className="inline-flex h-7 items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 px-3 text-xs font-medium shadow-sm transition-colors hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
                         >
                             {preset.label}
                         </button>
@@ -316,12 +316,12 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                         <div className="space-y-2">
                             <LabelText>{t('providers.field_app_type', '应用类型')}</LabelText>
                             <select
-                                className="flex h-9 w-full items-center justify-between rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-9 w-full items-center justify-between rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 py-2 text-sm text-gray-900 dark:text-slate-200 shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 value={appType}
                                 onChange={(e) => setAppType(e.target.value as AppType)}
                             >
                                 {VISIBLE_APP_TYPES.map((type) => (
-                                    <option key={type} value={type} className="bg-slate-900">{APP_LABELS[type]}</option>
+                                    <option key={type} value={type} className="bg-white dark:bg-slate-900">{APP_LABELS[type]}</option>
                                 ))}
                             </select>
                         </div>
@@ -341,7 +341,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             <button
                                 type="button"
                                 onClick={() => setShowKey(!showKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200"
                             >
                                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
@@ -457,7 +457,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                     <div className="space-y-2 pt-2">
                         <LabelText>{t('providers.field_description', '描述')}</LabelText>
                         <textarea
-                            className="flex min-h-[60px] w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 shadow-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                            className="flex min-h-[60px] w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 py-2 text-sm text-gray-900 dark:text-slate-200 shadow-sm placeholder:text-gray-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
                             placeholder={t('providers.desc_placeholder', '可选描述...')}
                             rows={2}
                             value={description}
@@ -474,48 +474,48 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
 
                     {/* 快捷配置按钮组 */}
                     {appType === 'claude' && (
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 px-4 py-3 bg-slate-800/50 rounded-md border border-slate-700/50">
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 px-4 py-3 bg-gray-50 dark:bg-slate-800/50 rounded-md border border-gray-200 dark:border-slate-700/50">
                             <label className="flex items-center gap-2 cursor-pointer group">
                                 <input
                                     type="checkbox"
-                                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-white dark:focus:ring-offset-slate-900 cursor-pointer"
                                     checked={!!internalSettings.alwaysThinkingEnabled}
                                     onChange={(e) => handleCheckboxChange('alwaysThinkingEnabled', e.target.checked)}
                                 />
-                                <span className="text-xs text-slate-300 group-hover:text-slate-200 transition-colors">扩展思考</span>
+                                <span className="text-xs text-gray-600 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors">扩展思考</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer group">
                                 <input
                                     type="checkbox"
-                                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-white dark:focus:ring-offset-slate-900 cursor-pointer"
                                     checked={!!internalSettings.teammatesMode}
                                     onChange={(e) => handleCheckboxChange('teammatesMode', e.target.checked)}
                                 />
-                                <span className="text-xs text-slate-300 group-hover:text-slate-200 transition-colors">Teammates 模式</span>
+                                <span className="text-xs text-gray-600 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors">Teammates 模式</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer group">
                                 <input
                                     type="checkbox"
-                                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-white dark:focus:ring-offset-slate-900 cursor-pointer"
                                     checked={!!internalSettings.disableNonessentialTraffic}
                                     onChange={(e) => handleCheckboxChange('disableNonessentialTraffic', e.target.checked)}
                                 />
-                                <span className="text-xs text-slate-300 group-hover:text-slate-200 transition-colors">禁用非必要流量</span>
+                                <span className="text-xs text-gray-600 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors">禁用非必要流量</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer group">
                                 <input
                                     type="checkbox"
-                                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-white dark:focus:ring-offset-slate-900 cursor-pointer"
                                     checked={!!internalSettings.disableAttributionHeader}
                                     onChange={(e) => handleCheckboxChange('disableAttributionHeader', e.target.checked)}
                                 />
-                                <span className="text-xs text-slate-300 group-hover:text-slate-200 transition-colors">禁用归因头</span>
+                                <span className="text-xs text-gray-600 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors">禁用归因头</span>
                             </label>
                             <label className="flex items-center gap-2 group">
-                                <span className="text-xs text-slate-300 whitespace-nowrap">最大输出 Tokens</span>
+                                <span className="text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap">最大输出 Tokens</span>
                                 <input
                                     type="text"
-                                    className="h-7 w-24 rounded border border-slate-600 bg-slate-900/50 px-2 text-xs text-slate-200 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                                    className="h-7 w-24 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-2 text-xs text-gray-900 dark:text-slate-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
                                     placeholder="如 100000"
                                     value={internalSettings.maxOutputTokens || ''}
                                     onChange={(e) => {
@@ -535,11 +535,11 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             const changedCount = previewLines.filter(line => !originalSet.has(stripComma(line))).length;
 
                             return (
-                                <div key={idx} className="relative rounded-md border border-slate-700 overflow-hidden bg-[#1e1e2e]">
-                                    <div className="flex items-center justify-between bg-slate-800/80 px-3 py-1.5 border-b border-slate-700">
-                                        <span className="text-xs font-mono text-slate-300">{file.title}</span>
+                                <div key={idx} className="relative rounded-md border border-gray-200 dark:border-slate-700 overflow-hidden bg-gray-50 dark:bg-[#1e1e2e]">
+                                    <div className="flex items-center justify-between bg-gray-100 dark:bg-slate-800/80 px-3 py-1.5 border-b border-gray-200 dark:border-slate-700">
+                                        <span className="text-xs font-mono text-gray-600 dark:text-slate-300">{file.title}</span>
                                         {changedCount > 0 && (
-                                            <span className="text-[10px] font-medium text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                            <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                                                 {changedCount} 行变更
                                             </span>
                                         )}
@@ -554,11 +554,11 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                                     className={cn(
                                                         "flex font-mono text-[13px] leading-[1.7] border-l-2",
                                                         isNew
-                                                            ? "bg-emerald-500/10 border-l-emerald-400 text-emerald-300"
-                                                            : "border-l-transparent text-[#cdd6f4]"
+                                                            ? "bg-emerald-500/10 border-l-emerald-400 text-emerald-700 dark:text-emerald-300"
+                                                            : "border-l-transparent text-gray-800 dark:text-[#cdd6f4]"
                                                     )}
                                                 >
-                                                    <span className="select-none w-8 shrink-0 text-right pr-2 text-[11px] text-slate-600 leading-[1.7]">
+                                                    <span className="select-none w-8 shrink-0 text-right pr-2 text-[11px] text-gray-400 dark:text-slate-600 leading-[1.7]">
                                                         {lineIdx + 1}
                                                     </span>
                                                     <span className="px-3 whitespace-pre">{line || ' '}</span>
@@ -609,11 +609,11 @@ function ModelComboBox({ label, placeholder, value, onChange, options }: {
 
     return (
         <div ref={wrapperRef} className="space-y-2 relative">
-            <label className="text-[11px] font-medium leading-none text-slate-300">{label}</label>
+            <label className="text-[11px] font-medium leading-none text-gray-600 dark:text-slate-300">{label}</label>
             <div className="relative">
                 <input
                     type="text"
-                    className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-1 font-mono text-xs pr-8 text-slate-200 shadow-sm transition-colors placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                    className="flex h-9 w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 py-1 font-mono text-xs pr-8 text-gray-900 dark:text-slate-200 shadow-sm transition-colors placeholder:text-gray-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
                     placeholder={placeholder}
                     value={filter !== null ? filter : value}
                     onChange={(e) => {
@@ -632,7 +632,7 @@ function ModelComboBox({ label, placeholder, value, onChange, options }: {
                     <button
                         type="button"
                         tabIndex={-1}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-transform"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200 transition-transform"
                         style={{ transform: `translateY(-50%) rotate(${open ? 180 : 0}deg)` }}
                         onClick={() => { setOpen(!open); setFilter(null); }}
                     >
@@ -641,15 +641,15 @@ function ModelComboBox({ label, placeholder, value, onChange, options }: {
                 )}
             </div>
             {open && hasOptions && (
-                <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-700 bg-slate-800 shadow-lg overflow-hidden">
+                <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
                     <ul className="max-h-48 overflow-y-auto py-1 text-xs font-mono">
                         {filtered.length === 0 ? (
-                            <li className="px-3 py-2 text-slate-400 text-center">No matching models</li>
+                            <li className="px-3 py-2 text-gray-400 dark:text-slate-400 text-center">No matching models</li>
                         ) : (
                             filtered.map((m) => (
                                 <li
                                     key={m}
-                                    className={`px-3 py-1.5 cursor-pointer hover:bg-slate-700 transition-colors ${m === value ? 'bg-blue-500/20 text-blue-400 font-semibold' : 'text-slate-300'}`}
+                                    className={`px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors ${m === value ? 'bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-semibold' : 'text-gray-700 dark:text-slate-300'}`}
                                     onClick={() => {
                                         onChange(m);
                                         setOpen(false);
@@ -724,7 +724,7 @@ function TagInput({ tags, onChange, placeholder }: {
             <div className="relative">
                 <input
                     type="text"
-                    className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-1 text-sm text-slate-200 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                    className="flex h-9 w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 py-1 text-sm text-gray-900 dark:text-slate-200 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
                     placeholder={placeholder}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -738,12 +738,12 @@ function TagInput({ tags, onChange, placeholder }: {
                 />
                 {/* 建议下拉 */}
                 {showSuggestions && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-700 bg-slate-800 shadow-lg overflow-hidden">
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
                         <ul className="max-h-36 overflow-y-auto py-1">
                             {suggestions.map((tag) => (
                                 <li
                                     key={tag}
-                                    className="px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-slate-100 cursor-pointer transition-colors"
+                                    className="px-3 py-1.5 text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-100 cursor-pointer transition-colors"
                                     onMouseDown={(e) => {
                                         e.preventDefault();
                                         addTag(tag);
@@ -782,7 +782,7 @@ function TagInput({ tags, onChange, placeholder }: {
                             key={tag}
                             type="button"
                             onClick={() => addTag(tag)}
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-700/40 text-slate-500 border border-slate-600/30 hover:bg-slate-700/70 hover:text-slate-300 hover:border-slate-500/50 transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-slate-700/40 text-gray-500 dark:text-slate-500 border border-gray-200 dark:border-slate-600/30 hover:bg-gray-200 dark:hover:bg-slate-700/70 hover:text-gray-700 dark:hover:text-slate-300 hover:border-gray-300 dark:hover:border-slate-500/50 transition-colors"
                         >
                             <Plus className="w-2.5 h-2.5" />
                             {tag}
