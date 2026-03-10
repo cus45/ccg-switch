@@ -33,7 +33,10 @@
       "Bash(echo === Test 1: x-api-key only ===:*)",
       "Bash(echo === Test 3: max_tokens=128 ===:*)",
       "Bash(echo === Test 5: no stream field ===:*)",
-      "Bash(echo === Test 8: Claude Code SDK headers ===:*)"
+      "Bash(echo === Test 8: Claude Code SDK headers ===:*)",
+      "Bash(sed:*)",
+      "Read(//c/guodevelop/claude-switch-v1/claude-switch-1.0/$LOCALAPPDATA/tauri/**)",
+      "Read(//c/guodevelop/claude-switch-v1/claude-switch-1.0/$HOME/.tauri/**)"
     ]
   }
 }
