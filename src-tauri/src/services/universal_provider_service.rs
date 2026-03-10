@@ -53,6 +53,7 @@ pub fn apply_universal_provider(config: UniversalProviderConfig) -> Result<Vec<S
             is_active: false,
             created_at: now,
             last_used: None,
+            proxy_config: None,
         };
 
         provider_service::add_provider(provider)?;
@@ -104,6 +105,7 @@ pub fn switch_universal_provider(provider_name: &str) -> Result<(), io::Error> {
                         is_active: false,
                         created_at: now,
                         last_used: None,
+                        proxy_config: ref_provider.proxy_config.clone(),
                     };
                     provider_service::add_provider(new_provider)?;
                     provider_service::switch_provider(*app_type, &new_id)?;

@@ -5,8 +5,9 @@ import { invoke } from '@tauri-apps/api/core';
 import ModalDialog from '../common/ModalDialog';
 import { showToast } from '../common/ToastContainer';
 import { useProviderStore } from '../../stores/useProviderStore';
-import { Provider } from '../../types/provider';
+import { Provider, ProviderProxyConfig } from '../../types/provider';
 import { AppType, VISIBLE_APP_TYPES, APP_LABELS } from '../../types/app';
+import ProviderProxyConfigInput from './ProviderProxyConfig';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -58,6 +59,12 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const [defaultReasoningModel, setDefaultReasoningModel] = useState(editingProvider?.defaultReasoningModel || '');
     const [description, setDescription] = useState(editingProvider?.description || '');
     const [tags, setTags] = useState<string[]>(editingProvider?.tags || []);
+    const [proxyConfig, setProxyConfig] = useState<ProviderProxyConfig>(() => {
+        if (editingProvider?.proxyConfig) {
+            return editingProvider.proxyConfig;
+        }
+        return { enabled: false };
+    });
     const [showKey, setShowKey] = useState(false);
     const [saving, setSaving] = useState(false);
     const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -89,6 +96,11 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             setDefaultReasoningModel(editingProvider?.defaultReasoningModel || '');
             setDescription(editingProvider?.description || '');
             setTags(editingProvider?.tags || []);
+            if (editingProvider?.proxyConfig) {
+                setProxyConfig(editingProvider.proxyConfig);
+            } else {
+                setProxyConfig({ enabled: false });
+            }
             setShowKey(false);
             setFetchedModels([]);
             
@@ -166,7 +178,8 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                         }
                     }
                     return Object.keys(clean).length > 0 ? clean : undefined;
-                })()
+                })(),
+                proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
             };
 
             if (isEditing && editingProvider) {
@@ -464,6 +477,12 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             onChange={(e) => setDescription(e.target.value)}
                         />
                     </div>
+
+                    {/* 代理配置 */}
+                    <ProviderProxyConfigInput
+                        value={proxyConfig}
+                        onChange={setProxyConfig}
+                    />
                 </div>
 
                 {/* 右侧：生成预览 */}

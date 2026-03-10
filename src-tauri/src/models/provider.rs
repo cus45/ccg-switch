@@ -4,6 +4,29 @@ use std::collections::HashMap;
 use super::app_type::AppType;
 use super::token::ApiToken;
 
+/// 供应商单独的代理配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderProxyConfig {
+    /// 是否启用单独代理
+    #[serde(default)]
+    pub enabled: bool,
+    /// 代理类型: http | https | socks5
+    #[serde(rename = "proxyType", skip_serializing_if = "Option::is_none")]
+    pub proxy_type: Option<String>,
+    /// 代理主机
+    #[serde(rename = "proxyHost", skip_serializing_if = "Option::is_none")]
+    pub proxy_host: Option<String>,
+    /// 代理端口
+    #[serde(rename = "proxyPort", skip_serializing_if = "Option::is_none")]
+    pub proxy_port: Option<u16>,
+    /// 代理用户名（可选）
+    #[serde(rename = "proxyUsername", skip_serializing_if = "Option::is_none")]
+    pub proxy_username: Option<String>,
+    /// 代理密码（可选）
+    #[serde(rename = "proxyPassword", skip_serializing_if = "Option::is_none")]
+    pub proxy_password: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Provider {
     pub id: String,
@@ -38,6 +61,9 @@ pub struct Provider {
     pub created_at: DateTime<Utc>,
     #[serde(rename = "lastUsed")]
     pub last_used: Option<DateTime<Utc>>,
+    /// 供应商单独的代理配置
+    #[serde(rename = "proxyConfig", skip_serializing_if = "Option::is_none")]
+    pub proxy_config: Option<ProviderProxyConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +93,7 @@ impl From<ApiToken> for Provider {
             is_active: token.is_active,
             created_at: token.created_at,
             last_used: token.last_used,
+            proxy_config: None,
         }
     }
 }

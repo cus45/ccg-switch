@@ -366,7 +366,14 @@
         "tags": "Tags",
         "tagPlaceholder": "Type a tag and press Enter to add",
         "openUrl": "Open in browser",
-        "reasoningModel": "Reasoning Model (Thinking)"
+        "reasoningModel": "Reasoning Model (Thinking)",
+        "proxyConfig": "Proxy Configuration",
+        "proxyConfigDesc": "Configure a dedicated proxy for this provider. When disabled, system or global proxy settings will be used.",
+        "useCustomProxy": "Use custom proxy",
+        "proxyUrlPlaceholder": "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
+        "proxyUsername": "Username (optional)",
+        "proxyPassword": "Password (optional)",
+        "clear": "Clear"
     },
     "settings": {
         "title": "Settings",

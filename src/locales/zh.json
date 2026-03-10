@@ -253,7 +253,14 @@
         "tags": "标签",
         "tagPlaceholder": "输入标签后回车添加",
         "openUrl": "在浏览器中打开",
-        "reasoningModel": "推理模型 (Thinking)"
+        "reasoningModel": "推理模型 (Thinking)",
+        "proxyConfig": "代理配置",
+        "proxyConfigDesc": "为此服务商配置单独的网络代理，不启用时使用系统代理或全局设置。",
+        "useCustomProxy": "使用单独代理",
+        "proxyUrlPlaceholder": "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
+        "proxyUsername": "用户名（可选）",
+        "proxyPassword": "密码（可选）",
+        "clear": "清除"
     },
     "settings": {
         "title": "设置",
