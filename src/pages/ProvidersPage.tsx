@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, Copy, ExternalLink, Terminal } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, GripVertical, Zap, Edit2, Trash2, Eye, EyeOff, Search, Layers, Download, Upload, Loader2, Tag, Copy, ExternalLink, Terminal, Activity, HeartPulse } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useProviderStore } from '../stores/useProviderStore';
@@ -11,6 +11,8 @@ import { exportProvidersConfigToFile, importProvidersConfigFromFile } from '../s
 import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
+import { useHealthCheck } from '../hooks/useHealthCheck';
+import HealthStatusBadge from '../components/providers/HealthStatusBadge';
 
 type ViewMode = 'card' | 'table';
 
@@ -32,6 +34,8 @@ function ProvidersPage() {
     const [exportLoading, setExportLoading] = useState(false);
     const [importLoading, setImportLoading] = useState(false);
     const [filterTag, setFilterTag] = useState<string | null>(null);
+
+    const { statuses, checkSingle, checkBatch, isAnyChecking } = useHealthCheck();
 
     // 拖拽状态
     const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -290,6 +294,14 @@ function ProvidersPage() {
                             {t('providers.import_config')}
                         </button>
                         <button
+                            onClick={() => checkBatch(filteredProviders.map(p => p.id))}
+                            disabled={isAnyChecking || loading}
+                            className="btn bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-none btn-sm gap-2 whitespace-nowrap"
+                        >
+                            {isAnyChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                            {t('providers.health_check')}
+                        </button>
+                        <button
                             onClick={() => loadAllProviders(true)}
                             disabled={loading || exportLoading || importLoading}
                             className="btn btn-ghost btn-sm gap-2 whitespace-nowrap"
@@ -434,6 +446,8 @@ function ProvidersPage() {
                                 onDelete={handleDelete}
                                 onPointerDragStart={handlePointerDragStart(provider.id)}
                                 onPointerOver={handlePointerOver(provider.id)}
+                                healthStatus={statuses[provider.id]}
+                                onHealthCheck={checkSingle}
                             />
                         ))}
                     </div>
@@ -450,6 +464,7 @@ function ProvidersPage() {
                                     <th className="bg-base-200 w-28">{t('providers.col_type')}</th>
                                     <th className="bg-base-200 w-48">API Key</th>
                                     <th className="bg-base-200 w-64">URL</th>
+                                    <th className="bg-base-200 w-28">Status</th>
                                     <th className="bg-base-200 text-right w-40 sticky right-0 z-20">{t('common.action')}</th>
                                 </tr>
                             </thead>
@@ -528,6 +543,9 @@ function ProvidersPage() {
                                                 )}
                                             </div>
                                         </td>
+                                        <td className="w-28">
+                                            <HealthStatusBadge status={statuses[provider.id]} compact />
+                                        </td>
                                         <td className="w-40 sticky right-0 z-20">
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
@@ -542,6 +560,16 @@ function ProvidersPage() {
                                                 </button>
                                                 <button onClick={() => handleClone(provider)} className="btn btn-ghost btn-xs">
                                                     <Copy className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => checkSingle(provider.id)}
+                                                    disabled={statuses[provider.id]?.state === 'checking'}
+                                                    className="btn btn-ghost btn-xs"
+                                                    title={t('providers.health_check_single')}
+                                                >
+                                                    {statuses[provider.id]?.state === 'checking'
+                                                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        : <HeartPulse className="w-3.5 h-3.5" />}
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(provider.id, provider.name)}

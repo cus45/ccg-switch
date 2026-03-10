@@ -23,7 +23,17 @@
       "Bash(gh run:*)",
       "Bash(where gh:*)",
       "Bash(npx tauri:*)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run:*)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(ccw cli:*)",
+      "Bash(C:/Users/Administrator/.claude/bin/codeagent-wrapper.exe:*)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(curl:*)",
+      "Bash(echo === Test 1: x-api-key only ===:*)",
+      "Bash(echo === Test 3: max_tokens=128 ===:*)",
+      "Bash(echo === Test 5: no stream field ===:*)",
+      "Bash(echo === Test 8: Claude Code SDK headers ===:*)"
     ]
   }
 }

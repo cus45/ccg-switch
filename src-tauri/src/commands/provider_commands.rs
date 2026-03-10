@@ -1,6 +1,7 @@
 use crate::models::app_type::AppType;
 use crate::models::provider::Provider;
 use crate::services::provider_service;
+use crate::services::stream_check_service;
 
 #[tauri::command]
 pub fn get_providers(app: String) -> Result<Vec<Provider>, String> {
@@ -53,4 +54,13 @@ pub fn preview_provider_sync(provider: Provider) -> Result<Vec<(String, String, 
 #[tauri::command]
 pub fn get_claude_settings_state() -> Result<serde_json::Value, String> {
     provider_service::get_claude_settings_state().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn check_provider_health(
+    provider_id: String,
+) -> Result<stream_check_service::ProviderHealthResult, String> {
+    stream_check_service::check_provider_health(provider_id)
+        .await
+        .map_err(|e| e.to_string())
 }

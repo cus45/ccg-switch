@@ -1,9 +1,12 @@
-import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink, Copy } from 'lucide-react';
+import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink, Copy, Loader2, HeartPulse } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { Provider } from '../../types/provider';
 import { APP_LABELS } from '../../types/app';
 import ProviderIcon from './ProviderIcon';
+import HealthStatusBadge from './HealthStatusBadge';
+import type { HealthStatus } from '../../hooks/useHealthCheck';
 
 interface ProviderCardProps {
     provider: Provider;
@@ -15,6 +18,8 @@ interface ProviderCardProps {
     onDelete: (id: string, name: string) => void;
     onPointerDragStart: (e: React.PointerEvent<HTMLElement>) => void;
     onPointerOver: () => void;
+    healthStatus?: HealthStatus;
+    onHealthCheck?: (id: string) => void;
 }
 
 function maskApiKey(key: string) {
@@ -32,7 +37,10 @@ export default function ProviderCard({
     onDelete,
     onPointerDragStart,
     onPointerOver,
+    healthStatus,
+    onHealthCheck,
 }: ProviderCardProps) {
+    const { t } = useTranslation();
     const [showKey, setShowKey] = useState(false);
 
     return (
@@ -83,6 +91,13 @@ export default function ProviderCard({
                         {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                 </div>
+
+                {/* Health Status */}
+                {healthStatus && healthStatus.state !== 'idle' && (
+                    <div className="mb-2">
+                        <HealthStatusBadge status={healthStatus} />
+                    </div>
+                )}
 
                 {/* URL */}
                 {provider.url && (
@@ -173,6 +188,16 @@ export default function ProviderCard({
                         title="克隆"
                     >
                         <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => onHealthCheck?.(provider.id)}
+                        disabled={healthStatus?.state === 'checking'}
+                        className="btn btn-ghost btn-xs gap-1"
+                        title={t('providers.health_check_single')}
+                    >
+                        {healthStatus?.state === 'checking'
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <HeartPulse className="w-3.5 h-3.5" />}
                     </button>
                     <button
                         onClick={() => onDelete(provider.id, provider.name)}

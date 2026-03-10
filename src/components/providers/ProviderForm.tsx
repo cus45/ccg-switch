@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff, Loader2, RefreshCw, ChevronDown, ExternalLink, X, Plus } from 'lucide-react';
+import { Eye, EyeOff, Loader2, RefreshCw, ChevronDown, ExternalLink, X, Plus, HeartPulse } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import ModalDialog from '../common/ModalDialog';
 import { showToast } from '../common/ToastContainer';
@@ -69,6 +69,8 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const [saving, setSaving] = useState(false);
     const [fetchedModels, setFetchedModels] = useState<string[]>([]);
     const [fetchModelsLoading, setFetchModelsLoading] = useState(false);
+    const [testLoading, setTestLoading] = useState(false);
+    const [testResult, setTestResult] = useState<{ success: boolean; latencyMs?: number; error?: string } | null>(null);
 
     // This state actually holds the true internal settingsConfig object for the database.
     const [internalSettings, setInternalSettings] = useState<any>(() => {
@@ -144,6 +146,40 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         }
         setAppType(preset.appType);
     };
+
+    const handleTestConnectivity = async () => {
+        if (!url.trim() || !apiKey.trim()) {
+            showToast(t('providers.fetchModelsNeedUrlKey'), 'error');
+            return;
+        }
+        const testModel = defaultSonnetModel || defaultOpusModel || defaultHaikuModel || defaultReasoningModel || (() => {
+            switch (appType) {
+                case 'codex': return 'gpt-4o';
+                case 'gemini': return 'gemini-2.0-flash';
+                default: return 'claude-sonnet-4-20250514';
+            }
+        })();
+        setTestLoading(true);
+        setTestResult(null);
+        try {
+            const result = await invoke<{ model: string; available: boolean; latencyMs: number; error?: string }>(
+                'check_stream_connectivity', { url: url.trim(), apiKey: apiKey.trim(), model: testModel, appType }
+            );
+            setTestResult({
+                success: result.available,
+                latencyMs: result.latencyMs,
+                error: result.error || undefined,
+            });
+        } catch (err) {
+            setTestResult({ success: false, error: String(err) });
+        } finally {
+            setTestLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        setTestResult(null);
+    }, [url, apiKey, appType]);
 
     const handleSave = async () => {
         const finalApiKey = apiKey.trim();
@@ -397,31 +433,50 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                     <div className="space-y-3 pt-2">
                         <div className="flex items-center justify-between">
                             <LabelText>{t('providers.modelConfig', '模型配置')}</LabelText>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    if (!url.trim() || !apiKey.trim()) {
-                                        showToast(t('providers.fetchModelsNeedUrlKey', '请先填写 URL 和 API Key'), 'error');
-                                        return;
-                                    }
-                                    setFetchModelsLoading(true);
-                                    try {
-                                        const models = await invoke<string[]>('fetch_models', { url: url.trim(), apiKey: apiKey.trim() });
-                                        setFetchedModels(models);
-                                        showToast(t('providers.fetchModelsSuccess', { count: models.length }), 'success');
-                                    } catch (error) {
-                                        showToast(`${t('providers.fetchModelsFailed', '获取模型失败')}: ${String(error)}`, 'error');
-                                    } finally {
-                                        setFetchModelsLoading(false);
-                                    }
-                                }}
-                                disabled={fetchModelsLoading || !url.trim() || !apiKey.trim()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 border border-blue-500/60 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                                {fetchModelsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                {t('providers.fetchModels', '获取模型')}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleTestConnectivity}
+                                    disabled={testLoading || !url.trim() || !apiKey.trim()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 border border-green-500/60 text-green-400 hover:bg-green-500/20 hover:text-green-300 hover:border-green-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    {testLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <HeartPulse className="w-3.5 h-3.5" />}
+                                    {t('providers.test_connectivity')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (!url.trim() || !apiKey.trim()) {
+                                            showToast(t('providers.fetchModelsNeedUrlKey', '请先填写 URL 和 API Key'), 'error');
+                                            return;
+                                        }
+                                        setFetchModelsLoading(true);
+                                        try {
+                                            const models = await invoke<string[]>('fetch_models', { url: url.trim(), apiKey: apiKey.trim() });
+                                            setFetchedModels(models);
+                                            showToast(t('providers.fetchModelsSuccess', { count: models.length }), 'success');
+                                        } catch (error) {
+                                            showToast(`${t('providers.fetchModelsFailed', '获取模型失败')}: ${String(error)}`, 'error');
+                                        } finally {
+                                            setFetchModelsLoading(false);
+                                        }
+                                    }}
+                                    disabled={fetchModelsLoading || !url.trim() || !apiKey.trim()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 border border-blue-500/60 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    {fetchModelsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                    {t('providers.fetchModels', '获取模型')}
+                                </button>
+                            </div>
                         </div>
+                        {testResult && (
+                            <div className={`text-xs px-1 ${testResult.success ? 'text-green-500' : 'text-red-500'}`}>
+                                {testResult.success
+                                    ? t('providers.test_connectivity_success', { latency: testResult.latencyMs })
+                                    : t('providers.test_connectivity_failed', { error: testResult.error?.substring(0, 100) })
+                                }
+                            </div>
+                        )}
                         
                         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                             {/* We maintain only the original 4 models to match what the user expected */}

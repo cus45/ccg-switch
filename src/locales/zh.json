@@ -260,7 +260,17 @@
         "proxyUrlPlaceholder": "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
         "proxyUsername": "用户名（可选）",
         "proxyPassword": "密码（可选）",
-        "clear": "清除"
+        "clear": "清除",
+        "health_check": "一键探活",
+        "health_check_single": "探活",
+        "test_connectivity": "测试连通性",
+        "health_checking": "检测中...",
+        "health_status_operational": "正常",
+        "health_status_degraded": "延迟",
+        "health_status_failed": "失败",
+        "health_check_batch_done": "探活完成：{{success}} 正常，{{failed}} 失败",
+        "test_connectivity_success": "连接成功 ({{latency}}ms)",
+        "test_connectivity_failed": "连接失败：{{error}}"
     },
     "settings": {
         "title": "设置",

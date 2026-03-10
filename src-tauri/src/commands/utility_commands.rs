@@ -33,8 +33,15 @@ pub async fn test_endpoint_speed(url: String, api_key: String) -> Result<speedte
 }
 
 #[tauri::command]
-pub async fn check_stream_connectivity(url: String, api_key: String, model: String) -> Result<stream_check_service::StreamCheckResult, String> {
-    stream_check_service::check_stream(url, api_key, model).await.map_err(|e| e.to_string())
+pub async fn check_stream_connectivity(
+    url: String,
+    api_key: String,
+    model: String,
+    app_type: Option<String>,
+) -> Result<stream_check_service::StreamCheckResult, String> {
+    stream_check_service::check_stream(url, api_key, model, app_type, None)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

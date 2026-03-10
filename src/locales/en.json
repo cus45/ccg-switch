@@ -373,7 +373,17 @@
         "proxyUrlPlaceholder": "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
         "proxyUsername": "Username (optional)",
         "proxyPassword": "Password (optional)",
-        "clear": "Clear"
+        "clear": "Clear",
+        "health_check": "Health Check All",
+        "health_check_single": "Check",
+        "test_connectivity": "Test Connection",
+        "health_checking": "Checking...",
+        "health_status_operational": "OK",
+        "health_status_degraded": "Slow",
+        "health_status_failed": "Failed",
+        "health_check_batch_done": "Check done: {{success}} OK, {{failed}} failed",
+        "test_connectivity_success": "Connected ({{latency}}ms)",
+        "test_connectivity_failed": "Failed: {{error}}"
     },
     "settings": {
         "title": "Settings",
