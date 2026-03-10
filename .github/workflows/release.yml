@@ -44,6 +44,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Cache Tauri bundler tools (NSIS/WiX)
+        if: matrix.platform == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\tauri\WixTools
+            ~\AppData\Local\tauri\NSIS
+          key: tauri-bundler-${{ runner.os }}-nsis3.11-wix3141
+
       - name: Install frontend dependencies
         run: npm install
 
