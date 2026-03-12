@@ -13,6 +13,16 @@ interface Version {
 
 const versions: Version[] = [
         {
+    version: '1.2.18',
+    date: '2026-03-13',
+    type: 'patch',
+    changes: [
+      { type: 'improvement', text: '优化：设置页面"关于"选项卡加载速度，工具版本检测改为并行执行 + 非阻塞调用 + 5分钟缓存' },
+      { type: 'improvement', text: '优化：服务商页面和技能管理页面顶部搜索/筛选栏固定，内容区域独立滚动' },
+      { type: 'fix', text: '修复：导入配置时取消文件选择对话框后按钮一直转圈的问题' }
+    ]
+  },
+        {
     version: '1.2.17',
     date: '2026-03-12',
     type: 'patch',

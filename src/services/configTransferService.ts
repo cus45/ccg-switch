@@ -30,6 +30,9 @@ function selectJsonFile(): Promise<File | null> {
             const file = (e.target as HTMLInputElement).files?.[0] ?? null;
             resolve(file);
         };
+        input.oncancel = () => {
+            resolve(null);
+        };
         input.click();
     });
 }

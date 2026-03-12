@@ -240,8 +240,10 @@ function ProvidersPage() {
     }, [providers]);
 
     return (
-        <div className="h-full w-full overflow-y-auto">
-            <div className="p-6 space-y-4 max-w-7xl mx-auto">
+        <div className="h-full w-full flex flex-col overflow-hidden">
+            {/* 固定顶部 */}
+            <div className="shrink-0">
+            <div className="px-6 pt-6 pb-3 space-y-4 max-w-7xl mx-auto w-full">
                 {/* 标题栏 */}
                 <div className="flex flex-wrap justify-between items-center gap-2">
                     <div className="flex items-center gap-3 shrink-0">
@@ -404,6 +406,12 @@ function ProvidersPage() {
                         ))}
                     </div>
                 )}
+            </div>
+            </div>
+
+            {/* 可滚动内容区域 */}
+            <div className="flex-1 overflow-y-auto">
+            <div className="px-6 pb-6 space-y-4 max-w-7xl mx-auto">
 
                 {/* 空状态 */}
                 {providers.length === 0 && !loading && (
@@ -585,6 +593,7 @@ function ProvidersPage() {
                         </table>
                     </div>
                 )}
+            </div>
             </div>
 
             {/* 表单弹窗 */}
