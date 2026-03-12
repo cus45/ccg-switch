@@ -119,6 +119,7 @@ impl serde::Serialize for AppError {
 }
 
 /// 格式化为 JSON 错误字符串，前端可解析为结构化错误
+#[allow(dead_code)]
 pub fn format_skill_error(
     code: &str,
     context: &[(&str, &str)],

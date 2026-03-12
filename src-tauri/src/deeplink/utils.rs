@@ -15,6 +15,7 @@ pub fn validate_url(url_str: &str, field_name: &str) -> Result<(), AppError> {
 }
 
 /// 遮掩 API Key：前 4 位明文 + `*` x 20，不足 4 位全部 `****`
+#[allow(dead_code)]
 pub fn mask_api_key(key: &str) -> String {
     if key.len() < 4 {
         "****".to_string()
@@ -57,6 +58,7 @@ pub fn redact_url_for_log(url_str: &str) -> String {
 }
 
 /// 去掉 api. 前缀推断首页
+#[allow(dead_code)]
 pub fn infer_homepage_from_endpoint(endpoint: &str) -> Option<String> {
     let parsed = url::Url::parse(endpoint).ok()?;
     let host = parsed.host_str()?;

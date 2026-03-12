@@ -201,7 +201,7 @@ fn get_session_messages(file_path: String) -> Result<Vec<SessionMessage>, String
 
 // 在终端中打开目录
 #[tauri::command]
-async fn open_in_terminal(app: tauri::AppHandle, path: String, terminal: Option<String>) -> Result<(), String> {
+async fn open_in_terminal(_app: tauri::AppHandle, path: String, terminal: Option<String>) -> Result<(), String> {
     let terminal_app = terminal.unwrap_or_else(|| {
         // 默认终端配置
         #[cfg(target_os = "windows")]
