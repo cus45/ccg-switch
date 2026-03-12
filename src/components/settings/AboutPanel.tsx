@@ -29,6 +29,12 @@ interface DownloadProgress {
     percentage: number;
 }
 
+interface InstallProgress {
+    stage: string;
+    message: string;
+    percentage: number;
+}
+
 const INSTALL_COMMANDS = `# Claude Code
 curl -fsSL https://claude.ai/install.sh | bash
 # Codex
@@ -56,6 +62,7 @@ function AboutPanel() {
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
     const [downloadedPath, setDownloadedPath] = useState<string | null>(null);
     const [installing, setInstalling] = useState(false);
+    const [installStage, setInstallStage] = useState<string>('idle');
 
     const loadToolVersions = useCallback(async () => {
         setLoadingTools(true);
@@ -78,6 +85,15 @@ function AboutPanel() {
         let unlisten: (() => void) | undefined;
         listen<DownloadProgress>('update-download-progress', (event) => {
             setDownloadProgress(event.payload);
+        }).then(fn => { unlisten = fn; });
+        return () => { unlisten?.(); };
+    }, []);
+
+    // 监听安装进度事件
+    useEffect(() => {
+        let unlisten: (() => void) | undefined;
+        listen<InstallProgress>('update-install-progress', (event) => {
+            setInstallStage(event.payload.stage);
         }).then(fn => { unlisten = fn; });
         return () => { unlisten?.(); };
     }, []);
@@ -114,11 +130,14 @@ function AboutPanel() {
     const handleInstall = async () => {
         if (!downloadedPath) return;
         setInstalling(true);
+        setInstallStage('mounting');
         try {
             await invoke('install_update', { filePath: downloadedPath });
+            // 成功后保持 installing 状态，等待用户重启
         } catch (e: any) {
             setCheckError(typeof e === 'string' ? e : e?.message || '安装失败');
             setInstalling(false);
+            setInstallStage('idle');
         }
     };
 
@@ -136,6 +155,13 @@ function AboutPanel() {
 
     const copyToClipboard = async (text: string) => {
         try { await navigator.clipboard.writeText(text); } catch { /* silent */ }
+    };
+
+    const handleRelaunch = async () => {
+        // 提示用户手动重启应用（因为安装完成后需要重启才能加载新版本）
+        setCheckError('安装完成！请手动关闭应用并重新打开以使用新版本。');
+        setInstalling(false);
+        setInstallStage('idle');
     };
 
     const getDisplayName = (name: string) => {
@@ -190,7 +216,7 @@ function AboutPanel() {
                         </button>
                         <button
                             onClick={handleCheckUpdate}
-                            disabled={checking}
+                            disabled={checking || installing}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm disabled:opacity-60"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${checking ? 'animate-spin' : ''}`} />
@@ -203,9 +229,38 @@ function AboutPanel() {
 
                 {/* 检查失败提示 */}
                 {checkError && (
-                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
-                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                        <span className="text-xs text-red-600 dark:text-red-400">{checkError}</span>
+                    <div className="mt-3 px-3 py-2.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                        <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <span className="text-xs text-red-600 dark:text-red-400 break-words">{checkError}</span>
+                                {/* 权限不足引导文案 */}
+                                {(checkError.includes('权限不足') || checkError.includes('EPERM')) && (
+                                    <div className="mt-2 p-2 rounded-md bg-red-100/50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                                        <p className="text-[11px] text-red-700 dark:text-red-300 leading-relaxed">
+                                            <span className="font-medium">解决方案：</span>请将 CCG Switch 移动到 /Applications 文件夹后重试，或手动复制下载的安装包到 /Applications 目录。
+                                        </p>
+                                    </div>
+                                )}
+                                {/* 挂载失败 - 提供重新下载按钮 */}
+                                {(checkError.includes('挂载失败') || checkError.toLowerCase().includes('mount failed')) && (
+                                    <div className="mt-2">
+                                        <button
+                                            onClick={() => {
+                                                setCheckError(null);
+                                                setDownloadedPath(null);
+                                                handleDownload();
+                                            }}
+                                            disabled={downloading}
+                                            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-60"
+                                        >
+                                            <Download className="w-3 h-3" />
+                                            {downloading ? '重新下载中...' : '重新下载更新'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -283,10 +338,22 @@ function AboutPanel() {
                                 </button>
                             )}
                             {installing && (
-                                <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-500">
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    {t('settings.installing', { defaultValue: '正在启动安装程序...' })}
-                                </span>
+                                <>
+                                    {installStage === 'success' ? (
+                                        <button
+                                            onClick={handleRelaunch}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-white bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 transition-all shadow-sm"
+                                        >
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            {t('settings.relaunchNow', { defaultValue: '立即重启' })}
+                                        </button>
+                                    ) : (
+                                        <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-500">
+                                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                            {t(`settings.installStage.${installStage}`, { defaultValue: '正在启动安装程序...' })}
+                                        </span>
+                                    )}
+                                </>
                             )}
                             {!updateInfo.downloadUrl && (
                                 <span className="text-xs text-gray-400">

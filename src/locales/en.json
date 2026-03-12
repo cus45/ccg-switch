@@ -425,6 +425,14 @@
         "webdav_save_failed": "Failed to save WebDAV configuration",
         "webdav_last_sync": "Last sync: {{time}}",
         "webdav_never_synced": "Never synced",
+        "installStage": {
+            "mounting": "Mounting disk image...",
+            "copying": "Copying application files...",
+            "verifying": "Verifying installation...",
+            "success": "Installation complete, please restart",
+            "failed": "Installation failed"
+        },
+        "relaunchNow": "Relaunch Now",
         "tabs": {
             "general": "General",
             "account": "Account",

@@ -310,7 +310,15 @@
         "webdav_save_success": "WebDAV 配置保存成功",
         "webdav_save_failed": "WebDAV 配置保存失败",
         "webdav_last_sync": "最后同步: {{time}}",
-        "webdav_never_synced": "尚未同步"
+        "webdav_never_synced": "尚未同步",
+        "installStage": {
+            "mounting": "正在挂载镜像...",
+            "copying": "正在替换旧版本...",
+            "verifying": "正在验证安装...",
+            "success": "安装完成，请重启应用",
+            "failed": "安装失败"
+        },
+        "relaunchNow": "立即重启"
     },
     "token_usage": {
         "title": "Token 用量分析",

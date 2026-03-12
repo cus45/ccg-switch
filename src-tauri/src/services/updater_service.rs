@@ -25,6 +25,14 @@ pub struct DownloadProgress {
     pub percentage: f64,
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallProgress {
+    pub stage: String,
+    pub message: String,
+    pub percentage: f64,
+}
+
 /// 检查 GitHub Release 是否有新版本
 pub async fn check_update(current_version: &str) -> Result<UpdateInfo, String> {
     let url = format!("https://api.github.com/repos/{}/releases/latest", GITHUB_REPO);
@@ -194,9 +202,118 @@ pub async fn download_update(app: &AppHandle, url: &str) -> Result<String, Strin
 }
 
 /// 启动安装程序
-pub fn install_update(file_path: &str) -> Result<(), String> {
-    std::process::Command::new(file_path)
-        .spawn()
-        .map_err(|e| format!("启动安装程序失败: {}", e))?;
-    Ok(())
+pub fn install_update(app: &tauri::AppHandle, file_path: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::fs;
+
+        // Stage 1: 挂载 DMG
+        let _ = app.emit("update-install-progress", InstallProgress {
+            stage: "mounting".to_string(),
+            message: "正在挂载磁盘镜像...".to_string(),
+            percentage: 10.0,
+        });
+
+        let mount_output = std::process::Command::new("hdiutil")
+            .args(["attach", "-nobrowse", "-readonly", file_path])
+            .output()
+            .map_err(|e| format!("挂载 DMG 失败: {}，请确保已授权访问磁盘权限", e))?;
+
+        if !mount_output.status.success() {
+            let stderr = String::from_utf8_lossy(&mount_output.stderr);
+            return Err(format!("挂载 DMG 失败: {}", stderr));
+        }
+
+        let stdout = String::from_utf8_lossy(&mount_output.stdout);
+
+        // 解析挂载点路径（例如：/Volumes/CCG Switch）
+        let mount_point = stdout
+            .lines()
+            .find(|line| line.contains("/Volumes/"))
+            .and_then(|line| line.split('\t').find(|part| part.contains("/Volumes/")))
+            .map(|s| s.trim().to_string())
+            .ok_or_else(|| format!("无法解析 DMG 挂载点，输出: {}", stdout))?;
+
+        // Stage 2: 查找 .app 文件
+        let _ = app.emit("update-install-progress", InstallProgress {
+            stage: "copying".to_string(),
+            message: "正在查找应用程序...".to_string(),
+            percentage: 30.0,
+        });
+
+        let mount_path = std::path::Path::new(&mount_point);
+        let app_bundle = fs::read_dir(mount_path)
+            .map_err(|e| format!("读取挂载点失败: {}", e))?
+            .filter_map(Result::ok)
+            .find(|entry| entry.path().extension().map_or(false, |ext| ext == "app"))
+            .ok_or_else(|| format!("DMG 中未找到 .app 文件"))?;
+
+        let app_source = app_bundle.path();
+        let app_name = app_source
+            .file_name()
+            .ok_or_else(|| format!("无法获取应用名称"))?;
+        let app_target = std::path::Path::new("/Applications").join(app_name);
+
+        // Stage 3: 复制到 /Applications
+        let _ = app.emit("update-install-progress", InstallProgress {
+            stage: "copying".to_string(),
+            message: format!("正在复制到应用程序文件夹...",),
+            percentage: 50.0,
+        });
+
+        // 如果目标已存在，先删除
+        if app_target.exists() {
+            fs::remove_dir_all(&app_target)
+                .map_err(|e| format!("删除旧版本失败（权限不足）: {}，请手动删除 /Applications 中的旧版本后重试", e))?;
+        }
+
+        // 使用 cp -R 递归复制
+        std::process::Command::new("cp")
+            .args(["-R", app_source.to_str().unwrap(), app_target.to_str().unwrap()])
+            .status()
+            .map_err(|e| format!("复制应用失败: {}，请确保已授予写入 /Applications 的权限", e))?;
+
+        if !app_target.exists() {
+            return Err(format!("复制后目标文件不存在，请检查 /Applications 目录权限"));
+        }
+
+        // Stage 4: 验证
+        let _ = app.emit("update-install-progress", InstallProgress {
+            stage: "verifying".to_string(),
+            message: "正在验证安装...".to_string(),
+            percentage: 80.0,
+        });
+
+        if !app_target.exists() || !app_target.join("Contents").exists() {
+            return Err(format!("安装验证失败：应用包结构不完整"));
+        }
+
+        // Stage 5: 清理（卸载 DMG）
+        let _ = app.emit("update-install-progress", InstallProgress {
+            stage: "cleanup".to_string(),
+            message: "正在清理临时文件...".to_string(),
+            percentage: 90.0,
+        });
+
+        let _ = std::process::Command::new("hdiutil")
+            .args(["detach", &mount_point])
+            .status();
+
+        // Stage 6: 完成
+        let _ = app.emit("update-install-progress", InstallProgress {
+            stage: "success".to_string(),
+            message: format!("安装成功！已更新到 /Applications/{}", app_name.to_string_lossy()),
+            percentage: 100.0,
+        });
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::process::Command::new(file_path)
+            .spawn()
+            .map_err(|e| format!("启动安装程序失败: {}", e))?;
+        Ok(())
+    }
 }

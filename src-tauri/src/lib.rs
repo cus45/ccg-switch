@@ -600,7 +600,7 @@ async fn download_update(app: tauri::AppHandle, url: String) -> Result<String, S
 // 安装更新并退出
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle, file_path: String) -> Result<(), String> {
-    services::updater_service::install_update(&file_path)?;
+    services::updater_service::install_update(&app, &file_path)?;
     // 退出当前应用，让安装程序接管
     app.exit(0);
     Ok(())
