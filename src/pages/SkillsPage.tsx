@@ -320,23 +320,21 @@ function SkillsPage() {
                             <div className="space-y-3">
                                 {filtered.map((skill) => (
                                 <div key={skill.id} className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h3 className="font-semibold text-gray-900 dark:text-base-content">{skill.name}</h3>
-                                                {skill.repoOwner && <span className="text-xs text-gray-400">{skill.repoOwner}/{skill.repoName}</span>}
-                                            </div>
-                                            {skill.description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{skill.description}</p>}
-                                            <div className="flex items-center gap-4">
-                                                {SKILL_APPS.map(({ key, label, app }) => (
-                                                    <label key={app} className="flex items-center gap-1.5 cursor-pointer">
-                                                        <input type="checkbox" className="toggle toggle-xs toggle-primary" checked={skill[key]} onChange={(e) => toggleV2App(skill.id, app, e.target.checked)} />
-                                                        <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="font-semibold text-gray-900 dark:text-base-content">{skill.name}</h3>
+                                        {skill.repoOwner && <span className="text-xs text-gray-400">{skill.repoOwner}/{skill.repoName}</span>}
+                                    </div>
+                                    {skill.description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 line-clamp-2">{skill.description}</p>}
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            {SKILL_APPS.map(({ key, label, app }) => (
+                                                <label key={app} className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input type="checkbox" className="toggle toggle-xs toggle-primary" checked={skill[key]} onChange={(e) => toggleV2App(skill.id, app, e.target.checked)} />
+                                                    <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
+                                                </label>
+                                            ))}
                                         </div>
-                                        <div className="flex flex-col gap-2 ml-4">
+                                        <div className="flex items-center gap-1">
                                             {skill.repoOwner && skill.repoName && (
                                                 <button 
                                                     onClick={async () => {

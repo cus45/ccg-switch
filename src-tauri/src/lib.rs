@@ -197,15 +197,14 @@ fn get_session_messages(file_path: String) -> Result<Vec<SessionMessage>, String
 
 // 在终端中打开目录
 #[tauri::command]
-async fn open_in_terminal(_app: tauri::AppHandle, path: String, terminal: Option<String>) -> Result<(), String> {
-    use std::process::Command;
-
+async fn open_in_terminal(app: tauri::AppHandle, path: String, terminal: Option<String>) -> Result<(), String> {
     let terminal_app = terminal.unwrap_or_else(|| {
         // 默认终端配置
         #[cfg(target_os = "windows")]
         { "cmd".to_string() }
         #[cfg(target_os = "macos")]
         {
+            use std::process::Command;
             // macOS 优先级: iTerm2 > Warp > Terminal
             if Command::new("ls").arg("/Applications/iTerm.app").output().map(|o| o.status.success()).unwrap_or(false) {
                 "iterm".to_string()
@@ -229,19 +228,19 @@ async fn open_in_terminal(_app: tauri::AppHandle, path: String, terminal: Option
                     .args(["/c", "start", "powershell", "-NoExit", "-Command",
                            &format!("Set-Location '{}'; cd {}", path.replace('\\', "\\\\").replace('\'', "''"), path)])
                     .spawn()
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e: tauri_plugin_shell::Error| e.to_string())?;
             }
             "wt" => {
                 shell.command("wt")
                     .args(["new-tab", "-d", &path, "powershell"])
                     .spawn()
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e: tauri_plugin_shell::Error| e.to_string())?;
             }
             _ => { // cmd
                 shell.command("cmd")
                     .args(["/c", "start", "cmd", "/k", &format!("cd /d {}", path)])
                     .spawn()
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e: tauri_plugin_shell::Error| e.to_string())?;
             }
         }
     }
