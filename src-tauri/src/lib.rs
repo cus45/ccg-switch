@@ -11,7 +11,6 @@ mod tray;
 mod utils;
 
 use tauri::Manager;
-use std::process::Command;
 use commands::provider_commands;
 use commands::proxy_commands;
 use commands::utility_commands;
@@ -202,7 +201,7 @@ fn get_session_messages(file_path: String) -> Result<Vec<SessionMessage>, String
 
 // 在终端中打开目录
 #[tauri::command]
-async fn open_in_terminal(_app: tauri::AppHandle, path: String, terminal: Option<String>) -> Result<(), String> {
+async fn open_in_terminal(app: tauri::AppHandle, path: String, terminal: Option<String>) -> Result<(), String> {
     let terminal_app = terminal.unwrap_or_else(|| {
         // 默认终端配置
         #[cfg(target_os = "windows")]
@@ -225,6 +224,7 @@ async fn open_in_terminal(_app: tauri::AppHandle, path: String, terminal: Option
 
     #[cfg(target_os = "windows")]
     {
+        use tauri_plugin_shell::ShellExt;
         use tauri_plugin_shell::ShellExt;
         let shell = app.shell();
         match terminal_app.as_str() {
@@ -327,6 +327,8 @@ async fn open_in_terminal(_app: tauri::AppHandle, path: String, terminal: Option
 
     #[cfg(target_os = "linux")]
     {
+        use std::process::Command;
+
         // 转义 shell 特殊字符
         let escape_shell = |s: &str| -> String {
             s.replace('\\', "\\\\")
@@ -493,6 +495,8 @@ async fn launch_resume_session(command: String, cwd: Option<String>, state: taur
 
     #[cfg(target_os = "linux")]
     {
+        use std::process::Command;
+
         // 转义 shell 特殊字符
         let escape_shell = |s: &str| -> String {
             s.replace('\\', "\\\\")
