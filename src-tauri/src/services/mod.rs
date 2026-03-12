@@ -16,7 +16,6 @@ pub mod storage;
 pub mod usage_service;
 pub mod universal_provider_service;
 pub mod import_export_service;
-pub mod speedtest_service;
 pub mod stream_check_service;
 pub mod global_proxy_service;
 pub mod env_checker_service;

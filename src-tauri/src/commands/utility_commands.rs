@@ -1,6 +1,5 @@
 use crate::services::{
     import_export_service,
-    speedtest_service,
     stream_check_service,
     global_proxy_service,
     env_checker_service,
@@ -26,11 +25,6 @@ pub fn export_providers_config() -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub fn import_providers_config(data: serde_json::Value) -> Result<Vec<String>, String> {
     import_export_service::import_providers_config(data).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn test_endpoint_speed(url: String, api_key: String) -> Result<speedtest_service::SpeedTestResult, String> {
-    speedtest_service::test_endpoint(url, api_key).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

@@ -39,6 +39,11 @@
       "Read(//c/guodevelop/claude-switch-v1/claude-switch-1.0/$HOME/.tauri/**)",
       "Bash(wc:*)",
       "Bash(openspec list:*)",
+      "Bash(netstat:*)",
+      "Bash(kill 25344:*)",
+      "Bash(Stop-Process:*)",
+      "mcp__ace-tool__enhance_prompt"
+      "Bash(openspec list:*)",
       "Bash(cargo clippy --quiet 2>&1 | head -50 || echo \"Clippy check complete\")"
     ]
   }
