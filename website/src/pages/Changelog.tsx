@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-      {
+        {
+    version: '1.2.17',
+    date: '2026-03-12',
+    type: 'patch',
+    changes: [
+      { type: 'fix', text: "修复 Windows 和 Linux 打包编译错误" }
+    ]
+  },
+{
     version: '1.2.16',
     date: '2026-03-12',
     type: 'patch',
