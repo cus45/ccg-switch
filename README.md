@@ -5,7 +5,7 @@
 
   **Claude · Codex · Gemini 统一配置管理与增强工具**
 
-  [![Website](https://img.shields.io/badge/🌐-Website-orange?logo=github-pages)](https://qincasin.github.io/ccg-switch/)
+  [![Website](https://img.shields.io/badge/🌐-Website-orange?logo=github-pages)](https://cus45.github.io/ccg-switch/)
   [![Tauri App](https://img.shields.io/badge/Tauri-v2-active?logo=tauri&color=FFC131)](#)
   [![React](https://img.shields.io/badge/React-19-blue?logo=react)](#)
   [![Rust](https://img.shields.io/badge/Rust-Backend-orange?logo=rust)](#)
