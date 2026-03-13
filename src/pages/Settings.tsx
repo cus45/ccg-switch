@@ -274,9 +274,9 @@ function Settings() {
                     </>
                 )}
 
-                {activeTab === 'about' && (
+                <div className={activeTab === 'about' ? '' : 'hidden'}>
                     <AboutPanel />
-                )}
+                </div>
             </div>
         </div>
     );

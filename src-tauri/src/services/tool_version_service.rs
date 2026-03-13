@@ -1,7 +1,9 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
+use tauri::Emitter;
 use tokio::sync::RwLock;
 
 #[cfg(target_os = "windows")]
@@ -10,7 +12,7 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolVersion {
     pub name: String,
@@ -39,54 +41,106 @@ fn extract_version(raw: &str) -> String {
         .unwrap_or_else(|| raw.to_string())
 }
 
-/// 获取多个工具的本地版本和远程最新版本（支持缓存和强制刷新）
-pub async fn get_tool_versions(tools: Option<Vec<String>>, force: bool) -> Vec<ToolVersion> {
-    // 非强制刷新时检查缓存
+// ── 磁盘缓存 ──
+
+fn cache_file_path() -> PathBuf {
+    let config_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".ccg-switch");
+    let _ = std::fs::create_dir_all(&config_dir);
+    config_dir.join("tool_versions_cache.json")
+}
+
+fn load_persisted_cache() -> Option<Vec<ToolVersion>> {
+    let path = cache_file_path();
+    let content = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn save_persisted_cache(data: &[ToolVersion]) {
+    if let Ok(json) = serde_json::to_string_pretty(data) {
+        let path = cache_file_path();
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+// ── 工具筛选辅助 ──
+
+fn filter_by_tools(all: Vec<ToolVersion>, tools: &Option<Vec<String>>) -> Vec<ToolVersion> {
+    if let Some(ref names) = tools {
+        let set: std::collections::HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
+        all.into_iter()
+            .filter(|t| set.contains(t.name.as_str()))
+            .collect()
+    } else {
+        all
+    }
+}
+
+// ── 后台真实检测（所有工具） ──
+
+async fn do_real_detection_all() -> Vec<ToolVersion> {
+    let all_tools: Vec<String> = VALID_TOOLS.iter().map(|s| s.to_string()).collect();
+    let futures: Vec<_> = all_tools
+        .into_iter()
+        .map(|tool| async move { get_single_tool_version(&tool).await })
+        .collect();
+    futures::future::join_all(futures).await
+}
+
+/// 获取多个工具的本地版本和远程最新版本
+/// 采用 stale-while-revalidate 模式：优先返回缓存，后台异步刷新并通过事件推送更新
+pub async fn get_tool_versions(
+    tools: Option<Vec<String>>,
+    force: bool,
+    app_handle: Option<tauri::AppHandle>,
+) -> Vec<ToolVersion> {
+    // 1. 非强制刷新时检查内存缓存
     if !force {
         let cache = CACHE.read().await;
         if let Some((ref cached, ref cached_at)) = *cache {
             if cached_at.elapsed() < CACHE_TTL {
-                if let Some(ref tools) = tools {
-                    let set: std::collections::HashSet<&str> =
-                        tools.iter().map(|s| s.as_str()).collect();
-                    return cached
-                        .iter()
-                        .filter(|t| set.contains(t.name.as_str()))
-                        .cloned()
-                        .collect();
-                }
-                return cached.clone();
+                return filter_by_tools(cached.clone(), &tools);
             }
         }
     }
 
-    let requested: Vec<String> = if let Some(ref tools) = tools {
-        let set: std::collections::HashSet<&str> = tools.iter().map(|s| s.as_str()).collect();
-        VALID_TOOLS
-            .iter()
-            .copied()
-            .filter(|t| set.contains(t))
-            .map(|s| s.to_string())
-            .collect()
-    } else {
-        VALID_TOOLS.iter().map(|s| s.to_string()).collect()
-    };
-
-    // 并行检查所有工具
-    let futures: Vec<_> = requested
-        .into_iter()
-        .map(|tool| async move { get_single_tool_version(&tool).await })
-        .collect();
-
-    let results = futures::future::join_all(futures).await;
-
-    // 请求全部工具时更新缓存
-    if tools.is_none() {
-        let mut cache = CACHE.write().await;
-        *cache = Some((results.clone(), std::time::Instant::now()));
+    // 2. 内存缓存 miss — 尝试磁盘缓存（非 force 时）
+    if !force {
+        if let Some(persisted) = load_persisted_cache() {
+            // 立即返回磁盘缓存数据，后台异步刷新
+            let app_clone = app_handle.clone();
+            tokio::spawn(async move {
+                let fresh = do_real_detection_all().await;
+                // 更新内存缓存
+                let mut cache = CACHE.write().await;
+                *cache = Some((fresh.clone(), std::time::Instant::now()));
+                // 保存磁盘缓存
+                save_persisted_cache(&fresh);
+                // 通过 Tauri 事件推送更新
+                if let Some(app) = app_clone {
+                    let _ = app.emit("tool-versions-updated", &fresh);
+                }
+            });
+            return filter_by_tools(persisted, &tools);
+        }
     }
 
-    results
+    // 3. 无任何缓存或 force=true — 后台执行真实检测，立即返回空
+    let app_clone = app_handle.clone();
+    tokio::spawn(async move {
+        let fresh = do_real_detection_all().await;
+        // 更新内存缓存
+        let mut cache = CACHE.write().await;
+        *cache = Some((fresh.clone(), std::time::Instant::now()));
+        // 保存磁盘缓存
+        save_persisted_cache(&fresh);
+        // 通过 Tauri 事件推送更新
+        if let Some(app) = app_clone {
+            let _ = app.emit("tool-versions-updated", &fresh);
+        }
+    });
+    vec![]
 }
 
 async fn get_single_tool_version(tool: &str) -> ToolVersion {

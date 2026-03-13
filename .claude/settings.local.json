@@ -45,7 +45,8 @@
       "mcp__ace-tool__enhance_prompt",
       "Bash(openspec list:*)",
       "Bash(cargo clippy --quiet 2>&1 | head -50 || echo \"Clippy check complete\")",
-      "Bash(find /Users/qinjiaxing/code/github/ccg-switch -name \"*CHANGE*\" -o -name \"*change*\" -o -name \"*Release*\" 2>/dev/null | grep -v node_modules | grep -v .git | head -20)"
+      "Bash(find /Users/qinjiaxing/code/github/ccg-switch -name \"*CHANGE*\" -o -name \"*change*\" -o -name \"*Release*\" 2>/dev/null | grep -v node_modules | grep -v .git | head -20)",
+      "Bash(cd \"C:\\\\guodevelop\\\\claude-switch-v1\\\\claude-switch-1.0\" && node -e \"console.log\\(require\\('./package.json'\\).version\\)\")"
     ]
   }
 }

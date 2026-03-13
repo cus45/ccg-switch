@@ -584,8 +584,12 @@ fn apply_universal_provider(config: UniversalProviderConfig) -> Result<Vec<Strin
 
 // 工具版本检测
 #[tauri::command]
-async fn get_tool_versions(tools: Option<Vec<String>>, force: Option<bool>) -> Result<Vec<ToolVersion>, String> {
-    Ok(services::tool_version_service::get_tool_versions(tools, force.unwrap_or(false)).await)
+async fn get_tool_versions(
+    app: tauri::AppHandle,
+    tools: Option<Vec<String>>,
+    force: Option<bool>,
+) -> Result<Vec<ToolVersion>, String> {
+    Ok(services::tool_version_service::get_tool_versions(tools, force.unwrap_or(false), Some(app)).await)
 }
 
 // 检查更新

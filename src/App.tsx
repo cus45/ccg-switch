@@ -8,6 +8,7 @@ import { DeepLinkImportDialog } from './components/providers/DeepLinkImportDialo
 import { useEffect } from 'react';
 import { useConfigStore } from './stores/useConfigStore';
 import { useTokenStore } from './stores/useTokenStore';
+import { useAboutStore } from './stores/useAboutStore';
 import { useTranslation } from 'react-i18next';
 
 // 懒加载非首屏页面，减少 Dashboard 切换到其他页面时的渲染开销
@@ -106,6 +107,22 @@ function App() {
     }
 
     const timer = globalThis.setTimeout(warmup, 300);
+    return () => globalThis.clearTimeout(timer);
+  }, []);
+
+  // 预热工具版本数据 + 初始化事件监听
+  useEffect(() => {
+    const warmup = () => {
+      useAboutStore.getState().initEventListeners();
+      void useAboutStore.getState().fetchToolVersions();
+    };
+
+    if ('requestIdleCallback' in window) {
+      const idleId = (window as any).requestIdleCallback(warmup, { timeout: 3000 });
+      return () => (window as any).cancelIdleCallback?.(idleId);
+    }
+
+    const timer = globalThis.setTimeout(warmup, 500);
     return () => globalThis.clearTimeout(timer);
   }, []);
 
