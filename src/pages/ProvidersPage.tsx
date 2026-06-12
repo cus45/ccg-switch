@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useProviderStore } from '../stores/useProviderStore';
 import { Provider } from '../types/provider';
-import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../types/app';
+import { AppType } from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
 import { exportProvidersConfigToFile, importProvidersConfigFromFile } from '../services/configTransferService';
@@ -13,6 +13,7 @@ import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
 import { useHealthCheck } from '../hooks/useHealthCheck';
 import HealthStatusBadge from '../components/providers/HealthStatusBadge';
+import { getAppColor, getAppLabel, useVisibleAppOptions } from '../hooks/useVisibleAppOptions';
 
 type ViewMode = 'card' | 'table';
 
@@ -36,6 +37,10 @@ function ProvidersPage() {
     const [filterTag, setFilterTag] = useState<string | null>(null);
 
     const { statuses, checkSingle, checkBatch, isAnyChecking } = useHealthCheck();
+    const appOptions = useVisibleAppOptions();
+    const defaultFormAppType = filterApp === 'all'
+        ? appOptions[0]?.appType ?? 'claude'
+        : filterApp;
 
     // 拖拽状态
     const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -339,8 +344,8 @@ function ProvidersPage() {
                         onChange={(e) => setFilterApp(e.target.value as AppType | 'all')}
                     >
                         <option value="all">{t('providers.filter_all')}</option>
-                        {VISIBLE_APP_TYPES.map(type => (
-                            <option key={type} value={type}>{APP_LABELS[type]}</option>
+                        {appOptions.map(({ appType, label }) => (
+                            <option key={appType} value={appType}>{label}</option>
                         ))}
                     </select>
                 </div>
@@ -521,8 +526,8 @@ function ProvidersPage() {
                                         </td>
                                         <td className="w-28">
                                             <span className="inline-flex items-center gap-1.5 text-xs text-base-content/70">
-                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: APP_COLORS[provider.appType] }} />
-                                                {APP_LABELS[provider.appType]}
+                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: getAppColor(provider.appType) }} />
+                                                {getAppLabel(provider.appType)}
                                             </span>
                                         </td>
                                         <td className="w-48">
@@ -601,7 +606,7 @@ function ProvidersPage() {
                 isOpen={isFormOpen}
                 editingProvider={editingProvider}
                 onClose={() => { setIsFormOpen(false); setEditingProvider(null); }}
-                defaultAppType={filterApp === 'all' ? 'claude' : filterApp}
+                defaultAppType={defaultFormAppType}
             />
 
             {/* 删除确认 */}

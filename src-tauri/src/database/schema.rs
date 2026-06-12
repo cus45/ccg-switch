@@ -56,6 +56,108 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
             updated_at INTEGER NOT NULL
         );
 
+        -- 工作空间表
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root_path TEXT NOT NULL,
+            normalized_path TEXT NOT NULL UNIQUE,
+            git_root TEXT,
+            origin_url TEXT,
+            description TEXT,
+            tags TEXT NOT NULL DEFAULT '[]',
+            color TEXT,
+            icon TEXT,
+            default_app_type TEXT,
+            default_provider_id TEXT,
+            permission_policy TEXT,
+            terminal_policy TEXT,
+            metadata TEXT NOT NULL DEFAULT '{}',
+            is_favorite BOOLEAN NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            last_opened_at INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspaces_last_opened_at
+            ON workspaces(last_opened_at);
+
+        -- 工作空间能力绑定表
+        CREATE TABLE IF NOT EXISTS workspace_bindings (
+            id TEXT PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            binding_type TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT 1,
+            priority INTEGER NOT NULL DEFAULT 0,
+            config TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(workspace_id, target_type, target_id, binding_type),
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_bindings_workspace_id
+            ON workspace_bindings(workspace_id);
+
+        -- Workspace automation 配置表（只存配置，不负责执行）
+        CREATE TABLE IF NOT EXISTS workspace_automations (
+            id TEXT PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            schedule TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT 0,
+            memory_path TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_automations_workspace_id
+            ON workspace_automations(workspace_id);
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_automations_enabled
+            ON workspace_automations(enabled);
+
+        -- 动态能力注册表：兼容 MCP / skill / prompt / automation 等能力来源
+        CREATE TABLE IF NOT EXISTS capabilities (
+            id TEXT PRIMARY KEY,
+            capability_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            metadata TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(capability_type, source_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_capabilities_type_source
+            ON capabilities(capability_type, source_id);
+
+        -- 动态能力绑定表：target 可扩展为 app / workspace / provider / model_adapter
+        CREATE TABLE IF NOT EXISTS capability_bindings (
+            id TEXT PRIMARY KEY,
+            capability_id TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            binding_type TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT 1,
+            priority INTEGER NOT NULL DEFAULT 0,
+            config TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(capability_id, target_type, target_id, binding_type),
+            FOREIGN KEY(capability_id) REFERENCES capabilities(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_capability_bindings_capability_id
+            ON capability_bindings(capability_id);
+
+        CREATE INDEX IF NOT EXISTS idx_capability_bindings_target
+            ON capability_bindings(target_type, target_id);
+
         -- Provider 表
         CREATE TABLE IF NOT EXISTS providers (
             id TEXT PRIMARY KEY,

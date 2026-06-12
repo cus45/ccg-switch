@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { Provider } from '../../types/provider';
-import { APP_LABELS } from '../../types/app';
 import ProviderIcon from './ProviderIcon';
 import HealthStatusBadge from './HealthStatusBadge';
 import type { HealthStatus } from '../../hooks/useHealthCheck';
+import { getAppLabel } from '../../hooks/useVisibleAppOptions';
 
 interface ProviderCardProps {
     provider: Provider;
@@ -78,7 +78,7 @@ export default function ProviderCard({
                                 </span>
                             )}
                         </div>
-                        <span className="text-xs text-base-content/50">{APP_LABELS[provider.appType]}</span>
+                        <span className="text-xs text-base-content/50">{getAppLabel(provider.appType)}</span>
                     </div>
                 </div>
 

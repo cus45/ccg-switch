@@ -1,4 +1,6 @@
 pub mod app_configs;
+pub mod automations;
+pub mod capabilities;
 pub mod failover_queue;
 pub mod global_proxies;
 pub mod mcp;
@@ -7,3 +9,4 @@ pub mod provider_health;
 pub mod providers;
 pub mod proxy_config;
 pub mod skills;
+pub mod workspaces;

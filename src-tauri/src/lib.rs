@@ -11,9 +11,13 @@ mod store;
 mod tray;
 mod utils;
 
+use commands::adapter_commands;
 use commands::advanced_commands;
+use commands::automation_commands;
 use commands::backup_commands;
+use commands::codex_bridge_commands;
 use commands::deeplink_commands;
+use commands::local_environment_commands;
 use commands::mcp_commands;
 use commands::prompt_commands;
 use commands::provider_commands;
@@ -21,6 +25,9 @@ use commands::proxy_commands;
 use commands::session_commands;
 use commands::skill_commands;
 use commands::utility_commands;
+use commands::workspace_commands;
+use commands::workspace_git_commands;
+use commands::worktree_commands;
 use store::AppState;
 use tauri::Emitter;
 use tauri::Manager;
@@ -833,6 +840,37 @@ pub fn run() {
             utility_commands::set_global_proxy,
             utility_commands::check_env,
             utility_commands::fetch_models,
+            // Workspace 命令
+            workspace_commands::list_workspaces,
+            workspace_commands::get_workspace,
+            workspace_commands::create_workspace,
+            workspace_commands::update_workspace,
+            workspace_commands::delete_workspace,
+            workspace_commands::import_project_as_workspace,
+            workspace_commands::touch_workspace,
+            workspace_commands::list_workspace_bindings,
+            workspace_commands::set_workspace_binding,
+            workspace_commands::delete_workspace_binding,
+            worktree_commands::list_workspace_worktrees,
+            workspace_git_commands::get_workspace_git_status,
+            local_environment_commands::read_local_environment,
+            local_environment_commands::save_local_environment,
+            automation_commands::list_workspace_automations,
+            automation_commands::create_workspace_automation,
+            automation_commands::update_workspace_automation,
+            automation_commands::delete_workspace_automation,
+            // Adapter registry 命令
+            adapter_commands::get_adapter_registry,
+            // CodexBridge 命令
+            codex_bridge_commands::codex_config_read,
+            codex_bridge_commands::codex_model_list,
+            codex_bridge_commands::codex_thread_start,
+            codex_bridge_commands::codex_thread_resume,
+            codex_bridge_commands::codex_turn_start,
+            codex_bridge_commands::codex_turn_interrupt,
+            codex_bridge_commands::codex_thread_read,
+            codex_bridge_commands::codex_mcp_server_status_list,
+            codex_bridge_commands::codex_approval_respond,
             // Clipboard
             write_clipboard,
             // Deep Link 命令

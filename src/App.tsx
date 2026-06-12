@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { useConfigStore } from './stores/useConfigStore';
 import { useTokenStore } from './stores/useTokenStore';
 import { useAboutStore } from './stores/useAboutStore';
+import { useAdapterRegistryStore } from './stores/useAdapterRegistryStore';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { showToast } from './components/common/ToastContainer';
@@ -91,6 +92,12 @@ function App() {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    void useAdapterRegistryStore.getState().loadRegistry().catch(() => {
+      // registry 失败不阻断应用启动，各页面会使用 legacy fallback。
+    });
+  }, []);
 
   // Sync language from config
   useEffect(() => {

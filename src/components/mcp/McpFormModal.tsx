@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { X, ChevronDown, ChevronUp, Save, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { McpServerConfig, McpServerRow } from '../../types/mcpV2';
+import { McpServerConfig, McpServerRow, type McpV2LegacyApp } from '../../types/mcpV2';
 import { mcpPresets, getMcpPresetWithDescription } from '../../config/mcpPresets';
 import McpWizardModal from './McpWizardModal';
+import { useVisibleAppOptions } from '../../hooks/useVisibleAppOptions';
 
 interface McpFormModalProps {
     isOpen: boolean;
@@ -13,9 +14,20 @@ interface McpFormModalProps {
     onSave: (server: Partial<McpServerRow>) => Promise<void>;
 }
 
+function isMcpLegacyApp(appType: string): appType is McpV2LegacyApp {
+    return appType === 'claude' || appType === 'codex' || appType === 'gemini';
+}
+
 function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave }: McpFormModalProps) {
     const { t } = useTranslation();
     const isEditing = !!editingServer;
+    const appOptions = useVisibleAppOptions();
+    const mcpAppOptions = appOptions.flatMap(option => {
+        if (!isMcpLegacyApp(option.appType)) {
+            return [];
+        }
+        return [{ ...option, appType: option.appType }];
+    });
 
     // 表单状态
     const [formId, setFormId] = useState('');
@@ -219,6 +231,10 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
         }
     }, [formConfig]);
 
+    const updateEnabledApp = (app: McpV2LegacyApp, checked: boolean) => {
+        setEnabledApps(prev => ({ ...prev, [app]: checked }));
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -320,33 +336,17 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
                                 {t('mcp.form.enabledApps')}
                             </label>
                             <div className="flex flex-wrap gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enabledApps.claude}
-                                        onChange={(e) => setEnabledApps({ ...enabledApps, claude: e.target.checked })}
-                                        className="checkbox checkbox-sm checkbox-primary"
-                                    />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">Claude</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enabledApps.codex}
-                                        onChange={(e) => setEnabledApps({ ...enabledApps, codex: e.target.checked })}
-                                        className="checkbox checkbox-sm checkbox-primary"
-                                    />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">Codex</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enabledApps.gemini}
-                                        onChange={(e) => setEnabledApps({ ...enabledApps, gemini: e.target.checked })}
-                                        className="checkbox checkbox-sm checkbox-primary"
-                                    />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">Gemini</span>
-                                </label>
+                                {mcpAppOptions.map(({ appType, label }) => (
+                                    <label key={appType} className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={enabledApps[appType]}
+                                            onChange={(e) => updateEnabledApp(appType, e.target.checked)}
+                                            className="checkbox checkbox-sm checkbox-primary"
+                                        />
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+                                    </label>
+                                ))}
                             </div>
                         </div>
 

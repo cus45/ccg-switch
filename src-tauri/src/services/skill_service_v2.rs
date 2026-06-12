@@ -6,6 +6,7 @@
 
 use crate::database::dao::skills::{InstalledSkillRow, SkillRepo};
 use crate::database::Database;
+use crate::services::capability_service;
 use crate::services::skill_discovery::{
     discover_available, download_skill_to_ssot, DiscoverableSkill,
 };
@@ -172,6 +173,7 @@ impl SkillServiceV2 {
         };
 
         db.save_skill(&row)?;
+        capability_service::sync_skill_legacy_bindings(db, &row)?;
 
         // 同步到启用的应用目录
         for app in ["claude", "codex", "gemini"] {
@@ -273,6 +275,7 @@ impl SkillServiceV2 {
         };
 
         db.save_skill(&row)?;
+        capability_service::sync_skill_legacy_bindings(db, &row)?;
 
         // 同步到 Claude 目录
         let _ = sync_to_app_dir(&row.directory, "claude");
@@ -302,6 +305,11 @@ impl SkillServiceV2 {
             }
         }
         db.delete_skill(id)?;
+        if let Some(capability) =
+            db.get_capability_by_type_source(crate::models::capability::CapabilityType::Skill, id)?
+        {
+            let _ = db.delete_capability_by_id(&capability.id);
+        }
         Ok(())
     }
 
@@ -327,6 +335,7 @@ impl SkillServiceV2 {
         }
 
         db.save_skill(row)?;
+        capability_service::sync_skill_legacy_bindings(db, row)?;
 
         if enabled {
             sync_to_app_dir(&row.directory, app)?;
@@ -504,6 +513,7 @@ impl SkillServiceV2 {
                 };
 
                 db.save_skill(&row)?;
+                capability_service::sync_skill_legacy_bindings(db, &row)?;
                 imported += 1;
                 imported_names.push(row.name);
             }

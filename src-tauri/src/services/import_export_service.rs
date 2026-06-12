@@ -4,6 +4,7 @@ use crate::database::dao::skills::{InstalledSkillRow, SkillRepo};
 use crate::database::{lock_conn, Database};
 use crate::models::provider::Provider;
 use crate::proxy::types::AppProxyConfig;
+use crate::services::capability_service;
 use crate::services::global_proxy_service::GlobalProxyConfig;
 use chrono::Utc;
 use serde::de::DeserializeOwned;
@@ -77,6 +78,7 @@ pub fn import_config(db: &Arc<Database>, data: Value) -> Result<Vec<String>, Str
     if let Some(mcp_servers) = data.get("mcp_servers") {
         for server in parse_rows::<McpServerRow>(mcp_servers, "mcp_servers")? {
             db.save_mcp_server(&server)?;
+            capability_service::sync_mcp_server_legacy_bindings(db, &server)?;
         }
         imported.push("mcp_servers".to_string());
     }
@@ -84,6 +86,7 @@ pub fn import_config(db: &Arc<Database>, data: Value) -> Result<Vec<String>, Str
     if let Some(skills) = data.get("skills") {
         for skill in parse_rows::<InstalledSkillRow>(skills, "skills")? {
             db.save_skill(&skill)?;
+            capability_service::sync_skill_legacy_bindings(db, &skill)?;
         }
         imported.push("skills".to_string());
     }
@@ -98,6 +101,7 @@ pub fn import_config(db: &Arc<Database>, data: Value) -> Result<Vec<String>, Str
     if let Some(prompts) = data.get("prompts") {
         for prompt in parse_rows::<PromptRow>(prompts, "prompts")? {
             db.save_prompt(&prompt)?;
+            capability_service::sync_prompt_legacy_binding(db, &prompt)?;
         }
         imported.push("prompts".to_string());
     }

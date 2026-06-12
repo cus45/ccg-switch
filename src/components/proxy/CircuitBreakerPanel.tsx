@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Shield, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useProviderStore } from '../../stores/useProviderStore';
 import { CircuitBreakerState } from '../../types/proxy';
+import { useVisibleAppOptions } from '../../hooks/useVisibleAppOptions';
 
 function getCircuitState(index: number): CircuitBreakerState {
     // 静态占位：前端展示模拟状态，实际由后端维护
@@ -38,6 +39,8 @@ const STATE_CONFIG: Record<CircuitBreakerState, {
 
 export default function CircuitBreakerPanel() {
     const { providers, hasLoaded, loadAllProviders } = useProviderStore();
+    const appOptions = useVisibleAppOptions();
+    const displayApp = appOptions[0];
 
     useEffect(() => {
         if (!hasLoaded) {
@@ -45,7 +48,9 @@ export default function CircuitBreakerPanel() {
         }
     }, [hasLoaded, loadAllProviders]);
 
-    const claudeProviders = providers.filter((p) => p.appType === 'claude');
+    const displayProviders = displayApp
+        ? providers.filter((p) => p.appType === displayApp.appType)
+        : [];
 
     return (
         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 p-5">
@@ -57,13 +62,13 @@ export default function CircuitBreakerPanel() {
                 </span>
             </div>
 
-            {claudeProviders.length === 0 ? (
+            {displayProviders.length === 0 ? (
                 <div className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-                    暂无 Claude Provider
+                    暂无 {displayApp?.label ?? 'App'} Provider
                 </div>
             ) : (
                 <div className="space-y-2">
-                    {claudeProviders.map((provider, index) => {
+                    {displayProviders.map((provider, index) => {
                         const state = getCircuitState(index);
                         const cfg = STATE_CONFIG[state];
                         const Icon = cfg.icon;

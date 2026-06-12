@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use crate::database::dao::prompts::PromptRow;
 use crate::database::Database;
+use crate::services::capability_service;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -51,6 +52,7 @@ impl PromptServiceV2 {
         }
         prompt.updated_at = now;
         db.save_prompt(&prompt)?;
+        capability_service::sync_prompt_legacy_binding(db, &prompt)?;
 
         // 如果此 prompt 已启用，同步到 live 文件
         if prompt.enabled {
@@ -68,7 +70,15 @@ impl PromptServiceV2 {
                 return Err("Cannot delete an enabled prompt. Disable it first.".to_string());
             }
         }
-        db.delete_prompt_row(id, app_type)?;
+        if db.delete_prompt_row(id, app_type)? {
+            let source_id = format!("{app_type}:{id}");
+            if let Some(capability) = db.get_capability_by_type_source(
+                crate::models::capability::CapabilityType::Prompt,
+                &source_id,
+            )? {
+                let _ = db.delete_capability_by_id(&capability.id);
+            }
+        }
         Ok(())
     }
 
@@ -91,14 +101,17 @@ impl PromptServiceV2 {
                 updated.content = live_content.clone();
                 updated.updated_at = chrono::Utc::now().timestamp();
                 db.save_prompt(&updated)?;
+                capability_service::sync_prompt_legacy_binding(db, &updated)?;
             }
         }
 
         // 3. 禁用所有
         db.disable_all_prompts(app_type)?;
+        capability_service::sync_prompts_for_app(db, app_type)?;
 
         // 4. 启用目标
         db.set_prompt_enabled(id, app_type, true)?;
+        capability_service::sync_prompts_for_app(db, app_type)?;
 
         // 5. 读取目标 prompt content，写入 live 文件
         let target = db
@@ -125,10 +138,12 @@ impl PromptServiceV2 {
                     updated.content = live_content;
                     updated.updated_at = chrono::Utc::now().timestamp();
                     db.save_prompt(&updated)?;
+                    capability_service::sync_prompt_legacy_binding(db, &updated)?;
                 }
             }
         }
         db.set_prompt_enabled(id, app_type, false)?;
+        capability_service::sync_prompts_for_app(db, app_type)?;
         Ok(())
     }
 
@@ -159,6 +174,7 @@ impl PromptServiceV2 {
             updated_at: now,
         };
         db.save_prompt(&prompt)?;
+        capability_service::sync_prompt_legacy_binding(db, &prompt)?;
         Ok(id)
     }
 

@@ -5,10 +5,16 @@ import { usePromptStoreV2 } from '../stores/usePromptStoreV2';
 import { PromptRow, PROMPT_APPS } from '../types/promptV2';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
+import { useVisibleAppOptions } from '../hooks/useVisibleAppOptions';
 
 function PromptsPage() {
     const { t } = useTranslation();
     const v2Store = usePromptStoreV2();
+    const appOptions = useVisibleAppOptions();
+    const promptApps = appOptions.flatMap(option => {
+        const promptApp = PROMPT_APPS.find(app => app.key === option.appType);
+        return promptApp ? [{ ...promptApp, label: option.label }] : [];
+    });
 
     const [currentApp, setCurrentApp] = useState('claude');
 
@@ -18,6 +24,12 @@ function PromptsPage() {
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; appType: string }>({ isOpen: false, id: '', appType: '' });
 
     // 数据加载
+    useEffect(() => {
+        if (promptApps.length > 0 && !promptApps.some(app => app.key === currentApp)) {
+            setCurrentApp(promptApps[0].key);
+        }
+    }, [currentApp, promptApps]);
+
     useEffect(() => {
         v2Store.loadPrompts(currentApp);
         v2Store.loadLiveContent(currentApp);
@@ -112,7 +124,7 @@ function PromptsPage() {
 
                 {/* 应用 tab */}
                 <div className="flex gap-2 flex-wrap">
-                    {PROMPT_APPS.map(({ key, label }) => (
+                    {promptApps.map(({ key, label }) => (
                         <button key={key} onClick={() => setCurrentApp(key)} className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${currentApp === key ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-base-100'}`}>
                             {label}
                         </button>

@@ -1,5 +1,10 @@
+pub mod adapter;
 pub mod app_type;
+pub mod automation;
+pub mod capability;
 pub mod config;
+pub mod conversation;
+pub mod local_environment;
 pub mod mcp;
 pub mod prompt;
 pub mod provider;
@@ -8,3 +13,5 @@ pub mod skill;
 pub mod subagent;
 pub mod token;
 pub mod usage;
+pub mod workspace;
+pub mod worktree;

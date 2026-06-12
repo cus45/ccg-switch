@@ -2,17 +2,25 @@ import { useEffect, useState } from 'react';
 import { GitMerge, Info } from 'lucide-react';
 import { useProviderStore } from '../../stores/useProviderStore';
 import { showToast } from '../common/ToastContainer';
-import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
+import { type AppType } from '../../types/app';
+import { getFallbackVisibleAppOptions, useVisibleAppOptions } from '../../hooks/useVisibleAppOptions';
 
 export default function FailoverQueue() {
     const { providers, hasLoaded, loading, loadAllProviders, updateProvider } = useProviderStore();
-    const [activeTab, setActiveTab] = useState<AppType>('claude');
+    const appOptions = useVisibleAppOptions();
+    const [activeTab, setActiveTab] = useState<AppType>(() => getFallbackVisibleAppOptions()[0].appType);
 
     useEffect(() => {
         if (!hasLoaded) {
             void loadAllProviders();
         }
     }, [hasLoaded, loadAllProviders]);
+
+    useEffect(() => {
+        if (appOptions.length > 0 && !appOptions.some(option => option.appType === activeTab)) {
+            setActiveTab(appOptions[0].appType);
+        }
+    }, [activeTab, appOptions]);
 
     const handleToggle = async (id: string, current: boolean) => {
         try {
@@ -33,10 +41,11 @@ export default function FailoverQueue() {
     const queueIndexMap = new Map(queued.map((p, i) => [p.id, i + 1]));
 
     // 每个 tab 的统计
-    const tabStats = VISIBLE_APP_TYPES.map((type) => {
+    const tabStats = appOptions.map(({ appType: type, label, color }) => {
         const list = providers.filter((p) => p.appType === type);
-        return { type, total: list.length, queued: list.filter((p) => p.inFailoverQueue).length };
+        return { type, label, color, total: list.length, queued: list.filter((p) => p.inFailoverQueue).length };
     });
+    const activeLabel = appOptions.find(option => option.appType === activeTab)?.label ?? activeTab;
 
     return (
         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200">
@@ -51,7 +60,7 @@ export default function FailoverQueue() {
 
             {/* Tab 导航 */}
             <div className="flex border-b border-gray-100 dark:border-base-200 px-5 gap-1" role="tablist">
-                {tabStats.map(({ type, total, queued }) => (
+                {tabStats.map(({ type, label, color, total, queued }) => (
                     <button
                         key={type}
                         role="tab"
@@ -66,9 +75,9 @@ export default function FailoverQueue() {
                         <span className="flex items-center gap-1.5">
                             <span
                                 className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: APP_COLORS[type] }}
+                                style={{ backgroundColor: color }}
                             />
-                            {APP_LABELS[type]}
+                            {label}
                             {total > 0 && (
                                 <span className={`text-[10px] px-1 rounded-full ${
                                     queued > 0
@@ -82,7 +91,7 @@ export default function FailoverQueue() {
                         {activeTab === type && (
                             <span
                                 className="absolute bottom-0 left-1 right-1 h-0.5 rounded-full"
-                                style={{ backgroundColor: APP_COLORS[type] }}
+                                style={{ backgroundColor: color }}
                             />
                         )}
                     </button>
@@ -93,7 +102,7 @@ export default function FailoverQueue() {
             <div className="p-4">
                 {filtered.length === 0 ? (
                     <div className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-                        暂无 {APP_LABELS[activeTab]} Provider
+                        暂无 {activeLabel} Provider
                     </div>
                 ) : (
                     <div className="space-y-1.5">

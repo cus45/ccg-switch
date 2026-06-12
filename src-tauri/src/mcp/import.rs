@@ -1,5 +1,6 @@
 use crate::database::dao::mcp::McpServerRow;
 use crate::database::Database;
+use crate::services::capability_service;
 use std::sync::Arc;
 
 /// 从 ~/.claude.json 导入 MCP 服务器到数据库
@@ -14,6 +15,7 @@ pub fn import_from_claude(db: &Arc<Database>) -> Result<usize, String> {
             if !row.enabled_claude {
                 row.enabled_claude = true;
                 db.save_mcp_server(row)?;
+                capability_service::sync_mcp_server_legacy_bindings(db, row)?;
                 count += 1;
             }
         } else {
@@ -28,6 +30,7 @@ pub fn import_from_claude(db: &Arc<Database>) -> Result<usize, String> {
                 enabled_gemini: false,
             };
             db.save_mcp_server(&row)?;
+            capability_service::sync_mcp_server_legacy_bindings(db, &row)?;
             existing.insert(id, row);
             count += 1;
         }
@@ -47,6 +50,7 @@ pub fn import_from_codex(db: &Arc<Database>) -> Result<usize, String> {
             if !row.enabled_codex {
                 row.enabled_codex = true;
                 db.save_mcp_server(row)?;
+                capability_service::sync_mcp_server_legacy_bindings(db, row)?;
                 count += 1;
             }
         } else {
@@ -61,6 +65,7 @@ pub fn import_from_codex(db: &Arc<Database>) -> Result<usize, String> {
                 enabled_gemini: false,
             };
             db.save_mcp_server(&row)?;
+            capability_service::sync_mcp_server_legacy_bindings(db, &row)?;
             existing.insert(id, row);
             count += 1;
         }
@@ -80,6 +85,7 @@ pub fn import_from_gemini(db: &Arc<Database>) -> Result<usize, String> {
             if !row.enabled_gemini {
                 row.enabled_gemini = true;
                 db.save_mcp_server(row)?;
+                capability_service::sync_mcp_server_legacy_bindings(db, row)?;
                 count += 1;
             }
         } else {
@@ -94,6 +100,7 @@ pub fn import_from_gemini(db: &Arc<Database>) -> Result<usize, String> {
                 enabled_gemini: true,
             };
             db.save_mcp_server(&row)?;
+            capability_service::sync_mcp_server_legacy_bindings(db, &row)?;
             existing.insert(id, row);
             count += 1;
         }

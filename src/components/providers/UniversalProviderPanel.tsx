@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Zap, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { showToast } from '../common/ToastContainer';
-import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
+import { type AppType } from '../../types/app';
+import { getFallbackVisibleAppOptions, useVisibleAppOptions } from '../../hooks/useVisibleAppOptions';
 
 interface UniversalProviderConfig {
     name: string;
@@ -19,14 +20,28 @@ interface UniversalProviderPanelProps {
 
 export default function UniversalProviderPanel({ onClose }: UniversalProviderPanelProps) {
     const { t } = useTranslation();
+    const appOptions = useVisibleAppOptions();
 
     const [name, setName] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [url, setUrl] = useState('');
     const [description, setDescription] = useState('');
-    const [targetApps, setTargetApps] = useState<AppType[]>([...VISIBLE_APP_TYPES]);
+    const [targetApps, setTargetApps] = useState<AppType[]>(() =>
+        getFallbackVisibleAppOptions().map(option => option.appType)
+    );
     const [showKey, setShowKey] = useState(false);
     const [applying, setApplying] = useState(false);
+
+    useEffect(() => {
+        setTargetApps(prev => {
+            const visibleApps = appOptions.map(option => option.appType);
+            const visibleSet = new Set(visibleApps);
+            const next = prev.filter(app => visibleSet.has(app));
+            return next.length === prev.length && next.every((app, index) => app === prev[index])
+                ? prev
+                : next;
+        });
+    }, [appOptions]);
 
     const toggleApp = (app: AppType) => {
         setTargetApps(prev =>
@@ -149,9 +164,8 @@ export default function UniversalProviderPanel({ onClose }: UniversalProviderPan
                     {t('providers.universal.target_apps', '目标应用')} <span className="text-red-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
-                    {VISIBLE_APP_TYPES.map((app) => {
+                    {appOptions.map(({ appType: app, label, color }) => {
                         const checked = targetApps.includes(app);
-                        const color = APP_COLORS[app];
                         return (
                             <button
                                 key={app}
@@ -165,7 +179,7 @@ export default function UniversalProviderPanel({ onClose }: UniversalProviderPan
                                 style={checked ? { backgroundColor: color, borderColor: color } : undefined}
                             >
                                 <span className={`w-2 h-2 rounded-full ${checked ? 'bg-white/70' : 'bg-gray-400'}`} />
-                                {APP_LABELS[app]}
+                                {label}
                             </button>
                         );
                     })}

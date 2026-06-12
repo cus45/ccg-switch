@@ -7,14 +7,20 @@ import { useSkillStoreV2 } from '../stores/useSkillStoreV2';
 import { useProviderStore } from '../stores/useProviderStore';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
-import { APP_TYPES, APP_LABELS } from '../types/app';
 import { SKILL_APPS } from '../types/skillV2';
+import { getAppLabel, useVisibleAppOptions } from '../hooks/useVisibleAppOptions';
 
 const ALL_TAB = 'all';
 
 
 function SkillsPage() {
     const { t } = useTranslation();
+    const appOptions = useVisibleAppOptions();
+    const skillAppOptions = appOptions.flatMap(option => {
+        const skillApp = SKILL_APPS.find(app => app.app === option.appType);
+        return skillApp ? [{ ...skillApp, label: option.label }] : [];
+    });
+    const defaultSkillApp = skillAppOptions[0]?.app ?? 'claude';
     const [pageTab, setPageTab] = useState<'legacy' | 'discover' | 'installed' | 'repos'>('installed');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -335,7 +341,7 @@ function SkillsPage() {
                                     {skill.description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 line-clamp-2">{skill.description}</p>}
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            {SKILL_APPS.map(({ key, label, app }) => (
+                                            {skillAppOptions.map(({ key, label, app }) => (
                                                 <label key={app} className="flex items-center gap-1.5 cursor-pointer">
                                                     <input type="checkbox" className="toggle toggle-xs toggle-primary" checked={skill[key]} onChange={(e) => toggleV2App(skill.id, app, e.target.checked)} />
                                                     <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
@@ -502,7 +508,7 @@ function SkillsPage() {
                                                         onClick={async () => {
                                                             setInstallLoading(skill.key);
                                                             try {
-                                                                await installSkill(skill, 'claude');
+                                                                await installSkill(skill, defaultSkillApp);
                                                                 showToast(`已安装 ${skill.name}`, 'success');
                                                             } catch (e) {
                                                                 showToast(String(e), 'error');
@@ -595,9 +601,9 @@ function SkillsPage() {
                             <button onClick={() => setCurrentApp(null)} className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${!currentApp || currentApp === ALL_TAB ? 'bg-gray-900 dark:bg-base-content text-white dark:text-base-100' : 'bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-base-100'}`}>
                                 {t('skills.all_apps')}
                             </button>
-                            {APP_TYPES.map((appType) => (
+                            {appOptions.map(({ appType, label }) => (
                                 <button key={appType} onClick={() => setCurrentApp(appType)} className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${currentApp === appType ? 'bg-purple-500 text-white' : 'bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-base-100'}`}>
-                                    {APP_LABELS[appType]}
+                                    {label}
                                 </button>
                             ))}
                         </div>
@@ -623,7 +629,7 @@ function SkillsPage() {
                                                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 font-mono">{skill.content.substring(0, 150)}...</p>
                                                 {currentApp && currentApp !== ALL_TAB && (
                                                     <div className="mt-3 flex items-center gap-2">
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">{APP_LABELS[currentApp as keyof typeof APP_LABELS] ?? currentApp}:</span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">{getAppLabel(currentApp)}:</span>
                                                         <input type="checkbox" className="toggle toggle-sm toggle-primary" checked={getAppEnabled(skill.apps, currentApp)} onChange={(e) => handleAppToggle(skill.name, currentApp, e.target.checked)} />
                                                         <span className="text-xs text-gray-500 dark:text-gray-400">{getAppEnabled(skill.apps, currentApp) ? t('skills.app_enabled') : t('skills.app_disabled')}</span>
                                                     </div>

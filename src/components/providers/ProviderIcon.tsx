@@ -1,4 +1,5 @@
-import { AppType, APP_COLORS, APP_LABELS } from '../../types/app';
+import { AppType } from '../../types/app';
+import { getAppColor, getAppLabel } from '../../hooks/useVisibleAppOptions';
 
 interface ProviderIconProps {
     appType: AppType;
@@ -12,8 +13,8 @@ const sizeMap = {
 };
 
 export default function ProviderIcon({ appType, size = 'md' }: ProviderIconProps) {
-    const color = APP_COLORS[appType] || '#6B7280';
-    const label = APP_LABELS[appType] || appType;
+    const color = getAppColor(appType);
+    const label = getAppLabel(appType);
 
     return (
         <div

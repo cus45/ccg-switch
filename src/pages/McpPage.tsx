@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useMcpStoreV2 } from '../stores/useMcpStoreV2';
 import McpFormModal from '../components/mcp/McpFormModal';
 import ModalDialog from '../components/common/ModalDialog';
-import { McpServerRow, MCP_V2_APPS } from '../types/mcpV2';
+import { MCP_V2_LEGACY_APP_BINDINGS, McpServerRow } from '../types/mcpV2';
 import { showToast } from '../components/common/ToastContainer';
+import { useVisibleAppOptions } from '../hooks/useVisibleAppOptions';
 
 // ========== 服务器卡片 ==========
 function McpServerRowCard({ server, onEdit, onDelete, onToggleApp }: {
@@ -16,6 +17,12 @@ function McpServerRowCard({ server, onEdit, onDelete, onToggleApp }: {
 }) {
     const { t } = useTranslation();
     const cfg = server.serverConfig;
+    const appOptions = useVisibleAppOptions();
+    const mcpApps = appOptions.flatMap(option => {
+        const binding = MCP_V2_LEGACY_APP_BINDINGS.find(item => item.app === option.appType);
+        return binding ? [{ ...binding, label: option.label }] : [];
+    });
+
     return (
         <div className="bg-white dark:bg-base-100 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-base-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
@@ -41,7 +48,7 @@ function McpServerRowCard({ server, onEdit, onDelete, onToggleApp }: {
                     </div>
                     {/* 多应用开关 */}
                     <div className="mt-3 flex items-center gap-4">
-                        {MCP_V2_APPS.map(({ key, label, app }) => (
+                        {mcpApps.map(({ key, label, app }) => (
                             <label key={app} className="flex items-center gap-1.5 cursor-pointer">
                                 <input
                                     type="checkbox"

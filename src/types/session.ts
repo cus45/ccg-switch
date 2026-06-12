@@ -1,5 +1,7 @@
+import type { AppType } from './app';
+
 export interface SessionMeta {
-    providerId: 'claude' | 'codex' | 'gemini';
+    providerId: AppType;
     sessionId: string;
     title: string | null;
     summary: string | null;
@@ -16,5 +18,5 @@ export interface UnifiedSessionMessage {
     ts?: string;
 }
 
-export type ProviderFilter = 'all' | 'claude' | 'codex' | 'gemini';
+export type ProviderFilter = 'all' | AppType;
 export type ViewMode = 'project' | 'all';

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Layers } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { useVisibleAppOptions } from '../../hooks/useVisibleAppOptions';
 
 // 简化的 Provider 接口
 interface Provider {
@@ -11,24 +12,19 @@ interface Provider {
     isActive: boolean;
 }
 
-const APP_DISPLAY: Record<string, { label: string; color: string }> = {
-    claude: { label: 'Claude', color: 'bg-orange-500' },
-    codex: { label: 'Codex', color: 'bg-blue-500' },
-    gemini: { label: 'Gemini', color: 'bg-purple-500' },
-};
-
 function MultiAppStatsCard() {
     const { t } = useTranslation();
     const [providers, setProviders] = useState<Provider[]>([]);
+    const appOptions = useVisibleAppOptions();
 
     useEffect(() => {
         invoke<Provider[]>('get_all_providers').then(setProviders).catch(() => {});
     }, []);
 
-    const appGroups = Object.entries(APP_DISPLAY).map(([app, info]) => {
+    const appGroups = appOptions.map(({ appType: app, label, color }) => {
         const appProviders = providers.filter(p => p.appType === app);
         const active = appProviders.find(p => p.isActive);
-        return { app, ...info, count: appProviders.length, activeName: active?.name || null };
+        return { app, label, color, count: appProviders.length, activeName: active?.name || null };
     });
 
     return (
@@ -43,7 +39,7 @@ function MultiAppStatsCard() {
                 {appGroups.map(group => (
                     <div key={group.app} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <span className={`w-2.5 h-2.5 rounded-full ${group.color}`} />
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{group.label}</span>
                             <span className="text-xs text-gray-400">({group.count})</span>
                         </div>

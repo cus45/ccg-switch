@@ -6,9 +6,10 @@ import ModalDialog from '../common/ModalDialog';
 import { showToast } from '../common/ToastContainer';
 import { useProviderStore } from '../../stores/useProviderStore';
 import { Provider, ProviderProxyConfig } from '../../types/provider';
-import { AppType, VISIBLE_APP_TYPES, APP_LABELS } from '../../types/app';
+import { AppType } from '../../types/app';
 import ProviderProxyConfigInput from './ProviderProxyConfig';
 import { cn } from '../../utils/cn';
+import { useVisibleAppOptions } from '../../hooks/useVisibleAppOptions';
 
 // ── 基础 UI 组件 ──────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const { t } = useTranslation();
     const { addProvider, updateProvider } = useProviderStore();
     const isEditing = !!editingProvider;
+    const appOptions = useVisibleAppOptions([editingProvider?.appType, defaultAppType]);
 
     // 基本配置
     const [name, setName] = useState(editingProvider?.name || '');
@@ -403,8 +405,8 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                 value={appType}
                                 onChange={(e) => setAppType(e.target.value as AppType)}
                             >
-                                {VISIBLE_APP_TYPES.map((type) => (
-                                    <option key={type} value={type} className="bg-white dark:bg-slate-900">{APP_LABELS[type]}</option>
+                                {appOptions.map(({ appType: type, label }) => (
+                                    <option key={type} value={type} className="bg-white dark:bg-slate-900">{label}</option>
                                 ))}
                             </select>
                         </div>

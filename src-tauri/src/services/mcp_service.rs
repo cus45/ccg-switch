@@ -1,6 +1,8 @@
 use crate::database::dao::mcp::McpServerRow;
 use crate::database::Database;
 use crate::mcp;
+use crate::models::capability::CapabilityType;
+use crate::services::capability_service;
 use indexmap::IndexMap;
 use std::sync::Arc;
 
@@ -8,7 +10,19 @@ pub struct McpService;
 
 impl McpService {
     pub fn get_all(db: &Arc<Database>) -> Result<IndexMap<String, McpServerRow>, String> {
-        db.get_all_mcp_servers()
+        capability_service::sync_legacy_capabilities(db)?;
+        let mut servers = db.get_all_mcp_servers()?;
+        let mut values: Vec<McpServerRow> = servers.values().cloned().collect();
+        capability_service::apply_mcp_dynamic_bindings(db, &mut values)?;
+
+        for server in values {
+            if let Some(existing) = servers.get_mut(&server.id) {
+                existing.enabled_claude = server.enabled_claude;
+                existing.enabled_codex = server.enabled_codex;
+                existing.enabled_gemini = server.enabled_gemini;
+            }
+        }
+        Ok(servers)
     }
 
     pub fn upsert(db: &Arc<Database>, server: McpServerRow) -> Result<(), String> {
@@ -28,6 +42,7 @@ impl McpService {
         }
 
         db.save_mcp_server(&server)?;
+        capability_service::sync_mcp_server_legacy_bindings(db, &server)?;
 
         // 同步到各启用的应用配置文件
         if server.enabled_claude {
@@ -56,7 +71,15 @@ impl McpService {
                 let _ = mcp::remove_server_from_codex(id);
             }
         }
-        db.delete_mcp_server(id)
+        let deleted = db.delete_mcp_server(id)?;
+        if deleted {
+            if let Some(capability) =
+                db.get_capability_by_type_source(CapabilityType::McpServer, id)?
+            {
+                let _ = db.delete_capability_by_id(&capability.id);
+            }
+        }
+        Ok(deleted)
     }
 
     pub fn toggle_app(
@@ -78,6 +101,7 @@ impl McpService {
         }
 
         db.save_mcp_server(server)?;
+        capability_service::sync_mcp_server_legacy_bindings(db, server)?;
 
         match (app, enabled) {
             ("claude", true) => {
@@ -102,5 +126,51 @@ impl McpService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::McpService;
+    use crate::database::dao::mcp::McpServerRow;
+    use crate::database::Database;
+    use crate::services::capability_service;
+    use serde_json::json;
+    use std::sync::Arc;
+
+    #[test]
+    fn get_all_applies_dynamic_capability_bindings_over_legacy_columns() {
+        let db = Arc::new(Database::in_memory().expect("in-memory db should initialize"));
+        let legacy = McpServerRow {
+            id: "server-1".to_string(),
+            name: "Server 1".to_string(),
+            server_config: json!({ "command": "server-1" }),
+            description: None,
+            tags: Vec::new(),
+            enabled_claude: false,
+            enabled_codex: false,
+            enabled_gemini: true,
+        };
+        db.save_mcp_server(&legacy)
+            .expect("legacy mcp save should pass");
+        capability_service::sync_mcp_server_legacy_bindings(&db, &legacy)
+            .expect("initial legacy sync should pass");
+
+        let mut dynamic = legacy.clone();
+        dynamic.enabled_codex = true;
+        dynamic.enabled_gemini = false;
+        capability_service::sync_mcp_server_legacy_bindings(&db, &dynamic)
+            .expect("dynamic binding sync should pass");
+
+        let servers = McpService::get_all(&db).expect("mcp service get should pass");
+        let server = servers.get("server-1").expect("server should exist");
+
+        assert!(!server.enabled_claude);
+        assert!(server.enabled_codex);
+        assert!(!server.enabled_gemini);
+
+        let raw = db.get_all_mcp_servers().expect("raw mcp list should pass");
+        assert!(!raw["server-1"].enabled_codex);
+        assert!(raw["server-1"].enabled_gemini);
     }
 }
