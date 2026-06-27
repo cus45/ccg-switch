@@ -8,8 +8,8 @@
 
 @@@auto:current-status
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
-- **Last Active**: 2026-06-25
+- **Total Sessions**: 15
+- **Last Active**: 2026-06-27
 @@@/auto:current-status
 
 ---
@@ -19,7 +19,7 @@
 @@@auto:active-documents
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~399 | Active |
+| `journal-1.md` | ~432 | Active |
 @@@/auto:active-documents
 
 ---
@@ -29,6 +29,7 @@
 @@@auto:session-history
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 15 | 2026-06-27 | 子代理实时展示 + 调试模式 + Node 版本校验 + 会话侧边栏优化 | `56e0a30` | `main` |
 | 14 | 2026-06-25 | Chat workspace switch, session/project actions, branch menu + gemini icon fix | `548adeb`, `8f6ffc1` | `cc-gui` |
 | 13 | 2026-06-25 | Chat completion dropdown and context window | `91b1655`, `cb5a194` | `cc-gui` |
 | 12 | 2026-06-25 | Provider brand icon dropdown fix | `0a85ede` | `cc-gui` |

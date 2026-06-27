@@ -397,3 +397,36 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: 子代理实时展示 + 调试模式 + Node 版本校验 + 会话侧边栏优化
+
+**Date**: 2026-06-27
+**Task**: 子代理实时展示 + 调试模式 + Node 版本校验 + 会话侧边栏优化
+**Branch**: `main`
+
+### Summary
+
+排查并修复了多项 chat 问题:1) detect_node 增加最低版本校验(Node 18+),老系统 node 回退内置私有 runtime,定位 Mac 聊天失败为系统 node 不兼容;2) 新增调试模式(设置→高级)+ daemon CLAUDE_DEBUG + daemonLogs 面板;3) 子代理(Task)消息按 parent_tool_use_id 与主对话隔离,daemon 经 [SUBAGENT_MESSAGE] 专用通道实时流式进卡片,修复 prompt 串台与轨迹永久加载(SubagentHistoryPanel 竞态);4) 最近聊天分组层次优化(吸顶标题/嵌套引导线)+ 每文件夹默认4条+展开更多。全树 cargo test chat::/tsc/vitest 通过。待办:子代理 AC2-6 需真实 GUI 验收(并发/实时/历史回退);stream_event 是否带 parent_tool_use_id 未实证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `56e0a30` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
