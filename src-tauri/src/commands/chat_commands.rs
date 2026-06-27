@@ -842,6 +842,303 @@ pub fn chat_resume_session_in_terminal(
     Ok(())
 }
 
+// =============================================================================
+// 右侧 dock：文件树 / 文件预览 / git 工作区改动（附加式命令）
+// =============================================================================
+
+/// 一个目录项（供右侧 dock 文件树按需展开）。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+}
+
+/// 读取文本文件用于只读预览的结果。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadTextFile {
+    pub content: String,
+    /// 文件超过上限，content 只含前 max_bytes 字节。
+    pub truncated: bool,
+    /// 疑似二进制文件，未返回内容。
+    pub binary: bool,
+}
+
+/// 一个 git 工作区改动文件。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangedFile {
+    pub path: String,
+    pub status: String,
+    pub additions: u32,
+    pub deletions: u32,
+}
+
+/// git 工作区改动汇总；非 git 仓库时 `is_git` 为 false。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangedFiles {
+    pub is_git: bool,
+    pub files: Vec<GitChangedFile>,
+}
+
+/// 单个文件的 HEAD 内容与工作区内容（供审查 diff）。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitFileContents {
+    pub old_content: String,
+    pub new_content: String,
+}
+
+const DIR_SKIP_NAMES: &[&str] = &[
+    "node_modules",
+    ".git",
+    "target",
+    "dist",
+    "build",
+    ".next",
+    ".cache",
+    "__pycache__",
+    ".venv",
+    "vendor",
+];
+
+const READ_TEXT_FILE_DEFAULT_MAX_BYTES: u64 = 512 * 1024;
+
+/// 列出目录的单层子项（目录在前、跳过重型/隐藏项），供文件树按需展开。
+#[tauri::command]
+pub async fn chat_list_directory(path: String) -> Result<Vec<DirEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || list_directory_blocking(path))
+        .await
+        .map_err(|e| format!("目录扫描任务失败: {e}"))?
+}
+
+fn list_directory_blocking(path: String) -> Result<Vec<DirEntry>, String> {
+    let dir = resolve_existing_chat_directory(path, "目录")?;
+    let mut entries: Vec<DirEntry> = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| format!("读取目录失败: {e}"))? {
+        let entry = entry.map_err(|e| format!("读取目录项失败: {e}"))?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.is_empty() || name.starts_with('.') || DIR_SKIP_NAMES.contains(&name.as_str()) {
+            continue;
+        }
+        let is_dir = entry.path().is_dir();
+        entries.push(DirEntry { name, is_dir });
+    }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+    Ok(entries)
+}
+
+/// 读取文本文件用于只读预览；二进制/超限给标记，不返回全部内容。
+#[tauri::command]
+pub async fn chat_read_text_file(
+    path: String,
+    max_bytes: Option<u64>,
+) -> Result<ReadTextFile, String> {
+    tauri::async_runtime::spawn_blocking(move || read_text_file_blocking(path, max_bytes))
+        .await
+        .map_err(|e| format!("文件读取任务失败: {e}"))?
+}
+
+fn read_text_file_blocking(path: String, max_bytes: Option<u64>) -> Result<ReadTextFile, String> {
+    use std::io::Read;
+
+    let file_path = resolve_existing_chat_path(path, "文件")?;
+    if file_path.is_dir() {
+        return Err("路径是目录而非文件".to_string());
+    }
+    let limit = max_bytes.unwrap_or(READ_TEXT_FILE_DEFAULT_MAX_BYTES);
+    let size = std::fs::metadata(&file_path)
+        .map_err(|e| format!("读取文件信息失败: {e}"))?
+        .len();
+
+    // 只读前 limit 字节，避免把超大文件全部载入内存。
+    let file = std::fs::File::open(&file_path).map_err(|e| format!("打开文件失败: {e}"))?;
+    let mut bytes = Vec::new();
+    file.take(limit)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("读取文件失败: {e}"))?;
+
+    // 二进制嗅探：前 8KB 含 NUL 字节视为二进制。
+    let head_len = bytes.len().min(8192);
+    if bytes[..head_len].contains(&0) {
+        return Ok(ReadTextFile {
+            content: String::new(),
+            truncated: false,
+            binary: true,
+        });
+    }
+
+    Ok(ReadTextFile {
+        content: String::from_utf8_lossy(&bytes).to_string(),
+        truncated: size > limit,
+        binary: false,
+    })
+}
+
+/// 列出 git 工作区改动文件（含已暂存）；非 git 仓库返回 `is_git: false`。
+#[tauri::command]
+pub async fn chat_git_changed_files(cwd: String) -> Result<GitChangedFiles, String> {
+    tauri::async_runtime::spawn_blocking(move || git_changed_files_blocking(cwd))
+        .await
+        .map_err(|e| format!("git 任务失败: {e}"))?
+}
+
+fn git_changed_files_blocking(cwd: String) -> Result<GitChangedFiles, String> {
+    let cwd = resolve_existing_chat_directory(cwd, "工作目录")?;
+    let Some((repo_root, _)) = find_git_entry(&cwd) else {
+        return Ok(GitChangedFiles {
+            is_git: false,
+            files: Vec::new(),
+        });
+    };
+
+    let porcelain = run_git(
+        &repo_root,
+        &["-c", "core.quotepath=false", "status", "--porcelain"],
+    )?;
+    let numstat = run_git(
+        &repo_root,
+        &["-c", "core.quotepath=false", "diff", "--numstat", "HEAD"],
+    )
+    .unwrap_or_default();
+
+    let stats = parse_git_numstat(&numstat);
+    let files = parse_git_porcelain(&porcelain, &stats);
+    Ok(GitChangedFiles {
+        is_git: true,
+        files,
+    })
+}
+
+/// 取某文件的 HEAD 内容与工作区内容，供审查 diff。
+#[tauri::command]
+pub async fn chat_git_file_contents(
+    cwd: String,
+    path: String,
+) -> Result<GitFileContents, String> {
+    tauri::async_runtime::spawn_blocking(move || git_file_contents_blocking(cwd, path))
+        .await
+        .map_err(|e| format!("git 任务失败: {e}"))?
+}
+
+fn git_file_contents_blocking(cwd: String, path: String) -> Result<GitFileContents, String> {
+    let cwd = resolve_existing_chat_directory(cwd, "工作目录")?;
+    let Some((repo_root, _)) = find_git_entry(&cwd) else {
+        return Err("当前工作目录不是 Git 仓库".to_string());
+    };
+    let rel = to_repo_relative_git_path(&repo_root, &path)?;
+
+    // 旧 = HEAD 版本（新增文件取不到 → 空）；新 = 工作区（删除文件 → 空）。
+    let old_content = run_git(&repo_root, &["show", &format!("HEAD:{rel}")]).unwrap_or_default();
+    let new_content = std::fs::read_to_string(repo_root.join(&rel)).unwrap_or_default();
+    Ok(GitFileContents {
+        old_content,
+        new_content,
+    })
+}
+
+/// 在仓库根运行 git 子命令并返回 stdout。Windows 加 CREATE_NO_WINDOW 防闪窗。
+fn run_git(repo_root: &Path, args: &[&str]) -> Result<String, String> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(repo_root).args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let output = cmd.output().map_err(|e| format!("执行 git 失败: {e}"))?;
+    if !output.status.success() {
+        return Err(format!("git {args:?} 执行失败"));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// 把传入路径(绝对或仓库相对)归一化为相对仓库根、`/` 分隔的 git 路径，拒绝越界/`..`。
+fn to_repo_relative_git_path(repo_root: &Path, path: &str) -> Result<String, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("文件路径为空".to_string());
+    }
+    if trimmed.chars().any(char::is_control) {
+        return Err("文件路径包含非法控制字符".to_string());
+    }
+    let candidate = PathBuf::from(trimmed);
+    let rel = if candidate.is_absolute() {
+        candidate
+            .strip_prefix(repo_root)
+            .map_err(|_| "文件不在仓库范围内".to_string())?
+            .to_path_buf()
+    } else {
+        candidate
+    };
+    let normalized = normalize_git_path(&rel.to_string_lossy());
+    if normalized.split('/').any(|seg| seg == "..") {
+        return Err("文件路径非法".to_string());
+    }
+    Ok(normalized)
+}
+
+fn normalize_git_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+/// 解析 `git diff --numstat HEAD`：每行 `<add>\t<del>\t<path>`；二进制行 `-\t-\t<path>` → (0,0)。
+fn parse_git_numstat(numstat: &str) -> std::collections::HashMap<String, (u32, u32)> {
+    let mut map = std::collections::HashMap::new();
+    for line in numstat.lines() {
+        let mut parts = line.splitn(3, '\t');
+        let add = parts.next().unwrap_or("").trim();
+        let del = parts.next().unwrap_or("").trim();
+        let path = match parts.next() {
+            Some(p) if !p.trim().is_empty() => p.trim().to_string(),
+            _ => continue,
+        };
+        map.insert(
+            normalize_git_path(&path),
+            (add.parse().unwrap_or(0), del.parse().unwrap_or(0)),
+        );
+    }
+    map
+}
+
+/// 解析 `git status --porcelain`：每行 `XY <path>`（重命名为 `XY old -> new`，取新路径）。
+fn parse_git_porcelain(
+    porcelain: &str,
+    stats: &std::collections::HashMap<String, (u32, u32)>,
+) -> Vec<GitChangedFile> {
+    let mut files = Vec::new();
+    for line in porcelain.lines() {
+        if line.len() < 4 {
+            continue;
+        }
+        let status = line[..2].trim().to_string();
+        let rest = line[3..].trim();
+        let path_part = rest.rsplit("->").next().unwrap_or(rest).trim();
+        let path = normalize_git_path(path_part.trim_matches('"'));
+        if path.is_empty() {
+            continue;
+        }
+        let (additions, deletions) = stats.get(&path).copied().unwrap_or((0, 0));
+        files.push(GitChangedFile {
+            status: if status.is_empty() {
+                "M".to_string()
+            } else {
+                status
+            },
+            path,
+            additions,
+            deletions,
+        });
+    }
+    files
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -865,6 +1162,95 @@ mod tests {
             fs::create_dir_all(parent).expect("create parent dir");
         }
         fs::write(path, text).expect("write test file");
+    }
+
+    #[test]
+    fn lists_directory_entries_dirs_first_skipping_heavy_and_hidden() {
+        let dir = unique_test_dir("dock-list-dir");
+        fs::create_dir_all(dir.join("zsub")).expect("create subdir");
+        fs::create_dir_all(dir.join("node_modules")).expect("create node_modules");
+        fs::create_dir_all(dir.join(".hidden")).expect("create hidden");
+        write_file(&dir.join("a.txt"), "x");
+        write_file(&dir.join("b.txt"), "y");
+
+        let entries = list_directory_blocking(dir.to_string_lossy().to_string()).expect("list");
+        let names: Vec<(String, bool)> =
+            entries.iter().map(|e| (e.name.clone(), e.is_dir)).collect();
+        assert_eq!(
+            names,
+            vec![
+                ("zsub".to_string(), true),
+                ("a.txt".to_string(), false),
+                ("b.txt".to_string(), false),
+            ]
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn reads_text_file_flags_binary_and_truncation() {
+        let dir = unique_test_dir("dock-read-file");
+        let text = dir.join("a.txt");
+        write_file(&text, "hello\nworld");
+        let result =
+            read_text_file_blocking(text.to_string_lossy().to_string(), None).expect("read text");
+        assert_eq!(result.content, "hello\nworld");
+        assert!(!result.truncated);
+        assert!(!result.binary);
+
+        let bin = dir.join("b.bin");
+        fs::write(&bin, [0u8, 1, 2, 3]).expect("write binary");
+        let result =
+            read_text_file_blocking(bin.to_string_lossy().to_string(), None).expect("read binary");
+        assert!(result.binary);
+        assert_eq!(result.content, "");
+
+        write_file(&text, "abcdefghij");
+        let result = read_text_file_blocking(text.to_string_lossy().to_string(), Some(4))
+            .expect("read truncated");
+        assert_eq!(result.content, "abcd");
+        assert!(result.truncated);
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn parses_git_numstat_including_binary_rows() {
+        let stats = parse_git_numstat("1\t2\tsrc/a.rs\n-\t-\tassets/img.png\n10\t0\tb.txt\n");
+        assert_eq!(stats.get("src/a.rs").copied(), Some((1, 2)));
+        assert_eq!(stats.get("assets/img.png").copied(), Some((0, 0)));
+        assert_eq!(stats.get("b.txt").copied(), Some((10, 0)));
+    }
+
+    #[test]
+    fn parses_git_porcelain_with_status_rename_and_stats() {
+        let mut stats = std::collections::HashMap::new();
+        stats.insert("src/new.rs".to_string(), (3u32, 1u32));
+        let files = parse_git_porcelain(
+            " M src/mod.rs\n?? untracked.txt\nR  src/old.rs -> src/new.rs\n",
+            &stats,
+        );
+        let by_path: std::collections::HashMap<&str, (&str, u32, u32)> = files
+            .iter()
+            .map(|f| (f.path.as_str(), (f.status.as_str(), f.additions, f.deletions)))
+            .collect();
+        assert_eq!(by_path.get("src/mod.rs"), Some(&("M", 0, 0)));
+        assert_eq!(by_path.get("untracked.txt"), Some(&("??", 0, 0)));
+        assert_eq!(by_path.get("src/new.rs"), Some(&("R", 3, 1)));
+    }
+
+    #[test]
+    fn to_repo_relative_strips_root_and_rejects_traversal() {
+        let root = unique_test_dir("dock-rel");
+        let abs = root.join("src").join("a.rs").to_string_lossy().to_string();
+        assert_eq!(to_repo_relative_git_path(&root, &abs).expect("rel"), "src/a.rs");
+        assert_eq!(
+            to_repo_relative_git_path(&root, "src/b.rs").expect("rel rel"),
+            "src/b.rs"
+        );
+        assert!(to_repo_relative_git_path(&root, "../escape.rs").is_err());
+        assert!(to_repo_relative_git_path(&root, "").is_err());
+        fs::remove_dir_all(root).ok();
     }
 
     #[test]

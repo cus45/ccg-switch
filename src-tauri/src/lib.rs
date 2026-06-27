@@ -922,6 +922,10 @@ pub fn run() {
             chat_commands::chat_resume_session_in_terminal,
             chat_commands::chat_list_workspace_files,
             chat_commands::chat_enhance_prompt,
+            chat_commands::chat_list_directory,
+            chat_commands::chat_read_text_file,
+            chat_commands::chat_git_changed_files,
+            chat_commands::chat_git_file_contents,
             // Editor 命令
             commands::editor_commands::open_file_in_editor,
         ])
