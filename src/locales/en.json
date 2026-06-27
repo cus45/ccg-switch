@@ -73,6 +73,28 @@
             "copyCode": "Copy code",
             "copiedCode": "Copied code"
         },
+        "dock": {
+            "title": "Tools",
+            "expand": "Expand tool dock",
+            "collapse": "Collapse tool dock",
+            "backToMenu": "Back to menu",
+            "files": "Files",
+            "filesDesc": "Browse the workspace file tree",
+            "review": "Review",
+            "reviewDesc": "Inspect Git working-tree changes",
+            "noWorkspace": "No workspace folder selected",
+            "filesEmpty": "This folder is empty",
+            "changedBadge": "Has Git changes; open review",
+            "previewBinary": "Binary file",
+            "previewBinaryHint": "Preview is unavailable for binary files.",
+            "previewTruncated": "Truncated",
+            "previewEmpty": "Empty file",
+            "loading": "Loading...",
+            "refresh": "Refresh changes",
+            "gitChangedSection": "Working-tree changes",
+            "chatEditedSection": "Edited in this chat",
+            "reviewEmpty": "No changes to review"
+        },
         "layout": {
             "anchorRail": "Message anchors",
             "searchPlaceholder": "Search this conversation",

@@ -62,6 +62,28 @@
             "copyCode": "复制代码",
             "copiedCode": "已复制代码"
         },
+        "dock": {
+            "title": "工具",
+            "expand": "展开工具坞",
+            "collapse": "收起工具坞",
+            "backToMenu": "返回菜单",
+            "files": "文件",
+            "filesDesc": "浏览工作区文件树",
+            "review": "审查",
+            "reviewDesc": "查看 Git 工作区改动",
+            "noWorkspace": "未选择工作目录",
+            "filesEmpty": "此文件夹为空",
+            "changedBadge": "有 Git 改动；打开审查",
+            "previewBinary": "二进制文件",
+            "previewBinaryHint": "二进制文件无法预览。",
+            "previewTruncated": "已截断",
+            "previewEmpty": "空文件",
+            "loading": "加载中...",
+            "refresh": "刷新改动",
+            "gitChangedSection": "工作区改动",
+            "chatEditedSection": "本次对话编辑",
+            "reviewEmpty": "暂无可审查的改动"
+        },
         "layout": {
             "anchorRail": "消息锚点",
             "searchPlaceholder": "搜索当前对话",
