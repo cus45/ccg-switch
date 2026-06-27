@@ -430,3 +430,39 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: 右侧 dock 重构(文件树/审查/状态条)接入 ChatPage
+
+**Date**: 2026-06-27
+**Task**: 右侧 dock 重构(文件树/审查/状态条)接入 ChatPage
+**Branch**: `main`
+
+### Summary
+
+完成 06-27-right-sidebar-dock:A 后端4命令(list_directory/read_text_file/git_changed_files/git_file_contents);B-D dock 骨架+卡片菜单+文件面板(懒加载树+预览+git改动标记)+审查面板(复用 ChatDiffReviewPane);E 接入 ChatPage 替换 StatusPanel 三栏布局,新增 StatusStrip(daemon+上下文%+诊断抽屉复用 StatusPanel showEdits=false),清理 resizer/中央diff栏;按反馈把 Files/Review 改左右分栏并加宽 dock。三层验证全绿(tsc/vitest 670/cargo 15)。429 期间全程主会话内联实现。后续:tab化 dock + 侧边聊天分屏(新任务)。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea21505` | (see git log) |
+| `ce4a121` | (see git log) |
+| `5fde83c` | (see git log) |
+| `e8329c0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
