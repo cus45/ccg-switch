@@ -395,6 +395,8 @@ interface ChatState {
     openTabs: ChatSessionTab[];
     /** 当前可见 tab key。 */
     activeTabKey: string | null;
+    /** 右侧 dock 当前可见的侧边聊天 tab key（背景 tab，不进 activeTabKey）。 */
+    dockChatTabKey: string | null;
     /** Provider 表配置变更后，下一次空闲/发送前需要重启 daemon 读取新配置。 */
     providerConfigDirty: boolean;
 
@@ -423,6 +425,10 @@ interface ChatState {
     closeTab: (key: string) => void;
     closeOtherTabs: (key: string) => void;
     closeAllTabs: () => void;
+    /** 新建一个独立侧边聊天 tab（背景，不切换中心活跃 tab），返回其 key。 */
+    openSideChat: (opts?: {cwd?: string | null}) => string;
+    /** 关闭指定侧边聊天 tab；若是当前可见侧聊则清空 dockChatTabKey。 */
+    closeSideChat: (key: string) => void;
     markProviderConfigDirty: () => Promise<void>;
     startNewSession: (cwd?: string | null) => Promise<void>;
     abort: () => Promise<void>;
@@ -1177,6 +1183,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     deniedToolIds: new Set(),
     openTabs: [],
     activeTabKey: null,
+    dockChatTabKey: null,
     providerConfigDirty: false,
 
     init: async () => {
@@ -2243,6 +2250,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 ...projectTabToState(emptyTab),
             };
         });
+    },
+
+    openSideChat: (opts) => {
+        const state = get();
+        const sideTab = createEmptyTabFromState(state, opts?.cwd ?? state.currentCwd);
+        set((s) => ({
+            openTabs: upsertTab(s.openTabs, sideTab),
+            dockChatTabKey: sideTab.key,
+        }));
+        return sideTab.key;
+    },
+
+    closeSideChat: (key) => {
+        retirePendingSendsForTab(key);
+        set((state) => ({
+            openTabs: removeTab(state.openTabs, key),
+            dockChatTabKey: state.dockChatTabKey === key ? null : state.dockChatTabKey,
+        }));
     },
 
     markProviderConfigDirty: async () => {

@@ -127,6 +127,7 @@ function resetStore() {
         deniedToolIds: new Set(),
         openTabs: [],
         activeTabKey: null,
+        dockChatTabKey: null,
         providerConfigDirty: false,
         lastSessionLoadMetrics: null,
     });
@@ -161,6 +162,51 @@ describe('useChatStore session transitions', () => {
         vi.mocked(localStorageMock.key).mockClear();
         clearChatSessionHistoryCache();
         resetStore();
+    });
+
+    it('openSideChat adds an independent background tab inheriting cwd without touching the active tab', () => {
+        useChatStore.setState({
+            messages: activeMessages,
+            currentCwd: 'C:/workspace/main',
+            activeTabKey: 'main-tab',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+
+        const sideKey = useChatStore.getState().openSideChat();
+        const state = useChatStore.getState();
+
+        // Center active tab + its projection stay untouched.
+        expect(state.activeTabKey).toBe('main-tab');
+        expect(state.messages).toBe(activeMessages);
+        // A new background side tab is tracked as the visible dock chat.
+        expect(state.dockChatTabKey).toBe(sideKey);
+        const sideTab = state.openTabs.find((tab) => tab.key === sideKey);
+        expect(sideTab).toBeDefined();
+        expect(sideTab?.messages).toEqual([]);
+        expect(sideTab?.currentCwd).toBe('C:/workspace/main');
+        expect(sideTab?.activeRequestId).toBeNull();
+    });
+
+    it('openSideChat honors an explicit cwd override', () => {
+        useChatStore.setState({currentCwd: 'C:/workspace/main', openTabs: [], dockChatTabKey: null});
+
+        const sideKey = useChatStore.getState().openSideChat({cwd: 'C:/workspace/side'});
+        const sideTab = useChatStore.getState().openTabs.find((tab) => tab.key === sideKey);
+
+        expect(sideTab?.currentCwd).toBe('C:/workspace/side');
+    });
+
+    it('closeSideChat removes the side tab and clears the visible dock chat key', () => {
+        useChatStore.setState({currentCwd: null, openTabs: [], dockChatTabKey: null});
+        const sideKey = useChatStore.getState().openSideChat();
+        expect(useChatStore.getState().openTabs).toHaveLength(1);
+
+        useChatStore.getState().closeSideChat(sideKey);
+        const state = useChatStore.getState();
+
+        expect(state.openTabs.find((tab) => tab.key === sideKey)).toBeUndefined();
+        expect(state.dockChatTabKey).toBeNull();
     });
 
     it('marks daemon warmup failure as a recoverable error during init', async () => {
