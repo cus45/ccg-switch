@@ -73,6 +73,7 @@
             "reviewDesc": "查看 Git 工作区改动",
             "noWorkspace": "未选择工作目录",
             "filesEmpty": "此文件夹为空",
+            "selectFileToPreview": "选择文件以预览",
             "changedBadge": "有 Git 改动；打开审查",
             "previewBinary": "二进制文件",
             "previewBinaryHint": "二进制文件无法预览。",

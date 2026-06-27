@@ -31,7 +31,10 @@ persist in `localStorage` (`utils/rightDockState.ts`,
   workspace `isGit`), `FilesPanel`, or `ReviewPanel`, with a back-to-menu
   control. It receives `currentCwd`, `gitRoot`, `allEdits`,
   `diffViewMode`/`onDiffViewModeChange`, `diffWrapLines`/`onDiffWrapLinesChange`,
-  and a `statusStrip` node from `ChatPage`.
+  and a `statusStrip` node from `ChatPage`. The dock is ~360px wide for the menu
+  and widens to `min(46vw, 820px)` for `files`/`review`, which lay out
+  **left-right** (not stacked): the main preview / diff area beside a narrow
+  (~240px) file-tree / changed-file-list column.
 - `FilesPanel` renders a lazily-loaded tree rooted at `currentCwd`
   (`chat_list_directory` per directory level via `utils/fileTreeUtils`), a
   read-only text preview (`chat_read_text_file`, binary/truncation flagged), and

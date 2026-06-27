@@ -108,7 +108,7 @@ export default function RightDock({
 
     return (
         <aside
-            className="flex h-full w-[360px] shrink-0 flex-col border-l border-gray-100 bg-white dark:border-base-200 dark:bg-base-100"
+            className={`flex h-full ${activePanel === 'menu' ? 'w-[360px]' : 'w-[min(46vw,820px)]'} shrink-0 flex-col border-l border-gray-100 bg-white dark:border-base-200 dark:bg-base-100`}
             data-chat-right-dock="true"
         >
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 dark:border-base-200">

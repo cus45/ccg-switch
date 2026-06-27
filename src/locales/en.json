@@ -84,6 +84,7 @@
             "reviewDesc": "Inspect Git working-tree changes",
             "noWorkspace": "No workspace folder selected",
             "filesEmpty": "This folder is empty",
+            "selectFileToPreview": "Select a file to preview",
             "changedBadge": "Has Git changes; open review",
             "previewBinary": "Binary file",
             "previewBinaryHint": "Preview is unavailable for binary files.",

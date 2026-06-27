@@ -123,105 +123,112 @@ export default function FilesPanel({currentCwd, gitRoot, changedFiles, onJumpToR
     const changedBadgeLabel = tf('chat.dock.changedBadge', 'Has Git changes; open review');
 
     return (
-        <div className="flex h-full flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto py-1">
-                {rows.length === 0 ? (
-                    <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-base-content/60">
-                        {tf('chat.dock.filesEmpty', 'This folder is empty')}
-                    </div>
+        <div className="flex h-full">
+            {/* 预览主区（左） */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                {preview ? (
+                    <>
+                        <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-2 py-1 text-xs text-gray-500 dark:border-base-200 dark:text-base-content/60">
+                            <span className="truncate font-medium text-gray-700 dark:text-base-content" title={preview.path}>
+                                {baseName(preview.path)}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                                {preview.result.binary && <span>{tf('chat.dock.previewBinary', 'Binary file')}</span>}
+                                {preview.result.truncated && <span>{tf('chat.dock.previewTruncated', 'Truncated')}</span>}
+                            </span>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-auto bg-gray-50 dark:bg-base-200/40">
+                            {preview.result.binary ? (
+                                <div className="p-3 text-xs text-gray-500 dark:text-base-content/60">
+                                    {tf('chat.dock.previewBinaryHint', 'Preview is unavailable for binary files.')}
+                                </div>
+                            ) : preview.result.content.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-500 dark:text-base-content/60">
+                                    {tf('chat.dock.previewEmpty', 'Empty file')}
+                                </div>
+                            ) : (
+                                <pre className="whitespace-pre p-2 font-mono text-xs leading-relaxed text-gray-800 dark:text-base-content">
+                                    {preview.result.content}
+                                </pre>
+                            )}
+                        </div>
+                    </>
                 ) : (
-                    rows.map((node) => {
-                        const expanded = Boolean(tree.expanded[node.path]);
-                        const loading = Boolean(tree.loading[node.path]);
-                        const changed = isPathChanged(changedSet, node.path);
-                        const selected = preview?.path === node.path;
-
-                        return (
-                            <div
-                                key={node.path}
-                                className={cn(
-                                    'flex items-center gap-1 pr-2 text-sm',
-                                    selected && 'bg-orange-50 dark:bg-base-200',
-                                )}
-                            >
-                                <button
-                                    type="button"
-                                    className="flex min-w-0 flex-1 items-center gap-1 py-1 text-left hover:bg-gray-50 dark:hover:bg-base-200/60 rounded"
-                                    style={{paddingLeft: 8 + node.depth * 14}}
-                                    title={node.name}
-                                    onClick={() => (node.isDir ? void handleToggleDir(node) : void handleOpenFile(node))}
-                                >
-                                    {node.isDir ? (
-                                        loading ? (
-                                            <Loader2 size={14} className="shrink-0 animate-spin text-gray-400" />
-                                        ) : expanded ? (
-                                            <ChevronDown size={14} className="shrink-0 text-gray-400" />
-                                        ) : (
-                                            <ChevronRight size={14} className="shrink-0 text-gray-400" />
-                                        )
-                                    ) : (
-                                        <span className="inline-block w-[14px] shrink-0" />
-                                    )}
-                                    {node.isDir ? (
-                                        <Folder size={14} className="shrink-0 text-orange-400" />
-                                    ) : (
-                                        <FileText size={14} className="shrink-0 text-gray-400" />
-                                    )}
-                                    <span className="truncate text-gray-800 dark:text-base-content">{node.name}</span>
-                                </button>
-                                {changed && !node.isDir && (
-                                    <button
-                                        type="button"
-                                        className="shrink-0 text-amber-500 hover:text-amber-600"
-                                        title={changedBadgeLabel}
-                                        aria-label={changedBadgeLabel}
-                                        onClick={(event) => {
-                                            event.stopPropagation();
-                                            onJumpToReview(node.path);
-                                        }}
-                                    >
-                                        <Dot size={20} strokeWidth={4} />
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })
+                    <div className="flex h-full items-center justify-center p-4 text-center text-sm text-gray-400 dark:text-base-content/50">
+                        {previewLoading
+                            ? tf('chat.dock.loading', 'Loading...')
+                            : tf('chat.dock.selectFileToPreview', 'Select a file to preview')}
+                    </div>
                 )}
             </div>
 
-            {preview && (
-                <div className="flex max-h-[45%] flex-col border-t border-gray-100 dark:border-base-200">
-                    <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-gray-500 dark:text-base-content/60">
-                        <span className="truncate font-medium text-gray-700 dark:text-base-content" title={preview.path}>
-                            {baseName(preview.path)}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                            {preview.result.binary && <span>{tf('chat.dock.previewBinary', 'Binary file')}</span>}
-                            {preview.result.truncated && <span>{tf('chat.dock.previewTruncated', 'Truncated')}</span>}
-                        </span>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-auto bg-gray-50 dark:bg-base-200/40">
-                        {preview.result.binary ? (
-                            <div className="p-3 text-xs text-gray-500 dark:text-base-content/60">
-                                {tf('chat.dock.previewBinaryHint', 'Preview is unavailable for binary files.')}
-                            </div>
-                        ) : preview.result.content.length === 0 ? (
-                            <div className="p-3 text-xs text-gray-500 dark:text-base-content/60">
-                                {tf('chat.dock.previewEmpty', 'Empty file')}
-                            </div>
-                        ) : (
-                            <pre className="whitespace-pre p-2 font-mono text-xs leading-relaxed text-gray-800 dark:text-base-content">
-                                {preview.result.content}
-                            </pre>
-                        )}
-                    </div>
+            {/* 文件树（右列） */}
+            <div className="flex w-[240px] shrink-0 flex-col border-l border-gray-100 dark:border-base-200">
+                <div className="min-h-0 flex-1 overflow-y-auto py-1">
+                    {rows.length === 0 ? (
+                        <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-base-content/60">
+                            {tf('chat.dock.filesEmpty', 'This folder is empty')}
+                        </div>
+                    ) : (
+                        rows.map((node) => {
+                            const expanded = Boolean(tree.expanded[node.path]);
+                            const loading = Boolean(tree.loading[node.path]);
+                            const changed = isPathChanged(changedSet, node.path);
+                            const selected = preview?.path === node.path;
+
+                            return (
+                                <div
+                                    key={node.path}
+                                    className={cn(
+                                        'flex items-center gap-1 pr-2 text-sm',
+                                        selected && 'bg-orange-50 dark:bg-base-200',
+                                    )}
+                                >
+                                    <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center gap-1 rounded py-1 text-left hover:bg-gray-50 dark:hover:bg-base-200/60"
+                                        style={{paddingLeft: 8 + node.depth * 14}}
+                                        title={node.name}
+                                        onClick={() => (node.isDir ? void handleToggleDir(node) : void handleOpenFile(node))}
+                                    >
+                                        {node.isDir ? (
+                                            loading ? (
+                                                <Loader2 size={14} className="shrink-0 animate-spin text-gray-400" />
+                                            ) : expanded ? (
+                                                <ChevronDown size={14} className="shrink-0 text-gray-400" />
+                                            ) : (
+                                                <ChevronRight size={14} className="shrink-0 text-gray-400" />
+                                            )
+                                        ) : (
+                                            <span className="inline-block w-[14px] shrink-0" />
+                                        )}
+                                        {node.isDir ? (
+                                            <Folder size={14} className="shrink-0 text-orange-400" />
+                                        ) : (
+                                            <FileText size={14} className="shrink-0 text-gray-400" />
+                                        )}
+                                        <span className="truncate text-gray-800 dark:text-base-content">{node.name}</span>
+                                    </button>
+                                    {changed && !node.isDir && (
+                                        <button
+                                            type="button"
+                                            className="shrink-0 text-amber-500 hover:text-amber-600"
+                                            title={changedBadgeLabel}
+                                            aria-label={changedBadgeLabel}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onJumpToReview(node.path);
+                                            }}
+                                        >
+                                            <Dot size={20} strokeWidth={4} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
-            )}
-            {previewLoading && !preview && (
-                <div className="border-t border-gray-100 px-2 py-2 text-xs text-gray-500 dark:border-base-200 dark:text-base-content/60">
-                    {tf('chat.dock.loading', 'Loading...')}
-                </div>
-            )}
+            </div>
         </div>
     );
 }

@@ -150,8 +150,27 @@ export default function ReviewPanel({
     );
 
     return (
-        <div className="flex h-full flex-col">
-            <div className="flex max-h-[40%] min-h-[2.5rem] shrink-0 flex-col border-b border-gray-100 dark:border-base-200">
+        <div className="flex h-full">
+            {/* diff 主区（左） */}
+            <div className="flex min-h-0 min-w-0 flex-1">
+                {loadingDiff && !selectedEdit ? (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-gray-500 dark:text-base-content/60">
+                        {tf('chat.dock.loading', 'Loading...')}
+                    </div>
+                ) : (
+                    <ChatDiffReviewPane
+                        edit={selectedEdit}
+                        mode={mode}
+                        wrapLines={wrapLines}
+                        currentCwd={currentCwd}
+                        onModeChange={onModeChange}
+                        onWrapLinesChange={onWrapLinesChange}
+                    />
+                )}
+            </div>
+
+            {/* 改动列表（右列） */}
+            <div className="flex w-[240px] shrink-0 flex-col border-l border-gray-100 dark:border-base-200">
                 <div className="flex items-center justify-between px-2 py-1">
                     <span className="text-xs font-medium text-gray-500 dark:text-base-content/60">
                         {tf('chat.dock.review', 'Review')}
@@ -230,23 +249,6 @@ export default function ReviewPanel({
                         </div>
                     )}
                 </div>
-            </div>
-
-            <div className="min-h-0 flex-1">
-                {loadingDiff && !selectedEdit ? (
-                    <div className="flex h-full items-center justify-center text-xs text-gray-500 dark:text-base-content/60">
-                        {tf('chat.dock.loading', 'Loading...')}
-                    </div>
-                ) : (
-                    <ChatDiffReviewPane
-                        edit={selectedEdit}
-                        mode={mode}
-                        wrapLines={wrapLines}
-                        currentCwd={currentCwd}
-                        onModeChange={onModeChange}
-                        onWrapLinesChange={onWrapLinesChange}
-                    />
-                )}
             </div>
         </div>
     );
