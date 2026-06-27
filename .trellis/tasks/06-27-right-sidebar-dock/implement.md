@@ -33,10 +33,10 @@
 
 ## 阶段 E — 状态条 + 接入 ChatPage
 
-- [ ] E1 `StatusStrip.tsx`:daemon 状态 + 上下文用量%;可展开抽屉放 SDK/MCP/锚点(从现 `StatusPanel.tsx` 抽可复用子块)。
-- [ ] E2 `ChatPage.tsx`:用 `<RightDock>` 替换原 `statusPane` + 条件 diff 区;对话区 `flex:1`;收起时无残留空白。原 `selectedEdit`/`diffViewMode` 状态迁移给 ReviewPanel。
-- [ ] E3 清理/保留:`StatusPanel.tsx` 仅保留被复用的子块;去掉重复入口。
-- [ ] E4 验证门 E:`tsc`/`vitest`/`cargo test chat::` 全绿;无 git 与有 git 两种工作目录手测。
+- [x] E1 `StatusStrip.tsx`:daemon 状态 + 上下文用量%;可展开抽屉放 SDK/MCP/锚点(从现 `StatusPanel.tsx` 抽可复用子块)。
+- [x] E2 `ChatPage.tsx`:用 `<RightDock>` 替换原 `statusPane` + 条件 diff 区;对话区 `flex:1`;收起时无残留空白。原 `selectedEdit`/`diffViewMode` 状态迁移给 ReviewPanel。
+- [x] E3 清理/保留:`StatusPanel.tsx` 仅保留被复用的子块;去掉重复入口。
+- [x] E4 验证门 E:`tsc`/`vitest`/`cargo test chat::` 全绿;无 git 与有 git 两种工作目录手测。
 
 ## 阶段 F — 收尾
 

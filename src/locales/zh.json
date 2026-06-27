@@ -82,7 +82,9 @@
             "refresh": "刷新改动",
             "gitChangedSection": "工作区改动",
             "chatEditedSection": "本次对话编辑",
-            "reviewEmpty": "暂无可审查的改动"
+            "reviewEmpty": "暂无可审查的改动",
+            "expandDiagnostics": "查看诊断",
+            "collapseDiagnostics": "收起诊断"
         },
         "layout": {
             "anchorRail": "消息锚点",

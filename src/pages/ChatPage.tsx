@@ -1,7 +1,7 @@
-import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {invoke} from '@tauri-apps/api/core';
-import {Package, PanelLeftOpen, PanelRightClose, PanelRightOpen, RefreshCw, Trash2} from 'lucide-react';
+import {Package, PanelLeftOpen, RefreshCw, Trash2} from 'lucide-react';
 import {useChatStore} from '../stores/useChatStore';
 import {useMcpStoreV2} from '../stores/useMcpStoreV2';
 import {useSdkStore} from '../stores/useSdkStore';
@@ -13,35 +13,23 @@ import MessageList from '../components/chat/MessageList';
 import ConversationSearch from '../components/chat/ConversationSearch';
 import MessageAnchorRail from '../components/chat/MessageAnchorRail';
 import ScrollControl from '../components/chat/ScrollControl';
-import StatusPanel from '../components/chat/StatusPanel';
+import RightDock from '../components/chat/dock/RightDock';
+import StatusStrip from '../components/chat/dock/StatusStrip';
 import ChatInputStatusTabs from '../components/chat/ChatInputStatusTabs';
 import ChatSessionSidebar from '../components/chat/ChatSessionSidebar';
 import ChatSessionTabs from '../components/chat/ChatSessionTabs';
-import ChatDiffReviewPane from '../components/chat/ChatDiffReviewPane';
 import type {ChatWorkspaceProjectOption} from '../components/chat/composer/ContextBar';
 import {ChatComposer} from '../components/chat/composer/ChatComposer';
 import ModalDialog from '../components/common/ModalDialog';
 import {
-    CONVERSATION_PANE_MAX_WIDTH,
-    CONVERSATION_PANE_MIN_WIDTH,
-    DIFF_PANE_MAX_WIDTH,
-    DIFF_PANE_MIN_WIDTH,
     getActivePermissionDialog,
     getChatTopChromeActionLabel,
     getCollapsedMessageWindow,
-    getDiffPaneReopenLabel,
-    getPaneResizeHandleLabel,
-    getPaneWidthsAfterResize,
     getSdkMissingBannerText,
     highlightTranscriptToolAnchor,
-    type PaneResizeHandleEdge,
-    queueDiffPaneFocusAfterOpen,
     shouldBuildCompleteChatStatusSummary,
     shouldIgnoreChatSessionSelection,
     shouldRequestFullHistoryForSearch,
-    shouldShowDiffPaneReopenControl,
-    STATUS_PANE_MAX_WIDTH,
-    STATUS_PANE_MIN_WIDTH,
     VISIBLE_MESSAGE_WINDOW,
 } from '../utils/chatUiBehavior';
 import {
@@ -90,6 +78,7 @@ import {
 import {getSessionSelectionKey, type SessionMeta} from '../types/session';
 import type {ChatMessage} from '../types/chat';
 import type {EditDiffPreviewMode} from '../components/toolBlocks/EditDiffPreview';
+import {apply1MContextSuffix, contextWindowFor} from '../components/chat/composer/constants';
 
 const BOTTOM_REVEAL_THRESHOLD = 160;
 
@@ -126,6 +115,9 @@ export default function ChatPage() {
         permissionMode,
         model,
         reasoningEffort,
+        contextTokens,
+        contextMaxTokens,
+        longContextEnabled,
         currentCwd,
         activeSession,
         pendingSessionKey,
@@ -161,14 +153,10 @@ export default function ChatPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedAnchorCount, setCollapsedAnchorCount] = useState<number | null>(null);
     const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
-    const [conversationPaneWidth, setConversationPaneWidth] = useState(600);
-    const [diffPaneWidth, setDiffPaneWidth] = useState(520);
-    const [statusPaneWidth, setStatusPaneWidth] = useState(320);
     const [sidebarLayoutState, setSidebarLayoutState] = useState(loadChatSidebarLayoutState);
     const [selectedEditKey, setSelectedEditKey] = useState<string | null>(null);
     const [diffViewMode, setDiffViewMode] = useState<EditDiffPreviewMode>('unified');
     const [diffWrapLines, setDiffWrapLines] = useState(true);
-    const [diffPaneCollapsed, setDiffPaneCollapsed] = useState(false);
     const [workspaceStatus, setWorkspaceStatus] = useState<ChatWorkspaceStatus>(EMPTY_CHAT_WORKSPACE_STATUS);
     const [workspaceProjects, setWorkspaceProjects] = useState<ChatWorkspaceProjectOption[]>([]);
     const [fullHistorySearchRetryCount, setFullHistorySearchRetryCount] = useState(0);
@@ -180,11 +168,9 @@ export default function ChatPage() {
     const [mcpConnectivity, setMcpConnectivity] = useState<ChatMcpConnectivityState>(EMPTY_CHAT_MCP_CONNECTIVITY_STATE);
     const scrollRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const diffReviewPaneRef = useRef<HTMLElement>(null);
     const fullHistorySearchStateRef = useRef<FullHistorySearchState | null>(null);
     const isNearBottomRef = useRef(true);
     const messageNodeMapRef = useRef<Map<string, HTMLElement>>(new Map());
-    const paneResizeCleanupRef = useRef<(() => void) | null>(null);
     const toolAnchorHighlightCleanupRef = useRef<(() => void) | null>(null);
     const mcpConnectivityRequestRef = useRef(0);
     const mcpConnectivityTargetKeyRef = useRef('');
@@ -237,7 +223,6 @@ export default function ChatPage() {
     }, [currentCwd]);
 
     useEffect(() => () => {
-        paneResizeCleanupRef.current?.();
         toolAnchorHighlightCleanupRef.current?.();
     }, []);
 
@@ -421,27 +406,16 @@ export default function ChatPage() {
         return allEdits.find((edit) => getChatStatusEditKey(edit) === selectedEditKey) ?? allEdits[0];
     }, [selectedEditKey, statusSummary.allEdits]);
     const activeSelectedEditKey = selectedEdit ? getChatStatusEditKey(selectedEdit) : null;
-    const shouldShowDiffPane = Boolean(selectedEdit) && !diffPaneCollapsed;
-    const showDiffReopenControl = shouldShowDiffPaneReopenControl({
-        diffPaneCollapsed,
-        hasSelectedEdit: Boolean(selectedEdit),
-    });
-    const diffPaneReopenLabel = getDiffPaneReopenLabel({
-        displayPath: selectedEdit?.displayPath,
-        translate: (key, options) => t(key, options),
-    });
-    const resizeConversationDiffLabel = getPaneResizeHandleLabel({
-        edge: 'conversation-diff',
-        translate: t,
-    });
-    const resizeDiffStatusLabel = getPaneResizeHandleLabel({
-        edge: 'diff-status',
-        translate: t,
-    });
-    const resizeConversationStatusLabel = getPaneResizeHandleLabel({
-        edge: 'conversation-status',
-        translate: t,
-    });
+    const effectiveModelForContext = provider === 'claude'
+        ? apply1MContextSuffix(model, longContextEnabled)
+        : model;
+    const contextFallbackMaxTokens = contextWindowFor(effectiveModelForContext);
+    const contextResolvedMaxTokens = contextMaxTokens && contextMaxTokens > 0
+        ? contextMaxTokens
+        : contextFallbackMaxTokens;
+    const contextUsagePercentage = contextResolvedMaxTokens > 0
+        ? (contextTokens / contextResolvedMaxTokens) * 100
+        : 0;
     const collapseSessionSidebarLabel = getChatSidebarLayoutActionLabel({
         action: 'collapse-session-sidebar',
         translate: t,
@@ -450,16 +424,7 @@ export default function ChatPage() {
         action: 'expand-session-sidebar',
         translate: t,
     });
-    const collapseStatusSidebarLabel = getChatSidebarLayoutActionLabel({
-        action: 'collapse-status-sidebar',
-        translate: t,
-    });
-    const expandStatusSidebarLabel = getChatSidebarLayoutActionLabel({
-        action: 'expand-status-sidebar',
-        translate: t,
-    });
     const sessionSidebarCollapsed = sidebarLayoutState.sessionSidebarCollapsed;
-    const statusSidebarCollapsed = sidebarLayoutState.statusSidebarCollapsed;
     const activeAnchorLabel = useMemo(
         () => {
             const activeAnchor = anchorItems.find((anchor) => anchor.id === activeAnchorId);
@@ -647,12 +612,6 @@ export default function ChatPage() {
         }
     }, [activeAnchorId, anchorItems]);
 
-    useEffect(() => {
-        if (!selectedEdit) {
-            setDiffPaneCollapsed(false);
-        }
-    }, [selectedEdit]);
-
     const handleMessageNodeRef = useCallback((messageId: string, node: HTMLElement | null) => {
         if (node) {
             messageNodeMapRef.current.set(messageId, node);
@@ -794,13 +753,6 @@ export default function ChatPage() {
 
     const handleSelectedEditChange = useCallback((edit: ChatStatusEditSummary) => {
         setSelectedEditKey(getChatStatusEditKey(edit));
-        setDiffPaneCollapsed(false);
-        queueDiffPaneFocusAfterOpen(() => diffReviewPaneRef.current);
-    }, []);
-
-    const handleOpenDiffPane = useCallback(() => {
-        setDiffPaneCollapsed(false);
-        queueDiffPaneFocusAfterOpen(() => diffReviewPaneRef.current);
     }, []);
 
     const updateSidebarLayoutState = useCallback((
@@ -819,91 +771,6 @@ export default function ChatPage() {
             sessionSidebarCollapsed: collapsed,
         }));
     }, [updateSidebarLayoutState]);
-
-    const setStatusSidebarCollapsed = useCallback((collapsed: boolean) => {
-        updateSidebarLayoutState((current) => ({
-            ...current,
-            statusSidebarCollapsed: collapsed,
-        }));
-    }, [updateSidebarLayoutState]);
-
-    const startPaneResize = useCallback((
-        edge: PaneResizeHandleEdge,
-        event: ReactPointerEvent<HTMLButtonElement>,
-    ) => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        paneResizeCleanupRef.current?.();
-
-        const startX = event.clientX;
-        const startConversationWidth = conversationPaneWidth;
-        const startDiffWidth = diffPaneWidth;
-        const startStatusWidth = statusPaneWidth;
-        const previousCursor = document.body.style.cursor;
-        const previousUserSelect = document.body.style.userSelect;
-
-        const handlePointerMove = (moveEvent: PointerEvent) => {
-            const rawDelta = moveEvent.clientX - startX;
-
-            if (edge === 'conversation-diff') {
-                const next = getPaneWidthsAfterResize(
-                    rawDelta,
-                    startConversationWidth,
-                    startDiffWidth,
-                    CONVERSATION_PANE_MIN_WIDTH,
-                    CONVERSATION_PANE_MAX_WIDTH,
-                    DIFF_PANE_MIN_WIDTH,
-                    DIFF_PANE_MAX_WIDTH,
-                );
-                setConversationPaneWidth(next.leftWidth);
-                setDiffPaneWidth(next.rightWidth);
-                return;
-            }
-
-            if (edge === 'diff-status') {
-                const next = getPaneWidthsAfterResize(
-                    rawDelta,
-                    startDiffWidth,
-                    startStatusWidth,
-                    DIFF_PANE_MIN_WIDTH,
-                    DIFF_PANE_MAX_WIDTH,
-                    STATUS_PANE_MIN_WIDTH,
-                    STATUS_PANE_MAX_WIDTH,
-                );
-                setDiffPaneWidth(next.leftWidth);
-                setStatusPaneWidth(next.rightWidth);
-                return;
-            }
-
-            const next = getPaneWidthsAfterResize(
-                rawDelta,
-                startConversationWidth,
-                startStatusWidth,
-                CONVERSATION_PANE_MIN_WIDTH,
-                CONVERSATION_PANE_MAX_WIDTH,
-                STATUS_PANE_MIN_WIDTH,
-                STATUS_PANE_MAX_WIDTH,
-            );
-            setConversationPaneWidth(next.leftWidth);
-            setStatusPaneWidth(next.rightWidth);
-        };
-
-        const cleanup = () => {
-            document.removeEventListener('pointermove', handlePointerMove);
-            document.removeEventListener('pointerup', cleanup);
-            document.removeEventListener('pointercancel', cleanup);
-            document.body.style.cursor = previousCursor;
-            document.body.style.userSelect = previousUserSelect;
-            paneResizeCleanupRef.current = null;
-        };
-
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-        document.addEventListener('pointermove', handlePointerMove);
-        document.addEventListener('pointerup', cleanup);
-        document.addEventListener('pointercancel', cleanup);
-        paneResizeCleanupRef.current = cleanup;
-    }, [conversationPaneWidth, diffPaneWidth, statusPaneWidth]);
 
     const scrollToBottom = () => {
         const scrollEl = scrollRef.current;
@@ -1025,7 +892,7 @@ export default function ChatPage() {
                 <div className="chat-review-layout">
                     <section
                         className="chat-conversation-pane"
-                        style={{flex: `1 1 ${conversationPaneWidth}px`}}
+                        style={{flex: '1 1 0%'}}
                     >
                         <ChatSessionTabs
                             tabs={openTabs}
@@ -1087,123 +954,48 @@ export default function ChatPage() {
                         />
                     </section>
 
-                    {shouldShowDiffPane && (
-                        <>
-                            <button
-                                type="button"
-                                className="chat-pane-resizer hidden xl:flex"
-                                title={resizeConversationDiffLabel}
-                                aria-label={resizeConversationDiffLabel}
-                                onPointerDown={(event) => startPaneResize('conversation-diff', event)}
-                            />
-
-                            <section
-                                className="chat-diff-pane-shell hidden xl:flex"
-                                style={{flex: `1 1 ${diffPaneWidth}px`}}
-                            >
-                                <ChatDiffReviewPane
-                                    ref={diffReviewPaneRef}
-                                    edit={selectedEdit}
-                                    mode={diffViewMode}
-                                    wrapLines={diffWrapLines}
+                    <div className="hidden xl:contents">
+                        <RightDock
+                            currentCwd={currentCwd}
+                            gitRoot={workspaceStatus.gitRoot}
+                            allEdits={statusSummary.allEdits}
+                            diffViewMode={diffViewMode}
+                            onDiffViewModeChange={setDiffViewMode}
+                            diffWrapLines={diffWrapLines}
+                            onDiffWrapLinesChange={setDiffWrapLines}
+                            statusStrip={(
+                                <StatusStrip
+                                    daemonIndicatorClass={daemonIndicatorClass}
+                                    daemonStatusText={daemonStatusText}
+                                    daemonDiagnosticText={daemonDiagnosticDisplayText}
+                                    contextPercentage={contextUsagePercentage}
+                                    contextUsedTokens={contextTokens}
+                                    contextMaxTokens={contextResolvedMaxTokens}
+                                    provider={provider}
+                                    messageCount={renderableMessageCount}
+                                    daemonReady={daemonReady}
+                                    model={model}
+                                    permissionMode={permissionMode}
+                                    reasoningEffort={reasoningEffort}
+                                    sdkStatus={currentSdk ?? null}
+                                    daemonStatus={daemonStatus}
+                                    daemonReconnecting={daemonReconnecting}
+                                    daemonError={error}
+                                    mcpStatus={mcpStatus}
+                                    mcpConnectivity={mcpConnectivity}
+                                    sessionLoadMetrics={lastSessionLoadMetrics}
+                                    anchorCount={anchorCount}
+                                    activeAnchorLabel={activeAnchorLabel}
                                     currentCwd={currentCwd}
-                                    onModeChange={setDiffViewMode}
-                                    onWrapLinesChange={setDiffWrapLines}
-                                    onCollapse={() => setDiffPaneCollapsed(true)}
-                                />
-                            </section>
-
-                            {!statusSidebarCollapsed && (
-                                <button
-                                    type="button"
-                                    className="chat-pane-resizer hidden xl:flex"
-                                    title={resizeDiffStatusLabel}
-                                    aria-label={resizeDiffStatusLabel}
-                                    onPointerDown={(event) => startPaneResize('diff-status', event)}
+                                    isStreaming={isStreaming}
+                                    statusSummary={statusSummary}
+                                    onSelectTool={handleSelectStatusTool}
+                                    onReconnectDaemon={() => void reconnectDaemon()}
+                                    onCheckMcpConnectivity={handleCheckMcpConnectivity}
                                 />
                             )}
-                        </>
-                    )}
-
-                    {!shouldShowDiffPane && !statusSidebarCollapsed && (
-                        <button
-                            type="button"
-                            className="chat-pane-resizer hidden xl:flex"
-                            title={resizeConversationStatusLabel}
-                            aria-label={resizeConversationStatusLabel}
-                            onPointerDown={(event) => startPaneResize('conversation-status', event)}
                         />
-                    )}
-
-                    {statusSidebarCollapsed ? (
-                        <div className="chat-status-sidebar-collapsed-rail hidden xl:flex">
-                            <button
-                                type="button"
-                                className="chat-sidebar-toggle-button"
-                                title={expandStatusSidebarLabel}
-                                aria-label={expandStatusSidebarLabel}
-                                onClick={() => setStatusSidebarCollapsed(false)}
-                            >
-                                <PanelRightOpen size={15} />
-                            </button>
-                        </div>
-                    ) : (
-                        <div
-                            className="chat-status-pane-shell hidden xl:block"
-                            style={{flex: `0 0 ${statusPaneWidth}px`, width: statusPaneWidth}}
-                        >
-                            <button
-                                type="button"
-                                className="chat-sidebar-toggle-button chat-status-sidebar-collapse-button"
-                                title={collapseStatusSidebarLabel}
-                                aria-label={collapseStatusSidebarLabel}
-                                onClick={() => setStatusSidebarCollapsed(true)}
-                            >
-                                <PanelRightClose size={15} />
-                            </button>
-                            <StatusPanel
-                                provider={provider}
-                                messageCount={renderableMessageCount}
-                                daemonReady={daemonReady}
-                                model={model}
-                                permissionMode={permissionMode}
-                                reasoningEffort={reasoningEffort}
-                                sdkStatus={currentSdk ?? null}
-                                daemonStatus={daemonStatus}
-                                daemonReconnecting={daemonReconnecting}
-                                daemonError={error}
-                                mcpStatus={mcpStatus}
-                                mcpConnectivity={mcpConnectivity}
-                                sessionLoadMetrics={lastSessionLoadMetrics}
-                                anchorCount={anchorCount}
-                                activeAnchorLabel={activeAnchorLabel}
-                                currentCwd={currentCwd}
-                                isStreaming={isStreaming}
-                                statusSummary={statusSummary}
-                                selectedEditKey={activeSelectedEditKey}
-                                isDiffPaneCollapsed={diffPaneCollapsed}
-                                diffViewMode={diffViewMode}
-                                onSelectedEditChange={handleSelectedEditChange}
-                                onOpenDiffPanel={handleOpenDiffPane}
-                                onDiffViewModeChange={setDiffViewMode}
-                                onSelectTool={handleSelectStatusTool}
-                                onReconnectDaemon={() => void reconnectDaemon()}
-                                onCheckMcpConnectivity={handleCheckMcpConnectivity}
-                            />
-                        </div>
-                    )}
-
-                    {showDiffReopenControl && (
-                        <button
-                            type="button"
-                            className="chat-diff-pane-reopen-floating"
-                            title={diffPaneReopenLabel}
-                            aria-label={diffPaneReopenLabel}
-                            onClick={handleOpenDiffPane}
-                        >
-                            <PanelRightOpen size={14} />
-                        </button>
-                    )}
+                    </div>
                 </div>
             </div>
 

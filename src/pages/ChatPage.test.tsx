@@ -17,6 +17,9 @@ const chatStoreState = vi.hoisted(() => ({
     permissionMode: 'default',
     model: 'claude-sonnet-4-6',
     reasoningEffort: 'medium',
+    contextTokens: 0,
+    contextMaxTokens: null,
+    longContextEnabled: false,
     currentCwd: 'C:/workspace/project',
     activeSession: null,
     pendingSessionKey: null,
@@ -89,8 +92,6 @@ vi.mock('react-i18next', () => ({
             const translations: Record<string, string> = {
                 'chat.layout.collapseSessionSidebar': 'Collapse session sidebar',
                 'chat.layout.expandSessionSidebar': 'Expand session sidebar',
-                'chat.layout.collapseStatusSidebar': 'Collapse status sidebar',
-                'chat.layout.expandStatusSidebar': 'Expand status sidebar',
                 'chat.empty': 'No messages yet',
             };
             const translated = translations[key] ?? key;
@@ -125,8 +126,10 @@ vi.mock('../components/chat/ChatSessionSidebar', () => ({
     ),
 }));
 
-vi.mock('../components/chat/StatusPanel', () => ({
-    default: () => createElement('aside', {'data-testid': 'chat-status-panel'}, 'Status panel'),
+// The right tool dock is exercised by its own unit tests; here it is a stub so
+// the page-layout test stays focused on the session sidebar shell.
+vi.mock('../components/chat/dock/RightDock', () => ({
+    default: () => createElement('aside', {'data-testid': 'chat-right-dock'}),
 }));
 
 vi.mock('../components/chat/MessageAnchorRail', () => ({
@@ -155,10 +158,6 @@ vi.mock('../components/chat/ChatInputStatusTabs', () => ({
 
 vi.mock('../components/chat/composer/ChatComposer', () => ({
     ChatComposer: () => createElement('div', {'data-testid': 'chat-composer'}),
-}));
-
-vi.mock('../components/chat/ChatDiffReviewPane', () => ({
-    default: () => createElement('section', {'data-testid': 'chat-diff-review-pane'}),
 }));
 
 vi.mock('../components/chat/AskUserQuestionDialog', () => ({
@@ -223,8 +222,8 @@ afterEach(async () => {
     mcpStoreState.loadServers.mockClear();
 });
 
-describe('ChatPage sidebar layout', () => {
-    it('collapses both sidebars and persists the layout preference', async () => {
+describe('ChatPage layout', () => {
+    it('renders the right tool dock and collapses the session sidebar, persisting the preference', async () => {
         tauriMocks.invoke.mockImplementation((command: string) => {
             if (command === 'get_dashboard_projects') return Promise.resolve([]);
             if (command === 'chat_workspace_status') return Promise.resolve({});
@@ -234,8 +233,7 @@ describe('ChatPage sidebar layout', () => {
         const rendered = await renderChatPage();
 
         expect(rendered.querySelector('[data-testid="chat-session-sidebar"]')).toBeInstanceOf(HTMLElement);
-        expect(rendered.querySelector('[data-testid="chat-status-panel"]')).toBeInstanceOf(HTMLElement);
-        expect(rendered.querySelector('.chat-session-sidebar-collapse-button')).toBeNull();
+        expect(rendered.querySelector('[data-testid="chat-right-dock"]')).toBeInstanceOf(HTMLElement);
         expect(rendered.querySelector('[data-chat-session-sidebar-action="collapse"]')).toBeInstanceOf(HTMLButtonElement);
 
         await act(async () => {
@@ -245,25 +243,12 @@ describe('ChatPage sidebar layout', () => {
         });
 
         expect(rendered.querySelector('[data-testid="chat-session-sidebar"]')).toBeNull();
-        expect(getStoredSidebarLayoutState()).toEqual({
-            sessionSidebarCollapsed: true,
-            statusSidebarCollapsed: false,
-        });
-
-        await act(async () => {
-            rendered
-                .querySelector<HTMLButtonElement>('button[aria-label="Collapse status sidebar"]')
-                ?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-        });
-
-        expect(rendered.querySelector('[data-testid="chat-status-panel"]')).toBeNull();
-        expect(getStoredSidebarLayoutState()).toEqual({
-            sessionSidebarCollapsed: true,
-            statusSidebarCollapsed: true,
-        });
+        // The dock owns its own collapsed state, so the layout store only tracks
+        // the session sidebar now.
+        expect(getStoredSidebarLayoutState().sessionSidebarCollapsed).toBe(true);
     });
 
-    it('restores persisted collapsed sidebars on mount', async () => {
+    it('restores a persisted collapsed session sidebar on mount', async () => {
         tauriMocks.invoke.mockImplementation((command: string) => {
             if (command === 'get_dashboard_projects') return Promise.resolve([]);
             if (command === 'chat_workspace_status') return Promise.resolve({});
@@ -271,32 +256,22 @@ describe('ChatPage sidebar layout', () => {
         });
         window.localStorage.setItem(CHAT_SIDEBAR_LAYOUT_STORAGE_KEY, JSON.stringify({
             sessionSidebarCollapsed: true,
-            statusSidebarCollapsed: true,
+            statusSidebarCollapsed: false,
         } satisfies ChatSidebarLayoutState));
 
         const rendered = await renderChatPage();
 
         expect(rendered.querySelector('[data-testid="chat-session-sidebar"]')).toBeNull();
-        expect(rendered.querySelector('[data-testid="chat-status-panel"]')).toBeNull();
+        expect(rendered.querySelector('[data-testid="chat-right-dock"]')).toBeInstanceOf(HTMLElement);
         expect(rendered.querySelector('button[aria-label="Expand session sidebar"]')).toBeInstanceOf(HTMLButtonElement);
-        expect(rendered.querySelector('button[aria-label="Expand status sidebar"]')).toBeInstanceOf(HTMLButtonElement);
 
         await act(async () => {
             rendered
                 .querySelector<HTMLButtonElement>('button[aria-label="Expand session sidebar"]')
                 ?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
         });
-        await act(async () => {
-            rendered
-                .querySelector<HTMLButtonElement>('button[aria-label="Expand status sidebar"]')
-                ?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-        });
 
         expect(rendered.querySelector('[data-testid="chat-session-sidebar"]')).toBeInstanceOf(HTMLElement);
-        expect(rendered.querySelector('[data-testid="chat-status-panel"]')).toBeInstanceOf(HTMLElement);
-        expect(getStoredSidebarLayoutState()).toEqual({
-            sessionSidebarCollapsed: false,
-            statusSidebarCollapsed: false,
-        });
+        expect(getStoredSidebarLayoutState().sessionSidebarCollapsed).toBe(false);
     });
 });

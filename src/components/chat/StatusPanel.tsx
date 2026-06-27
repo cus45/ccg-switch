@@ -107,6 +107,9 @@ interface StatusPanelProps {
     onSelectTool?: (tool: ChatStatusToolSummary) => void;
     onReconnectDaemon?: () => void;
     onCheckMcpConnectivity?: () => void;
+    /** When false, the recent-edits tree + diff controls are omitted (the dock's
+     *  ReviewPanel owns edit/diff review). Defaults to true for standalone use. */
+    showEdits?: boolean;
 }
 
 function normalizeEditPathParts(edit: ChatStatusEditSummary): string[] {
@@ -296,6 +299,7 @@ export default function StatusPanel({
     onSelectTool,
     onReconnectDaemon,
     onCheckMcpConnectivity,
+    showEdits = true,
 }: StatusPanelProps) {
     const { t } = useTranslation();
     const translateWithFallback = (key: string, fallback: string, options?: Record<string, unknown>) => {
@@ -1714,7 +1718,7 @@ export default function StatusPanel({
                         </div>
                     )}
 
-                    {shouldShowRecentEditsCard && (
+                    {showEdits && shouldShowRecentEditsCard && (
                         <div className="rounded-md border border-base-300/70 bg-base-100/65 p-2">
                             <div className="mb-1.5 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-normal text-base-content/45">

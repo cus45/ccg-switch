@@ -13,6 +13,68 @@ and pass data + callbacks down to feature components.
 
 ---
 
+## Chat Right Tool Dock (supersedes the old right `StatusPanel` + central diff pane)
+
+The Chat page's right side is a single collapsible **card tool dock**
+(`components/chat/dock/RightDock`), not a fixed `StatusPanel` pane plus a
+separate central diff pane. This replaces the earlier three-pane
+(conversation / central diff / status) resizable layout: the conversation pane
+is now `flex:1` and the dock is a fixed-width (~360px) desktop-only (`xl`) flex
+child that fully collapses to a floating expand button with **no residual
+width** (`.chat-review-layout` stays `position: relative` so the collapsed
+button anchors to the conversation area). Dock collapsed state + active panel
+persist in `localStorage` (`utils/rightDockState.ts`,
+`ccg-chat-right-dock-state`), mirroring the `chatSidebarLayout` pattern.
+
+- `RightDock` owns `{collapsed, activePanel: 'menu' | 'files' | 'review'}` and
+  routes its body to `DockMenu` (cards: Files, plus Review only when the
+  workspace `isGit`), `FilesPanel`, or `ReviewPanel`, with a back-to-menu
+  control. It receives `currentCwd`, `gitRoot`, `allEdits`,
+  `diffViewMode`/`onDiffViewModeChange`, `diffWrapLines`/`onDiffWrapLinesChange`,
+  and a `statusStrip` node from `ChatPage`.
+- `FilesPanel` renders a lazily-loaded tree rooted at `currentCwd`
+  (`chat_list_directory` per directory level via `utils/fileTreeUtils`), a
+  read-only text preview (`chat_read_text_file`, binary/truncation flagged), and
+  a change badge on files in the git working-tree set that jumps to Review.
+- `ReviewPanel` lists git working-tree changes (`chat_git_changed_files`) merged
+  with chat-edited files (`statusSummary.allEdits`); selecting a git file builds
+  `DiffPreviewLine[]` via `buildDiffPreviewLines(old, new)` from
+  `chat_git_file_contents` and renders through the **reused** `ChatDiffReviewPane`
+  (unified/split via the shared `diffViewMode`). No git repo ⇒ no Review card.
+- `StatusStrip` is the dock's always-visible thin bar: daemon status + context
+  usage % (`TokenIndicator`), with an expandable drawer that reuses
+  `StatusPanel showEdits={false}` for diagnostics (provider/message/anchor/daemon,
+  MCP, session-load metrics, runtime context, activity). It is presentational —
+  `ChatPage` passes all values down; it must not read stores.
+- `StatusPanel` gained `showEdits?: boolean` (default `true`). The recent-edits
+  tree + diff-mode toggle render only when `showEdits` is true; the dock passes
+  `false` because `ReviewPanel` now owns edit/diff review. Standalone
+  `StatusPanel` callers/tests keep the edit tree via the default.
+
+Superseded by this layout (do not reintroduce for the desktop dock): the
+resizable conversation/diff/status pane handles (`startPaneResize`,
+`.chat-pane-resizer`, `getPaneWidthsAfterResize`), the central diff review pane
+as a separate column with its own collapse/restore/focus-handoff controls, the
+right status-sidebar collapse rail, and the floating diff-pane reopen control.
+The composer status strip (`ChatInputStatusTabs`) remains the small-screen
+(`< xl`) fallback for edits/tasks and still uses `selectedEditKey` /
+`onSelectedEditChange` / `onSelectTool`.
+
+### New backend commands (cross-layer)
+
+Four additive read-only Tauri commands back the dock (`commands/chat_commands.rs`,
+serde `camelCase`), wrapped by `services/chatDockService.ts` with payload
+normalization:
+
+| Command | Returns |
+|---------|---------|
+| `chat_list_directory(path)` | `Array<{name, isDir}>` (dirs first, heavy/hidden dirs skipped) |
+| `chat_read_text_file(path, maxBytes?)` | `{content, truncated, binary}` |
+| `chat_git_changed_files(cwd)` | `{isGit, files: [{path, status, additions, deletions}]}` |
+| `chat_git_file_contents(cwd, path)` | `{oldContent, newContent}` |
+
+---
+
 ## Component Structure
 
 Standard order within a component file:

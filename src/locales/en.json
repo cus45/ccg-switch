@@ -93,7 +93,9 @@
             "refresh": "Refresh changes",
             "gitChangedSection": "Working-tree changes",
             "chatEditedSection": "Edited in this chat",
-            "reviewEmpty": "No changes to review"
+            "reviewEmpty": "No changes to review",
+            "expandDiagnostics": "Show diagnostics",
+            "collapseDiagnostics": "Hide diagnostics"
         },
         "layout": {
             "anchorRail": "Message anchors",
