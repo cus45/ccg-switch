@@ -209,6 +209,77 @@ describe('useChatStore session transitions', () => {
         expect(state.dockChatTabKey).toBeNull();
     });
 
+    it('sendInTab streams into the side tab and routes its request without disturbing the active center tab', async () => {
+        useChatStore.setState({
+            messages: activeMessages,
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            provider: 'claude',
+            model: 'claude-opus-4-8',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        tauriMocks.invoke.mockResolvedValueOnce('req-side-1');
+
+        const ok = await useChatStore.getState().sendInTab(sideKey, 'hi side');
+
+        expect(ok).toBe(true);
+        const state = useChatStore.getState();
+        // Active center tab + its top-level projection stay untouched.
+        expect(state.activeTabKey).toBe('main-tab');
+        expect(state.messages).toBe(activeMessages);
+        expect(state.activeRequestId).toBeNull();
+        // The side tab received the optimistic pair and the routed request id.
+        const side = state.openTabs.find((tab) => tab.key === sideKey);
+        expect(side?.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+        expect(side?.activeRequestId).toBe('req-side-1');
+        expect(tauriMocks.invoke).toHaveBeenCalledWith('chat_send', expect.objectContaining({provider: 'claude'}));
+    });
+
+    it('sendInTab returns false for an unknown tab', async () => {
+        useChatStore.setState({openTabs: [], dockChatTabKey: null});
+
+        const ok = await useChatStore.getState().sendInTab('missing-tab', 'hi');
+
+        expect(ok).toBe(false);
+    });
+
+    it('setTabDraft updates only the target tab draft, not the active tab', () => {
+        useChatStore.setState({
+            activeTabKey: 'main-tab',
+            messages: activeMessages,
+            draft: 'main draft',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+
+        useChatStore.getState().setTabDraft(sideKey, 'side draft');
+
+        const state = useChatStore.getState();
+        expect(state.draft).toBe('main draft');
+        expect(state.openTabs.find((tab) => tab.key === sideKey)?.draft).toBe('side draft');
+    });
+
+    it('updateTabConfig changes an idle tab but is a no-op while that tab is streaming', () => {
+        useChatStore.setState({activeTabKey: 'main-tab', messages: [], openTabs: [], dockChatTabKey: null});
+        const sideKey = useChatStore.getState().openSideChat();
+
+        useChatStore.getState().updateTabConfig(sideKey, {model: 'claude-haiku-4-5-20251001'});
+        expect(useChatStore.getState().openTabs.find((tab) => tab.key === sideKey)?.model)
+            .toBe('claude-haiku-4-5-20251001');
+
+        useChatStore.setState((state) => ({
+            openTabs: state.openTabs.map((tab) => tab.key === sideKey
+                ? {...tab, messages: [{id: 'a', role: 'assistant', content: '', streaming: true, createdAt: 1}] as ChatMessage[]}
+                : tab),
+        }));
+        useChatStore.getState().updateTabConfig(sideKey, {model: 'claude-opus-4-8'});
+        expect(useChatStore.getState().openTabs.find((tab) => tab.key === sideKey)?.model)
+            .toBe('claude-haiku-4-5-20251001');
+    });
+
     it('marks daemon warmup failure as a recoverable error during init', async () => {
         tauriMocks.invoke.mockRejectedValueOnce(new Error('warmup failed'));
 

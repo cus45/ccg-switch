@@ -1,4 +1,5 @@
 import {create} from 'zustand';
+import {useShallow} from 'zustand/react/shallow';
 import {invoke} from '@tauri-apps/api/core';
 import {listen, type UnlistenFn} from '@tauri-apps/api/event';
 import {
@@ -418,6 +419,20 @@ interface ChatState {
         attachments?: ChatAttachment[];
         displayText?: string;
     }) => Promise<boolean>;
+    /** 向指定 tab 发送（侧边聊天并发发送）；现有 send 等价于向活跃 tab 发送。 */
+    sendInTab: (tabKey: string, text: string, opts?: {
+        cwd?: string;
+        model?: string;
+        attachments?: ChatAttachment[];
+        displayText?: string;
+    }) => Promise<boolean>;
+    /** 设置指定 tab 的输入草稿（侧聊草稿存于 tab 快照，不写全局 localStorage）。 */
+    setTabDraft: (tabKey: string, text: string) => void;
+    /** 更新指定 tab 的会话配置（provider/model/权限/推理/1M）；流式进行中为 no-op。 */
+    updateTabConfig: (
+        tabKey: string,
+        config: Partial<Pick<ChatSessionTab, 'provider' | 'model' | 'permissionMode' | 'reasoningEffort' | 'longContextEnabled'>>,
+    ) => void;
     loadSession: (session: SessionMeta) => Promise<void>;
     loadActiveSessionFullHistory: () => Promise<ChatMessage[] | null>;
     expandActiveSessionHistory: () => Promise<void>;
@@ -1796,6 +1811,153 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
     },
 
+    sendInTab: async (tabKey, text, opts) => {
+        const trimmed = text.trim();
+        const attachments = opts?.attachments?.filter((attachment) => (
+            attachment.fileName.trim().length > 0
+        )) ?? [];
+        const hasAttachments = attachments.length > 0;
+        if (!trimmed && !hasAttachments) return false;
+
+        const tab = get().openTabs.find((item) => item.key === tabKey);
+        if (!tab) return false;
+
+        prepareChatTurnStoppedNotificationPermission();
+        const messageText = trimmed || ATTACHMENT_ONLY_MESSAGE;
+        const displayText = opts?.displayText?.trim() || messageText;
+        const outboundMessage = tab.handoffContextProvider
+            && tab.handoffContextProvider !== tab.provider
+            && !tab.sessionId
+            ? buildProviderHandoffMessage(
+                messageText,
+                tab.messages,
+                tab.handoffContextProvider,
+                tab.provider,
+            )
+            : messageText;
+
+        const userMsg: ChatMessage = {
+            id: newId(),
+            role: 'user',
+            content: displayText,
+            raw: buildUserRawMessage(trimmed, attachments),
+            createdAt: Date.now(),
+        };
+        const assistantMsg: ChatMessage = {
+            id: newId(),
+            role: 'assistant',
+            content: '',
+            streaming: true,
+            createdAt: Date.now(),
+        };
+
+        set((state) => updateTabStateByKey(state, tabKey, (current) => ({
+            ...current,
+            messages: [...current.messages, userMsg, assistantMsg],
+            draft: '',
+            error: null,
+            status: 'running',
+            pendingSessionKey: null,
+        })));
+        pendingSendOwners.set(assistantMsg.id, {tabKey, assistantMessageId: assistantMsg.id});
+
+        const requestedModel = opts?.model ?? tab.model;
+        const effectiveModel = tab.provider === 'claude'
+            ? apply1MContextSuffix(requestedModel, tab.longContextEnabled)
+            : requestedModel;
+        const params: Record<string, unknown> = {
+            message: outboundMessage,
+            sessionId: tab.provider === 'claude' ? (tab.sessionId ?? undefined) : undefined,
+            threadId: tab.provider === 'codex' ? (tab.sessionId ?? undefined) : undefined,
+            cwd: opts?.cwd ?? tab.currentCwd ?? undefined,
+            model: effectiveModel,
+            permissionMode: tab.permissionMode,
+            reasoningEffort: tab.reasoningEffort,
+            streaming: true,
+        };
+        if (hasAttachments) {
+            params.attachments = tab.provider === 'codex'
+                ? attachments.map((attachment) => (
+                    attachment.path
+                        ? { type: 'local_image', path: attachment.path }
+                        : attachment
+                ))
+                : attachments;
+        }
+
+        try {
+            if (get().providerConfigDirty) {
+                await invoke('chat_restart_daemon');
+                set({
+                    providerConfigDirty: false,
+                    daemonReady: false,
+                    daemonStatus: 'starting',
+                    daemonReconnecting: false,
+                    error: null,
+                });
+                scheduleDaemonReadyTimeout(get, set);
+            }
+            const requestId = await invoke<string>('chat_send', {
+                provider: tab.provider,
+                command: tab.provider === 'claude' && hasAttachments ? 'sendWithAttachments' : 'send',
+                params,
+            });
+            const owner = pendingSendOwners.get(assistantMsg.id);
+            pendingSendOwners.delete(assistantMsg.id);
+            const ownerTab = owner
+                ? get().openTabs.find((item) => item.key === owner.tabKey)
+                : null;
+            if (!owner || !ownerTab?.messages.some((message) => (
+                message.id === owner.assistantMessageId && message.role === 'assistant' && message.streaming
+            ))) {
+                retireRequestOwnership(requestId);
+                return true;
+            }
+            requestTabKeys.set(requestId, tabKey);
+            set((state) => updateRequestTabState(state, requestId, (current) => ({
+                ...current,
+                activeRequestId: requestId,
+                status: 'running',
+                error: null,
+            })));
+            return true;
+        } catch (e) {
+            pendingSendOwners.delete(assistantMsg.id);
+            notifyStoppedRequestOnce(
+                `send-error:${assistantMsg.id}`,
+                'error',
+                tab.provider,
+                String(e),
+            );
+            set((state) => updateTabStateByKey(state, tabKey, (current) => ({
+                ...current,
+                error: String(e),
+                status: 'error',
+                messages: current.messages.map((m) =>
+                    m.id === assistantMsg.id
+                        ? { ...m, streaming: false, error: String(e) }
+                        : m,
+                ),
+            })));
+            return false;
+        }
+    },
+
+    setTabDraft: (tabKey, text) => {
+        set((state) => updateTabStateByKey(state, tabKey, (tab) => ({...tab, draft: text})));
+    },
+
+    updateTabConfig: (tabKey, config) => {
+        set((state) => {
+            const tab = tabKey === state.activeTabKey
+                ? currentTopLevelTab(state)
+                : state.openTabs.find((item) => item.key === tabKey);
+            // 流式进行中锁定配置变更（与活跃 tab 守卫一致）。
+            if (!tab || tab.activeRequestId || tab.messages.some((m) => m.streaming)) return {};
+            return updateTabStateByKey(state, tabKey, (current) => ({...current, ...config}));
+        });
+    },
+
     loadSession: async (session) => {
         if (!isChatProvider(session.providerId)) {
             set({
@@ -2469,3 +2631,62 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     clearDaemonLogs: () => set({ daemonLogs: [] }),
 }));
+
+/** 指定 tab 的会话切片（供 `<ChatPane tabKey>` 主/侧共用）。 */
+export interface ChatTabView {
+    key: string;
+    messages: ChatMessage[];
+    provider: ChatProvider;
+    permissionMode: PermissionMode;
+    model: string;
+    reasoningEffort: ReasoningEffort;
+    draft: string;
+    longContextEnabled: boolean;
+    contextTokens: number;
+    contextMaxTokens: number | null;
+    activeRequestId: string | null;
+    sessionId: string | null;
+    currentCwd: string | null;
+    activeSession: SessionMeta | null;
+    pendingSessionKey: string | null;
+    lastSessionLoadMetrics: ChatSessionLoadMetrics | null;
+    subagentRuns: Record<string, ChatMessage[]>;
+    error: string | null;
+    isStreaming: boolean;
+}
+
+/**
+ * 读取指定 tab 的会话切片。活跃 tab 走顶层投影、背景 tab 读 `openTabs[key]`；
+ * 用 `useShallow` 浅比较避免无谓重渲染。tabKey 为空或 tab 不存在返回 null。
+ */
+export function useChatTab(tabKey: string | null): ChatTabView | null {
+    return useChatStore(useShallow((state): ChatTabView | null => {
+        if (!tabKey) return null;
+        const source: ChatState | ChatSessionTab | undefined =
+            tabKey === state.activeTabKey
+                ? state
+                : state.openTabs.find((tab) => tab.key === tabKey);
+        if (!source) return null;
+        return {
+            key: tabKey,
+            messages: source.messages,
+            provider: source.provider,
+            permissionMode: source.permissionMode,
+            model: source.model,
+            reasoningEffort: source.reasoningEffort,
+            draft: source.draft,
+            longContextEnabled: source.longContextEnabled,
+            contextTokens: source.contextTokens,
+            contextMaxTokens: source.contextMaxTokens,
+            activeRequestId: source.activeRequestId,
+            sessionId: source.sessionId,
+            currentCwd: source.currentCwd,
+            activeSession: source.activeSession,
+            pendingSessionKey: source.pendingSessionKey,
+            lastSessionLoadMetrics: source.lastSessionLoadMetrics,
+            subagentRuns: source.subagentRuns,
+            error: source.error,
+            isStreaming: source.messages.some((message) => message.streaming),
+        };
+    }));
+}
