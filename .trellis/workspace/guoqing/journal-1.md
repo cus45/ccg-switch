@@ -466,3 +466,61 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 ### Next Steps
 
 - None - task complete
+
+## Session 17: ChatPane 会话列组件化(06-27-tabbed-dock-side-chat Stage B)
+
+**Date**: 2026-07-03
+**Task**: 06-27-tabbed-dock-side-chat Stage B
+**Branch**: `main`
+
+### Summary
+
+完成 Stage B:B1 新增 useChatPaneController(转录/搜索/锚点/状态摘要按 tabKey 作用域,tab 未命中回退全局投影)+ ChatPane(main/side variant 会话列组合,main 含 ChatSessionTabs,composer 按 variant 决定全局/tab 绑定);B2 ChatComposer 经 useComposerChatBinding 支持 tabKey 注入(全局路径行为不变含真实 abort,tab 路径 sendInTab/updateTabConfig/setTabDraft,侧聊 canAbort=false);B3 ChatPage 中心区切 <ChatPane variant="main">,dock StatusStrip/ReviewPanel 与 ChatPane 共享同一 controller 实例避免双份计算,页面瘦身约 400 行。验证: tsc 干净/vitest 677 全绿/cargo test chat:: 41 通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a3af5f6` | feat(chat): ChatPane 会话列组件化,中心主聊天切换(Stage B) |
+
+### Status
+
+[OK] **Stage B 代码完成,等待 review-gate**
+
+### Next Steps
+
+- 用户手测主聊天回归(发送/流式/工具块/会话切换/审查/文件树/状态条/权限弹窗)
+- 通过后进 Stage C(DockShell tab 外壳)
+
+## Session 18: DockShell tab 化 + 侧边聊天分屏(Stage C/D/E)
+
+**Date**: 2026-07-03
+**Task**: 06-27-tabbed-dock-side-chat Stage C-E
+**Branch**: `main`
+
+### Summary
+
+同一会话内完成 C/D/E 三阶段:C) dockDocuments 纯函数文档模型(open 去重/close 邻位回退/持久化 ccg-chat-dock-documents,载入丢弃 sideChat)+DockShell/DockTabBar(tab 条+"+"菜单,空态复用 DockMenu,回滚开关 ccg-chat-dock-shell)+FilesPanel 拆成 FilesBrowser(树)/FilePreview(独立文件 tab);D) "+"新建侧聊→openSideChat+sideChat 文档,SideChatPane 自建 controller 渲染 <ChatPane variant="side">(sdk/mcp 按 tab provider 独立算),修复 closeSideChat 在侧聊被中心聚焦后的 activeTabKey 悬空(走 closeTab 焦点回退+store 测试);E) 批量关闭菜单项+i18n 六个新键(zh/en)+spec 更新(component-guidelines 记 DockShell/ChatPane 契约,state-management 记 tab 作用域 API/并发路由/canAbort 约束)。验证:tsc/vitest 695/cargo chat:: 41 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3661cb0` | feat(chat): DockShell tab 化右侧 dock(Stage C) |
+| `fffead5` | feat(chat): dock 侧边聊天分屏(Stage D) |
+| `36bf973` | feat(chat): dock 批量关闭 + spec 入库(Stage E) |
+
+### Status
+
+[OK] **代码完成,待 GUI 人工验收 AC1-AC8**
+
+### Next Steps
+
+- 用户 GUI 验收:B4 主聊天回归 + AC1-5(tab 条/侧聊独立对话/并发不串扰/后台保活/文件 tab)
+- 全部通过后 task.py finish 归档任务
+
+## Session 18 附加: 工作中会话的 loading 指示(验收反馈)
+
+**Date**: 2026-07-03
+
+按用户截图反馈补交互细节:1) 中心会话 tab busy 小圆点→Loader2 spinner;2) dock 侧聊文档 tab 在其聊天 tab 流式/排队时图标→spinner(DockShell 计算 busyChatTabKeys:活跃 tab 读顶层投影,背景 tab 读快照);3) 侧边栏会话项对「正在工作」的会话显示 spinner+「对话进行中」(busySessionKeys 同口径);4) 流式中的 ThinkingBlock 图标→spinner+标题呼吸动画(复用 expandThinkingBlockIndex 判定)。i18n: sessionPanel.working/dock.sideChatWorking(zh/en)。注意:并发会话同时修了 useComposerChatBinding 动作稳定引用与 setTabDraft no-op 守卫(未提交,留给对方),本次提交只含我的文件。tsc/vitest 695 全绿。

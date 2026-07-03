@@ -2,6 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 import type {ReactNode} from 'react';
 import {PanelRightClose, PanelRightOpen} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
+import {useShallow} from 'zustand/react/shallow';
 import {useChatStore} from '../../../stores/useChatStore';
 import type {ChatStatusEditSummary} from '../../../utils/chatStatusSummary';
 import {loadRightDockState, saveRightDockState} from '../../../utils/rightDockState';
@@ -77,6 +78,13 @@ export default function DockShell({
     const [gitChanged, setGitChanged] = useState<GitChangedFiles>(EMPTY_GIT_CHANGED_FILES);
     const openSideChat = useChatStore((state) => state.openSideChat);
     const closeSideChat = useChatStore((state) => state.closeSideChat);
+    // 正在工作（流式/排队）的聊天 tab key，用于侧聊文档 tab 的 loading 指示。
+    // 活跃中心 tab 的快照可能滞后，改读顶层投影；背景 tab 事件直写快照，读快照即可。
+    const busyChatTabKeys = useChatStore(useShallow((state) => state.openTabs
+        .filter((tab) => (tab.key === state.activeTabKey
+            ? Boolean(state.activeRequestId) || state.messages.some((message) => message.streaming)
+            : tab.status === 'running' || tab.status === 'queued' || Boolean(tab.activeRequestId)))
+        .map((tab) => tab.key)));
 
     useEffect(() => {
         // 与旧 RightDock 共用收起状态；activePanel 字段保留给回滚路径。
@@ -182,6 +190,7 @@ export default function DockShell({
                     documents={docState.documents}
                     activeDocId={docState.activeDocId}
                     isGit={gitChanged.isGit}
+                    busyChatTabKeys={busyChatTabKeys}
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onOpenFiles={handleOpenFiles}

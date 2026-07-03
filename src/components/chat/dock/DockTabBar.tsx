@@ -1,5 +1,5 @@
 import {useCallback} from 'react';
-import {FileDiff, FileText, Folder, MessageSquare, Plus, X} from 'lucide-react';
+import {FileDiff, FileText, Folder, Loader2, MessageSquare, Plus, X} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import {cn} from '../../../utils/cn';
 import type {DockDocument, DockDocumentKind} from '../../../utils/dockDocuments';
@@ -9,6 +9,8 @@ interface DockTabBarProps {
     activeDocId: string | null;
     /** 非 git 工作区时 “+” 菜单不提供审查入口。 */
     isGit: boolean;
+    /** 正在工作（流式/排队）的聊天 tab key；侧聊文档 tab 据此显示 loading。 */
+    busyChatTabKeys: string[];
     onActivate: (id: string) => void;
     onClose: (id: string) => void;
     onOpenFiles: () => void;
@@ -29,6 +31,7 @@ export default function DockTabBar({
     documents,
     activeDocId,
     isGit,
+    busyChatTabKeys,
     onActivate,
     onClose,
     onOpenFiles,
@@ -55,6 +58,10 @@ export default function DockTabBar({
                 {documents.map((doc) => {
                     const Icon = KIND_ICON[doc.kind];
                     const active = doc.id === activeDocId;
+                    const busy = doc.kind === 'sideChat'
+                        && Boolean(doc.chatTabKey)
+                        && busyChatTabKeys.includes(doc.chatTabKey as string);
+                    const workingLabel = tf('chat.dock.sideChatWorking', 'Working…');
                     return (
                         <div
                             key={doc.id}
@@ -68,10 +75,14 @@ export default function DockTabBar({
                             <button
                                 type="button"
                                 className="flex min-w-0 items-center gap-1"
-                                title={doc.title}
+                                title={busy ? `${doc.title} · ${workingLabel}` : doc.title}
                                 onClick={() => onActivate(doc.id)}
                             >
-                                <Icon size={13} className="shrink-0" />
+                                {busy ? (
+                                    <Loader2 size={13} className="shrink-0 animate-spin text-primary" aria-label={workingLabel} />
+                                ) : (
+                                    <Icon size={13} className="shrink-0" />
+                                )}
                                 <span className="truncate">{doc.title}</span>
                             </button>
                             <button

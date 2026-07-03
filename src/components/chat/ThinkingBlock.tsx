@@ -1,6 +1,6 @@
 import {useEffect, useId, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {ChevronDown, MessageCircle} from 'lucide-react';
+import {ChevronDown, Loader2, MessageCircle} from 'lucide-react';
 import MarkdownBlock from './MarkdownBlock';
 
 interface ThinkingBlockProps {
@@ -8,6 +8,8 @@ interface ThinkingBlockProps {
     defaultExpanded?: boolean;
     title?: string;
     compact?: boolean;
+    /** 该思考块正在流式产出（最后一条流式 assistant 消息的活跃思考块）。 */
+    streaming?: boolean;
 }
 
 /**
@@ -19,6 +21,7 @@ export default function ThinkingBlock({
     defaultExpanded = false,
     title,
     compact = false,
+    streaming = false,
 }: ThinkingBlockProps) {
     const { t } = useTranslation();
     const panelId = useId();
@@ -51,8 +54,14 @@ export default function ThinkingBlock({
                 aria-expanded={expanded}
                 aria-controls={panelId}
             >
-                <MessageCircle size={compact ? 14 : 16} className="text-base-content/60 flex-shrink-0" />
-                <span className={compact ? 'flex-1 text-[11.5px] text-base-content/65' : 'flex-1 text-sm text-base-content/70'}>
+                {streaming ? (
+                    <Loader2 size={compact ? 14 : 16} className="flex-shrink-0 animate-spin text-primary/70" />
+                ) : (
+                    <MessageCircle size={compact ? 14 : 16} className="text-base-content/60 flex-shrink-0" />
+                )}
+                <span
+                    className={`${compact ? 'flex-1 text-[11.5px] text-base-content/65' : 'flex-1 text-sm text-base-content/70'}${streaming ? ' animate-pulse' : ''}`}
+                >
                     {title ?? t('chat.thinking.title')}
                 </span>
                 <ChevronDown

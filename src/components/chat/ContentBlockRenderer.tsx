@@ -390,6 +390,7 @@ export default function ContentBlockRenderer({
                                     defaultExpanded={grouped.originalIndex === expandThinkingBlockIndex}
                                     title={t('chat.thinking.title')}
                                     compact={compact}
+                                    streaming={grouped.originalIndex === expandThinkingBlockIndex}
                                 />
                             );
 

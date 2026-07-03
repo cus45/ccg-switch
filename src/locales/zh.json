@@ -91,7 +91,8 @@
             "previewFailed": "文件加载失败。",
             "sideChat": "侧边聊天",
             "newSideChat": "新侧边聊天",
-            "closeAllTabs": "关闭全部标签页"
+            "closeAllTabs": "关闭全部标签页",
+            "sideChatWorking": "对话进行中"
         },
         "layout": {
             "anchorRail": "消息锚点",
@@ -300,6 +301,7 @@
             "loading": "正在加载建议..."
         },
         "sessionPanel": {
+            "working": "对话进行中",
             "title": "会话管理",
             "newChat": "新对话",
             "recentChats": "最近聊天",

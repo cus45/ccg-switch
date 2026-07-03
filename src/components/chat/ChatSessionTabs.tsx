@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {X} from 'lucide-react';
+import {Loader2, X} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import type {ChatSessionTab} from '../../stores/useChatStore';
 import {cn} from '../../utils/cn';
@@ -137,10 +137,12 @@ export default function ChatSessionTabs({
                             </span>
                             {isBusy && (
                                 <span
-                                    className="chat-session-tab-busy-dot h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                                    className="flex shrink-0 items-center"
                                     title={statusLabel}
                                     aria-label={statusLabel}
-                                />
+                                >
+                                    <Loader2 size={11} className="animate-spin text-primary" />
+                                </span>
                             )}
                             {tab.status === 'error' && (
                                 <span

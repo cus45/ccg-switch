@@ -8,6 +8,7 @@ import {
     Clock,
     FolderOpen,
     History,
+    Loader2,
     MessageSquare,
     PanelLeftClose,
     Pin,
@@ -15,6 +16,8 @@ import {
     RefreshCw,
     Search,
 } from 'lucide-react';
+import {useShallow} from 'zustand/react/shallow';
+import {useChatStore} from '../../stores/useChatStore';
 import {showToast} from '../common/ToastContainer';
 import {getSessionSelectionKey, type SessionMeta} from '../../types/session';
 import {openChatPathInExplorer, renameChatSessionTitle} from '../../utils/chatWorkspaceStatus';
@@ -349,10 +352,28 @@ export default function ChatSessionSidebar({
         const translated = options ? t(key, options) : t(key);
         return translated === key ? fallback : translated;
     };
+    // 正在工作（流式/排队）的会话 key：活跃 tab 读顶层投影，背景 tab 读快照。
+    // 用于给侧边栏对应会话项加 loading 指示。
+    const busySessionKeys = useChatStore(useShallow((state) => {
+        const keys: string[] = [];
+        const activeBusy = Boolean(state.activeRequestId)
+            || state.messages.some((message) => message.streaming);
+        if (activeBusy && state.activeSession) {
+            keys.push(getSessionSelectionKey(state.activeSession));
+        }
+        for (const tab of state.openTabs) {
+            if (tab.key === state.activeTabKey || !tab.activeSession) continue;
+            if (tab.status === 'running' || tab.status === 'queued' || Boolean(tab.activeRequestId)) {
+                keys.push(getSessionSelectionKey(tab.activeSession));
+            }
+        }
+        return keys;
+    }));
     const panelTitleLabel = translateWithFallback('chat.sessionPanel.title', 'Session Management');
     const newChatLabel = translateWithFallback('chat.sessionPanel.newChat', 'New chat');
     const refreshLabel = translateWithFallback('common.refresh', 'Refresh');
     const loadingLabel = translateWithFallback('common.loading', 'Loading...');
+    const workingLabel = translateWithFallback('chat.sessionPanel.working', 'Working…');
     const searchProjectsLabel = translateWithFallback('chat.sessionPanel.searchProjects', 'Search projects...');
     const projectsLabel = translateWithFallback('chat.sessionPanel.projects', 'Projects');
     const noProjectsLabel = translateWithFallback('chat.sessionPanel.noProjects', 'No projects');
@@ -644,6 +665,7 @@ export default function ChatSessionSidebar({
         const sessionKey = getSessionSelectionKey(session);
         const isPending = pendingSessionKey === sessionKey;
         const isActive = activeSessionKey === sessionKey;
+        const isWorking = !isPending && busySessionKeys.includes(sessionKey);
         const selected = isPending || (!pendingSessionKey && isActive);
         const providerLabel = getSessionProviderLabel(t, session.providerId);
         return (
@@ -658,11 +680,17 @@ export default function ChatSessionSidebar({
                         ? 'border-primary/25 bg-primary/10 text-base-content shadow-[inset_0_0_0_1px_rgba(59,130,246,0.05)]'
                         : 'border-transparent hover:bg-base-200/80'
                 }`}
-                title={isPending ? loadingLabel : session.sessionId}
+                title={isPending ? loadingLabel : isWorking ? `${sessionTitle(session)} · ${workingLabel}` : session.sessionId}
             >
                 <div className={compact ? 'flex items-center gap-1.5' : 'flex items-center gap-2'}>
                     {isPending ? (
                         <RefreshCw size={compact ? 13 : 14} className="animate-spin text-primary"/>
+                    ) : isWorking ? (
+                        <Loader2
+                            size={compact ? 13 : 14}
+                            className="animate-spin text-primary"
+                            aria-label={workingLabel}
+                        />
                     ) : (
                         <MessageSquare size={compact ? 13 : 14} className={selected ? 'text-primary' : 'text-base-content/40'}/>
                     )}
@@ -693,6 +721,12 @@ export default function ChatSessionSidebar({
                     {isPending && (
                         <>
                             <span className="shrink-0 text-primary/80">{loadingLabel}</span>
+                            <span className="shrink-0">·</span>
+                        </>
+                    )}
+                    {isWorking && (
+                        <>
+                            <span className="shrink-0 text-primary/80">{workingLabel}</span>
                             <span className="shrink-0">·</span>
                         </>
                     )}

@@ -102,7 +102,8 @@
             "previewFailed": "Failed to load this file.",
             "sideChat": "Side chat",
             "newSideChat": "New side chat",
-            "closeAllTabs": "Close all tabs"
+            "closeAllTabs": "Close all tabs",
+            "sideChatWorking": "Working…"
         },
         "layout": {
             "anchorRail": "Message anchors",
@@ -311,6 +312,7 @@
             "loading": "Loading suggestions..."
         },
         "sessionPanel": {
+            "working": "Working…",
             "title": "Session Management",
             "newChat": "New chat",
             "recentChats": "Recent chats",

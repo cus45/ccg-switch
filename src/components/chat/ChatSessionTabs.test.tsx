@@ -155,7 +155,8 @@ describe('ChatSessionTabs', () => {
         expect(html).not.toContain('flex-1 basis-0');
         expect(html).not.toContain('overflow-x-auto');
         expect(html).not.toContain('shrink-0 items-center gap-1.5 rounded-t-md border px-2 text-xs');
-        expect(html).toContain('chat-session-tab-busy-dot');
+        // 工作中的 tab 用旋转 loading 指示（lucide Loader2 + animate-spin）。
+        expect(html).toContain('animate-spin');
         expect(html).not.toContain('>Running<');
     });
 
