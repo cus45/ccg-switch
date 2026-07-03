@@ -12,10 +12,12 @@
 
 ## Stage B — `<ChatPane tabKey>`，中心主聊天切换 `[review-gate]`
 
-- [ ] B1 `components/chat/ChatPane.tsx`：吃 `tabKey` + `variant`；组合 转录(MessageList)+ ChatComposer + StatusStrip + 该 tab 权限弹窗。数据源 = `useChatTab(tabKey)` + tab actions。
-- [ ] B2 `ChatComposer` 重构：provider/model/draft/send/abort/setProvider… 从全局 `useChatStore()` 改为注入的 tab 切片 + tab actions（保持所有键盘/守卫/补全/增强契约不变）。
-- [ ] B3 `ChatPage` 中心区改用 `<ChatPane tabKey={activeTabKey} variant="main"/>`；保留 `ChatSessionTabs`（中心会话 tab）。
-- [ ] B4 验证门 B：`tsc`；`vitest run`（**全量**，重点 ChatComposer/ChatPage/useChatStore 回归）；逐项手测主聊天：发送/流式/工具块/中心会话切换/审查/文件树/状态条/权限弹窗无回归（AC6）。`[review-gate]` 通过后再进 C。
+- [x] B1 `components/chat/ChatPane.tsx`：吃 `tabKey` + `variant`；组合 转录(MessageList)+ ChatComposer + StatusStrip + 该 tab 权限弹窗。数据源 = `useChatTab(tabKey)` + tab actions。
+  - 落地形态：`ChatPane.tsx`（会话列组合）+ `useChatPaneController.ts`（转录/搜索/锚点/状态摘要控制器，tab 未命中回退全局投影）。StatusStrip 仍常驻 dock 顶（设计原文），由 ChatPage 用同一 controller 实例喂数据；权限弹窗按取舍留在 ChatPage 全局队列。
+- [x] B2 `ChatComposer` 重构：provider/model/draft/send/abort/setProvider… 从全局 `useChatStore()` 改为注入的 tab 切片 + tab actions（保持所有键盘/守卫/补全/增强契约不变）。
+  - 落地形态：`useComposerChatBinding(tabKey?)` —— 缺省走全局路径（主聊天零改动，含真实 abort）；传 tabKey 走 tab 作用域 action（侧聊，canAbort=false，chat_abort 无法按 requestId 定向）。
+- [x] B3 `ChatPage` 中心区改用 `<ChatPane tabKey={activeTabKey} variant="main"/>`；保留 `ChatSessionTabs`（中心会话 tab，收敛进 ChatPane 的 main variant）。
+- [ ] B4 验证门 B：`tsc` ✓；`vitest run` 全量 677/677 ✓；`cargo test chat::` 41/41 ✓。**待用户手测**主聊天：发送/流式/工具块/中心会话切换/审查/文件树/状态条/权限弹窗无回归（AC6）。`[review-gate]` 通过后再进 C。
 
 ## Stage C — DockShell tab 外壳（收编 Files/Review/File）
 

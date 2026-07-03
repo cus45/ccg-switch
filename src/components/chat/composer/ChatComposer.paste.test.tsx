@@ -41,7 +41,7 @@ vi.mock('../../../stores/useChatStore', () => {
         abort: vi.fn(),
     });
     useChatStore.getState = () => ({draft: ''});
-    return {useChatStore};
+    return {useChatStore, useChatTab: () => null};
 });
 
 vi.mock('../../../stores/useProviderStore', () => ({

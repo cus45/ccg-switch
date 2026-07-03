@@ -68,6 +68,8 @@ const tauriMocks = vi.hoisted(() => ({
 
 vi.mock('../stores/useChatStore', () => ({
     useChatStore: () => chatStoreState,
+    // ChatPane/useChatPaneController 在 tab 未命中时回退全局投影（chatStoreState）。
+    useChatTab: () => null,
 }));
 
 vi.mock('../stores/useSdkStore', () => ({

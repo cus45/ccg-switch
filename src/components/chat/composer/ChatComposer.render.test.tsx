@@ -40,6 +40,7 @@ vi.mock('../../../stores/useChatStore', () => ({
         activeSession: null,
         setCurrentCwd: vi.fn(),
     }),
+    useChatTab: () => null,
 }));
 
 vi.mock('../../../stores/useProviderStore', () => ({

@@ -11,7 +11,7 @@ import {
 } from 'react';
 import {useTranslation} from 'react-i18next';
 import {invoke} from '@tauri-apps/api/core';
-import {useChatStore} from '../../../stores/useChatStore';
+import {useComposerChatBinding} from './useComposerChatBinding';
 import {useProviderStore} from '../../../stores/useProviderStore';
 import type {ChatAttachment} from '../../../types/chat';
 import {type ChatWorkspaceProjectOption, ContextBar} from './ContextBar';
@@ -48,6 +48,8 @@ interface ChatComposerProps {
     onWorkspaceChange?: (cwd: string) => void;
     workspaceStatus?: ChatWorkspaceStatus;
     onWorkspaceStatusChange?: (status: ChatWorkspaceStatus) => void;
+    /** 绑定到的会话 tab；缺省=全局活跃 tab（主聊天）。侧边聊天传入其 tab key。 */
+    tabKey?: string | null;
 }
 
 type FileWithPath = File & {
@@ -187,6 +189,7 @@ export function ChatComposer({
     onWorkspaceChange,
     workspaceStatus,
     onWorkspaceStatusChange,
+    tabKey,
 }: ChatComposerProps) {
     const { t } = useTranslation();
     const {
@@ -208,7 +211,8 @@ export function ChatComposer({
         setDraft,
         send,
         abort,
-    } = useChatStore();
+        readDraft,
+    } = useComposerChatBinding(tabKey);
     const {
         providers,
         hasLoaded: providersLoaded,
@@ -473,7 +477,7 @@ export function ChatComposer({
             const sent = await send(text, { cwd, attachments: sendingAttachments, displayText });
             if (!sent) {
                 setAttachments((current) => restoreFailedSendAttachments(current, sendingAttachments));
-                if (text && !useChatStore.getState().draft.trim()) {
+                if (text && !readDraft().trim()) {
                     setDraft(text);
                 }
             } else {

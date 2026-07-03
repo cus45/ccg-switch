@@ -9,45 +9,20 @@ import SdkDependencyPanel, {getSdkDependencyPanelLabels} from '../components/cha
 import AskUserQuestionDialog from '../components/chat/AskUserQuestionDialog';
 import PlanApprovalDialog from '../components/chat/PlanApprovalDialog';
 import ToolPermissionDialog from '../components/chat/ToolPermissionDialog';
-import MessageList from '../components/chat/MessageList';
-import ConversationSearch from '../components/chat/ConversationSearch';
 import MessageAnchorRail from '../components/chat/MessageAnchorRail';
-import ScrollControl from '../components/chat/ScrollControl';
 import RightDock from '../components/chat/dock/RightDock';
 import StatusStrip from '../components/chat/dock/StatusStrip';
-import ChatInputStatusTabs from '../components/chat/ChatInputStatusTabs';
 import ChatSessionSidebar from '../components/chat/ChatSessionSidebar';
-import ChatSessionTabs from '../components/chat/ChatSessionTabs';
+import {ChatPane} from '../components/chat/ChatPane';
+import {useChatPaneController} from '../components/chat/useChatPaneController';
 import type {ChatWorkspaceProjectOption} from '../components/chat/composer/ContextBar';
-import {ChatComposer} from '../components/chat/composer/ChatComposer';
 import ModalDialog from '../components/common/ModalDialog';
 import {
     getActivePermissionDialog,
     getChatTopChromeActionLabel,
-    getCollapsedMessageWindow,
     getSdkMissingBannerText,
-    highlightTranscriptToolAnchor,
-    shouldBuildCompleteChatStatusSummary,
     shouldIgnoreChatSessionSelection,
-    shouldRequestFullHistoryForSearch,
-    VISIBLE_MESSAGE_WINDOW,
 } from '../utils/chatUiBehavior';
-import {
-    buildChatStatusSummary,
-    type ChatStatusEditSummary,
-    type ChatStatusSummary,
-    type ChatStatusToolSummary,
-    getChatStatusEditKey,
-    mergeChatInputStatusSummary,
-} from '../utils/chatStatusSummary';
-import {
-    filterRenderableMessages,
-    getAnchorPreview,
-    getRecentRenderableMessages,
-    getRenderableMessages,
-    getSearchStatusContextMessages,
-    isMessageAnchorCandidate,
-} from '../utils/chatNavigation';
 import {
     canReconnectChatDaemon,
     getChatDaemonDiagnosticDisplayText,
@@ -76,41 +51,19 @@ import {
     saveChatSidebarLayoutState,
 } from '../utils/chatSidebarLayout';
 import {getSessionSelectionKey, type SessionMeta} from '../types/session';
-import type {ChatMessage} from '../types/chat';
 import type {EditDiffPreviewMode} from '../components/toolBlocks/EditDiffPreview';
 import {apply1MContextSuffix, contextWindowFor} from '../components/chat/composer/constants';
 
-const BOTTOM_REVEAL_THRESHOLD = 160;
-
-function findToolAnchorElement(root: HTMLElement, toolId: string): HTMLElement | null {
-    const candidates = root.querySelectorAll<HTMLElement>('[data-chat-tool-id], [data-chat-tool-ids]');
-
-    for (const candidate of candidates) {
-        if (candidate.dataset.chatToolId === toolId) return candidate;
-        const groupedToolIds = candidate.dataset.chatToolIds?.split(/\s+/).filter(Boolean) ?? [];
-        if (groupedToolIds.includes(toolId)) return candidate;
-    }
-
-    return null;
-}
-
-interface FullHistorySearchState {
-    sessionKey: string;
-    status: 'loading' | 'complete' | 'error';
-    messages: ChatMessage[] | null;
-    error: string | null;
-}
 /**
  * 交互式对话页 —— 对接 ai-bridge daemon（Claude Code / Codex）。
  *
- * 这是集成的最小可用前端：发送消息、流式渲染回复、中止、清空。
- * 工具调用可视化、Diff、权限审批将在后续任务中补充。
+ * 会话列（转录/搜索/锚点/状态摘要）收敛在 `<ChatPane>` + `useChatPaneController`；
+ * 本页保留页面级 chrome（daemon 状态、SDK 依赖、会话侧栏、右侧 dock、权限弹窗）。
  */
 export default function ChatPage() {
     const {t} = useTranslation();
     const sdkDependencyLabels = useMemo(() => getSdkDependencyPanelLabels(t), [t]);
     const {
-        messages,
         provider,
         permissionMode,
         model,
@@ -129,49 +82,26 @@ export default function ChatPage() {
         pendingAskUserQuestion,
         pendingPlanApproval,
         pendingToolPermission,
-        openTabs,
         activeTabKey,
         init,
         reconnectDaemon,
         clear,
         loadSession,
-        loadActiveSessionFullHistory,
-        expandActiveSessionHistory,
-        focusTab,
-        closeTab,
-        closeOtherTabs,
-        closeAllTabs,
         setCurrentCwd,
         startNewSession,
         answerAskUserQuestion,
         answerToolPermission,
         approvePlan,
     } = useChatStore();
+    const pane = useChatPaneController({tabKey: activeTabKey, bindSearchShortcut: true});
 
     const [sdkModalOpen, setSdkModalOpen] = useState(false);
-    const [isNearBottom, setIsNearBottom] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [collapsedAnchorCount, setCollapsedAnchorCount] = useState<number | null>(null);
-    const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
     const [sidebarLayoutState, setSidebarLayoutState] = useState(loadChatSidebarLayoutState);
-    const [selectedEditKey, setSelectedEditKey] = useState<string | null>(null);
     const [diffViewMode, setDiffViewMode] = useState<EditDiffPreviewMode>('unified');
     const [diffWrapLines, setDiffWrapLines] = useState(true);
     const [workspaceStatus, setWorkspaceStatus] = useState<ChatWorkspaceStatus>(EMPTY_CHAT_WORKSPACE_STATUS);
     const [workspaceProjects, setWorkspaceProjects] = useState<ChatWorkspaceProjectOption[]>([]);
-    const [fullHistorySearchRetryCount, setFullHistorySearchRetryCount] = useState(0);
-    const [completeStatusSummaryState, setCompleteStatusSummaryState] = useState<{
-        key: string;
-        summary: ChatStatusSummary;
-    } | null>(null);
-    const [fullHistorySearchState, setFullHistorySearchState] = useState<FullHistorySearchState | null>(null);
     const [mcpConnectivity, setMcpConnectivity] = useState<ChatMcpConnectivityState>(EMPTY_CHAT_MCP_CONNECTIVITY_STATE);
-    const scrollRef = useRef<HTMLDivElement>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-    const fullHistorySearchStateRef = useRef<FullHistorySearchState | null>(null);
-    const isNearBottomRef = useRef(true);
-    const messageNodeMapRef = useRef<Map<string, HTMLElement>>(new Map());
-    const toolAnchorHighlightCleanupRef = useRef<(() => void) | null>(null);
     const mcpConnectivityRequestRef = useRef(0);
     const mcpConnectivityTargetKeyRef = useRef('');
 
@@ -222,169 +152,10 @@ export default function ChatPage() {
         };
     }, [currentCwd]);
 
-    useEffect(() => () => {
-        toolAnchorHighlightCleanupRef.current?.();
-    }, []);
-
-    const updateBottomState = useCallback(() => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl) return;
-
-        const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
-        const nextIsNearBottom = distanceFromBottom < BOTTOM_REVEAL_THRESHOLD;
-        isNearBottomRef.current = nextIsNearBottom;
-        setIsNearBottom(nextIsNearBottom);
-    }, []);
-
-    useEffect(() => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl || !isNearBottomRef.current) return;
-
-        requestAnimationFrame(() => {
-            scrollEl.scrollTo({top: scrollEl.scrollHeight, behavior: 'smooth'});
-        });
-    }, [messages]);
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-                event.preventDefault();
-                searchInputRef.current?.focus();
-                searchInputRef.current?.select();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
-
     // 当前 provider 对应的 SDK 是否已安装。
     const sdkId = provider === 'claude' ? 'claude-sdk' : 'codex-sdk';
     const currentSdk = sdkStatuses.find((s) => s.id === sdkId);
     const sdkMissing = currentSdk ? !currentSdk.installed : false;
-    const hasMessages = messages.length > 0;
-    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-    const isSearchingTranscript = normalizedSearchQuery.length > 0;
-    const activeSessionKey = useMemo(
-        () => activeSession ? getSessionSelectionKey(activeSession) : null,
-        [activeSession],
-    );
-    const activeFullHistorySearchState = fullHistorySearchState?.sessionKey === activeSessionKey
-        ? fullHistorySearchState
-        : null;
-    const fullHistorySearchMessages = activeFullHistorySearchState?.status === 'complete'
-        ? activeFullHistorySearchState.messages
-        : null;
-    const fullHistorySearchStatus = isSearchingTranscript
-        && activeSessionKey
-        && lastSessionLoadMetrics?.status === 'windowed'
-        ? (activeFullHistorySearchState?.status ?? 'loading')
-        : null;
-    const searchSourceMessages = isSearchingTranscript && fullHistorySearchMessages
-        ? fullHistorySearchMessages
-        : messages;
-    const hasEarlierServerHistory = !isSearchingTranscript
-        && lastSessionLoadMetrics?.status === 'windowed';
-    const isLoadingEarlierServerHistory = !isSearchingTranscript
-        && lastSessionLoadMetrics?.status === 'loading';
-    const baseNavigationWindow = useMemo(() => {
-        if (isSearchingTranscript) return null;
-        return getRecentRenderableMessages(messages, VISIBLE_MESSAGE_WINDOW);
-    }, [isSearchingTranscript, messages]);
-    const searchCollapsedWindow = useMemo(() => {
-        if (!isSearchingTranscript) return null;
-        const allRenderableMessages = getRenderableMessages(searchSourceMessages);
-        return {
-            renderableMessages: allRenderableMessages,
-            window: getCollapsedMessageWindow({
-                filteredCount: allRenderableMessages.length,
-                revealedCount: 0,
-                isSearching: true,
-            }),
-        };
-    }, [isSearchingTranscript, searchSourceMessages]);
-    const totalEarlierMessages = isSearchingTranscript
-        ? (searchCollapsedWindow?.window.totalEarlierMessages ?? 0)
-        : (baseNavigationWindow?.hiddenRenderableCount ?? 0);
-    const clampedCollapsedAnchorCount = Math.min(
-        collapsedAnchorCount ?? totalEarlierMessages,
-        totalEarlierMessages,
-    );
-    const visibleNavigationCount = baseNavigationWindow
-        ? Math.max(
-            VISIBLE_MESSAGE_WINDOW,
-            baseNavigationWindow.totalRenderableCount - clampedCollapsedAnchorCount,
-        )
-        : 0;
-    const renderableMessages = useMemo(() => {
-        if (isSearchingTranscript) return searchCollapsedWindow?.renderableMessages ?? [];
-        if (!baseNavigationWindow) return [];
-        if (visibleNavigationCount <= baseNavigationWindow.renderableMessages.length) {
-            return baseNavigationWindow.renderableMessages;
-        }
-        return getRecentRenderableMessages(messages, visibleNavigationCount).renderableMessages;
-    }, [
-        baseNavigationWindow,
-        isSearchingTranscript,
-        messages,
-        searchCollapsedWindow,
-        visibleNavigationCount,
-    ]);
-    const filteredMessages = useMemo(
-        () => (
-            isSearchingTranscript
-                ? filterRenderableMessages(renderableMessages, normalizedSearchQuery)
-                : renderableMessages
-        ),
-        [isSearchingTranscript, normalizedSearchQuery, renderableMessages],
-    );
-    const renderableMessageCount = isSearchingTranscript
-        ? renderableMessages.length
-        : (baseNavigationWindow?.totalRenderableCount ?? renderableMessages.length);
-    const visibleAnchorMessages = filteredMessages;
-    const anchorItems = useMemo(() => {
-        const userMessages = visibleAnchorMessages.filter(({ message }) => isMessageAnchorCandidate(message));
-
-        return userMessages.map(({ message }, index) => {
-            const preview = getAnchorPreview(message, t('chat.layout.anchorRail'));
-            return {
-                id: message.id,
-                label: preview.label,
-                kind: preview.kind,
-                sequence: index + 1,
-                total: userMessages.length,
-                createdAt: message.createdAt,
-            };
-        });
-    }, [t, visibleAnchorMessages]);
-    const anchorCount = anchorItems.length;
-    const isStreaming = useMemo(
-        () => messages.some((message) => Boolean(message.streaming)),
-        [messages],
-    );
-    const statusMessages = useMemo(() => {
-        if (isSearchingTranscript) {
-            return getSearchStatusContextMessages(searchSourceMessages, filteredMessages);
-        }
-        const firstVisibleIndex = renderableMessages[0]?.originalIndex ?? messages.length;
-        return messages.slice(firstVisibleIndex);
-    }, [filteredMessages, isSearchingTranscript, messages, renderableMessages, searchSourceMessages]);
-    const statusSummary = useMemo(
-        () => buildChatStatusSummary(statusMessages),
-        [statusMessages],
-    );
-    const transcriptStatusKey = useMemo(() => {
-        const firstMessage = messages[0];
-        const lastMessage = messages[messages.length - 1];
-        return `${messages.length}:${firstMessage?.id ?? ''}:${lastMessage?.id ?? ''}`;
-    }, [messages]);
-    const completeStatusSummary = completeStatusSummaryState?.key === transcriptStatusKey
-        ? completeStatusSummaryState.summary
-        : null;
-    const inputStatusSummary = useMemo(
-        () => mergeChatInputStatusSummary(statusSummary, completeStatusSummary),
-        [completeStatusSummary, statusSummary],
-    );
     const mcpStatus = useMemo(
         () => buildChatMcpAvailabilitySummary({
             servers: mcpServers,
@@ -399,13 +170,6 @@ export default function ChatPage() {
         [mcpStatus],
     );
     const mcpConnectivityTargetKey = mcpConnectivityTargetIds.join('\n');
-    const selectedEdit = useMemo<ChatStatusEditSummary | undefined>(() => {
-        const allEdits = statusSummary.allEdits;
-        if (allEdits.length === 0) return undefined;
-        if (!selectedEditKey) return allEdits[0];
-        return allEdits.find((edit) => getChatStatusEditKey(edit) === selectedEditKey) ?? allEdits[0];
-    }, [selectedEditKey, statusSummary.allEdits]);
-    const activeSelectedEditKey = selectedEdit ? getChatStatusEditKey(selectedEdit) : null;
     const effectiveModelForContext = provider === 'claude'
         ? apply1MContextSuffix(model, longContextEnabled)
         : model;
@@ -425,19 +189,6 @@ export default function ChatPage() {
         translate: t,
     });
     const sessionSidebarCollapsed = sidebarLayoutState.sessionSidebarCollapsed;
-    const activeAnchorLabel = useMemo(
-        () => {
-            const activeAnchor = anchorItems.find((anchor) => anchor.id === activeAnchorId);
-            if (activeAnchor) return activeAnchor.label;
-            if (anchorItems.length === 0) return undefined;
-
-            const fallbackAnchor = isNearBottom
-                ? anchorItems[anchorItems.length - 1]
-                : anchorItems[0];
-            return fallbackAnchor?.label;
-        },
-        [activeAnchorId, anchorItems, isNearBottom],
-    );
     const activePermissionDialog = getActivePermissionDialog({
         hasAskUserQuestion: Boolean(pendingAskUserQuestion),
         askUserQuestionTimestamp: pendingAskUserQuestion?.timestamp ?? null,
@@ -496,178 +247,13 @@ export default function ChatPage() {
     });
 
     useEffect(() => {
-        fullHistorySearchStateRef.current = fullHistorySearchState;
-    }, [fullHistorySearchState]);
-
-    useEffect(() => {
-        if (!isSearchingTranscript) {
-            setFullHistorySearchState(null);
-            return;
-        }
-        if (!shouldRequestFullHistoryForSearch({
-            isSearching: isSearchingTranscript,
-            activeSessionKey,
-            sessionLoadStatus: lastSessionLoadMetrics?.status ?? null,
-            fullHistorySearchSessionKey: fullHistorySearchStateRef.current?.sessionKey ?? null,
-            fullHistorySearchStatus: fullHistorySearchStateRef.current?.status ?? null,
-        })) {
-            return;
-        }
-
-        let cancelled = false;
-        const searchSessionKey = activeSessionKey;
-        if (!searchSessionKey) return;
-        setFullHistorySearchState({
-            sessionKey: searchSessionKey,
-            status: 'loading',
-            messages: null,
-            error: null,
-        });
-
-        void loadActiveSessionFullHistory()
-            .then((fullHistoryMessages) => {
-                if (cancelled) return;
-                if (fullHistoryMessages) {
-                    setFullHistorySearchState({
-                        sessionKey: searchSessionKey,
-                        status: 'complete',
-                        messages: fullHistoryMessages,
-                        error: null,
-                    });
-                    return;
-                }
-                setFullHistorySearchState({
-                    sessionKey: searchSessionKey,
-                    status: 'error',
-                    messages: null,
-                    error: 'full-history-load-failed',
-                });
-            })
-            .catch((error) => {
-                if (cancelled) return;
-                setFullHistorySearchState({
-                    sessionKey: searchSessionKey,
-                    status: 'error',
-                    messages: null,
-                    error: String(error),
-                });
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [
-        activeSessionKey,
-        fullHistorySearchRetryCount,
-        isSearchingTranscript,
-        lastSessionLoadMetrics?.status,
-        loadActiveSessionFullHistory,
-    ]);
-
-    useEffect(() => {
-        if (!shouldBuildCompleteChatStatusSummary({
-            messageCount: messages.length,
-            isSearching: isSearchingTranscript,
-            sessionLoadStatus: lastSessionLoadMetrics?.status ?? null,
-        })) {
-            setCompleteStatusSummaryState(null);
-            return;
-        }
-
-        let cancelled = false;
-        setCompleteStatusSummaryState(null);
-
-        const buildCompleteStatusSummary = () => {
-            if (cancelled) return;
-            setCompleteStatusSummaryState({
-                key: transcriptStatusKey,
-                summary: buildChatStatusSummary(messages),
-            });
-        };
-
-        if (window.requestIdleCallback) {
-            const idleHandle = window.requestIdleCallback(buildCompleteStatusSummary, {timeout: 800});
-            return () => {
-                cancelled = true;
-                window.cancelIdleCallback(idleHandle);
-            };
-        }
-
-        const timeoutHandle = window.setTimeout(buildCompleteStatusSummary, 0);
-        return () => {
-            cancelled = true;
-            window.clearTimeout(timeoutHandle);
-        };
-    }, [isSearchingTranscript, lastSessionLoadMetrics?.status, messages, transcriptStatusKey]);
-
-    useEffect(() => {
         mcpConnectivityTargetKeyRef.current = mcpConnectivityTargetKey;
         mcpConnectivityRequestRef.current += 1;
         setMcpConnectivity(EMPTY_CHAT_MCP_CONNECTIVITY_STATE);
     }, [mcpConnectivityTargetKey]);
 
-    useEffect(() => {
-        if (activeAnchorId && !anchorItems.some((anchor) => anchor.id === activeAnchorId)) {
-            setActiveAnchorId(null);
-        }
-    }, [activeAnchorId, anchorItems]);
-
-    const handleMessageNodeRef = useCallback((messageId: string, node: HTMLElement | null) => {
-        if (node) {
-            messageNodeMapRef.current.set(messageId, node);
-            return;
-        }
-
-        messageNodeMapRef.current.delete(messageId);
-    }, []);
-
-    const resetConversationNavigation = useCallback(() => {
-        setSearchQuery('');
-        setCollapsedAnchorCount(null);
-        setActiveAnchorId(null);
-        messageNodeMapRef.current.clear();
-        isNearBottomRef.current = true;
-        setIsNearBottom(true);
-    }, []);
-
-    const handleSearchChange = useCallback((value: string) => {
-        setSearchQuery(value);
-        setActiveAnchorId(null);
-
-        if (value.trim()) {
-            requestAnimationFrame(() => {
-                scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
-            });
-        }
-    }, []);
-
-    const handleRetryFullHistorySearch = useCallback(() => {
-        fullHistorySearchStateRef.current = null;
-        setFullHistorySearchState(null);
-        setFullHistorySearchRetryCount((count) => count + 1);
-    }, []);
-
-    const handleLoadEarlierServerHistory = useCallback(() => {
-        void expandActiveSessionHistory();
-    }, [expandActiveSessionHistory]);
-
-    const handleSelectStatusTool = useCallback((tool: ChatStatusToolSummary) => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl) return;
-
-        const anchor = findToolAnchorElement(scrollEl, tool.toolId);
-        if (!anchor) return;
-
-        anchor.scrollIntoView({behavior: 'smooth', block: 'center'});
-        anchor.focus({preventScroll: true});
-        toolAnchorHighlightCleanupRef.current = highlightTranscriptToolAnchor(anchor, {
-            previousCleanup: toolAnchorHighlightCleanupRef.current,
-        });
-        requestAnimationFrame(updateBottomState);
-    }, [updateBottomState]);
-
     const handleClear = () => {
-        resetConversationNavigation();
+        pane.resetNavigation();
         void clear();
     };
 
@@ -682,17 +268,17 @@ export default function ChatPage() {
             return;
         }
 
-        resetConversationNavigation();
+        pane.resetNavigation();
         void loadSession(session);
-    }, [activeSession, loadSession, pendingSessionKey, resetConversationNavigation]);
+    }, [activeSession, loadSession, pane.resetNavigation, pendingSessionKey]);
 
     const handleNewSession = useCallback((cwd?: string | null) => {
-        resetConversationNavigation();
+        pane.resetNavigation();
         void startNewSession(cwd ?? currentCwd);
-    }, [currentCwd, resetConversationNavigation, startNewSession]);
+    }, [currentCwd, pane.resetNavigation, startNewSession]);
 
     const handleWorkspaceChange = useCallback((nextCwd: string) => {
-        resetConversationNavigation();
+        pane.resetNavigation();
         setCurrentCwd(nextCwd);
         // 把通过 "Open folder" 选中的目录补进切换器列表，方便下次直接切回，
         // 避免它只能来自 get_dashboard_projects 的历史项目。
@@ -706,7 +292,7 @@ export default function ChatPage() {
             const name = nextCwd.trim().split(/[\\/]+/).filter(Boolean).pop() ?? nextCwd.trim();
             return [{name, path: nextCwd.trim()}, ...current];
         });
-    }, [resetConversationNavigation, setCurrentCwd]);
+    }, [pane.resetNavigation, setCurrentCwd]);
 
     const handleCheckMcpConnectivity = useCallback(() => {
         if (mcpConnectivityTargetIds.length === 0) return;
@@ -751,10 +337,6 @@ export default function ChatPage() {
             });
     }, [mcpConnectivityTargetIds, mcpConnectivityTargetKey]);
 
-    const handleSelectedEditChange = useCallback((edit: ChatStatusEditSummary) => {
-        setSelectedEditKey(getChatStatusEditKey(edit));
-    }, []);
-
     const updateSidebarLayoutState = useCallback((
         resolveNextState: (current: ChatSidebarLayoutState) => ChatSidebarLayoutState,
     ) => {
@@ -771,24 +353,6 @@ export default function ChatPage() {
             sessionSidebarCollapsed: collapsed,
         }));
     }, [updateSidebarLayoutState]);
-
-    const scrollToBottom = () => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl) return;
-
-        scrollEl.scrollTo({top: scrollEl.scrollHeight, behavior: 'smooth'});
-        isNearBottomRef.current = true;
-        setIsNearBottom(true);
-    };
-
-    const scrollToTop = () => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl) return;
-
-        scrollEl.scrollTo({top: 0, behavior: 'smooth'});
-        isNearBottomRef.current = false;
-        setIsNearBottom(false);
-    };
 
     return (
         <div className="flex flex-col h-full">
@@ -826,7 +390,7 @@ export default function ChatPage() {
                     <button
                         className="btn btn-ghost btn-sm"
                         onClick={handleClear}
-                        disabled={messages.length === 0}
+                        disabled={!pane.hasMessages}
                     >
                         <Trash2 size={16}/>
                         {clearChatLabel}
@@ -878,87 +442,35 @@ export default function ChatPage() {
                 )}
 
                 <MessageAnchorRail
-                    hasMessages={hasMessages}
-                    anchors={anchorItems}
-                    activeAnchorId={activeAnchorId}
-                    activeAnchorLabel={activeAnchorLabel}
-                    containerRef={scrollRef}
-                    messageNodeMap={messageNodeMapRef}
-                    onActiveAnchorChange={setActiveAnchorId}
-                    onScrollToTop={scrollToTop}
-                    onScrollToBottom={scrollToBottom}
+                    hasMessages={pane.hasMessages}
+                    anchors={pane.anchorItems}
+                    activeAnchorId={pane.activeAnchorId}
+                    activeAnchorLabel={pane.activeAnchorLabel}
+                    containerRef={pane.scrollRef}
+                    messageNodeMap={pane.messageNodeMapRef}
+                    onActiveAnchorChange={pane.setActiveAnchorId}
+                    onScrollToTop={pane.scrollToTop}
+                    onScrollToBottom={pane.scrollToBottom}
                 />
 
                 <div className="chat-review-layout">
-                    <section
-                        className="chat-conversation-pane"
-                        style={{flex: '1 1 0%'}}
-                    >
-                        <ChatSessionTabs
-                            tabs={openTabs}
-                            activeTabKey={activeTabKey}
-                            onFocusTab={focusTab}
-                            onCloseTab={closeTab}
-                            onCloseOtherTabs={closeOtherTabs}
-                            onCloseAllTabs={closeAllTabs}
-                        />
-                        <ConversationSearch ref={searchInputRef} value={searchQuery} onChange={handleSearchChange} />
-
-                        <div
-                            ref={scrollRef}
-                            className="flex-1 scroll-pb-8 overflow-y-auto px-2 py-3 sm:px-3"
-                            onScroll={updateBottomState}
-                        >
-                            {!hasMessages && (
-                                <div className="flex h-full flex-col items-center justify-center text-base-content/40">
-                                    <p className="text-sm">{t('chat.empty')}</p>
-                                </div>
-                            )}
-                            <MessageList
-                                messages={searchSourceMessages}
-                                searchQuery={searchQuery}
-                                fullHistorySearchStatus={fullHistorySearchStatus}
-                                scrollContainerRef={scrollRef}
-                                onCollapsedCountChange={setCollapsedAnchorCount}
-                                onMessageNodeRef={handleMessageNodeRef}
-                                onRetryFullHistorySearch={handleRetryFullHistorySearch}
-                                hasEarlierServerHistory={hasEarlierServerHistory}
-                                isLoadingEarlierServerHistory={isLoadingEarlierServerHistory}
-                                onLoadEarlierServerHistory={handleLoadEarlierServerHistory}
-                            />
-                        </div>
-
-                        <ScrollControl
-                            visible={hasMessages && !isNearBottom}
-                            onScrollToBottom={scrollToBottom}
-                        />
-
-                        {/* 发送控制台：约束在中间对话列，避免横跨会话栏/状态栏 */}
-                        <ChatInputStatusTabs
-                            statusSummary={inputStatusSummary}
-                            isStreaming={isStreaming}
-                            selectedEditKey={activeSelectedEditKey}
-                            onSelectedEditChange={handleSelectedEditChange}
-                            onSelectTool={handleSelectStatusTool}
-                            mcpStatus={mcpStatus}
-                            collapseStatusTabsOnDesktop
-                        />
-                        <ChatComposer
-                            sdkMissing={sdkMissing}
-                            onSdkMissing={() => setSdkModalOpen(true)}
-                            cwd={currentCwd ?? undefined}
-                            workspaceProjects={workspaceProjects}
-                            onWorkspaceChange={handleWorkspaceChange}
-                            workspaceStatus={workspaceStatus}
-                            onWorkspaceStatusChange={setWorkspaceStatus}
-                        />
-                    </section>
+                    <ChatPane
+                        controller={pane}
+                        variant="main"
+                        sdkMissing={sdkMissing}
+                        onSdkMissing={() => setSdkModalOpen(true)}
+                        mcpStatus={mcpStatus}
+                        workspaceProjects={workspaceProjects}
+                        onWorkspaceChange={handleWorkspaceChange}
+                        workspaceStatus={workspaceStatus}
+                        onWorkspaceStatusChange={setWorkspaceStatus}
+                    />
 
                     <div className="hidden xl:contents">
                         <RightDock
                             currentCwd={currentCwd}
                             gitRoot={workspaceStatus.gitRoot}
-                            allEdits={statusSummary.allEdits}
+                            allEdits={pane.statusSummary.allEdits}
                             diffViewMode={diffViewMode}
                             onDiffViewModeChange={setDiffViewMode}
                             diffWrapLines={diffWrapLines}
@@ -972,7 +484,7 @@ export default function ChatPage() {
                                     contextUsedTokens={contextTokens}
                                     contextMaxTokens={contextResolvedMaxTokens}
                                     provider={provider}
-                                    messageCount={renderableMessageCount}
+                                    messageCount={pane.renderableMessageCount}
                                     daemonReady={daemonReady}
                                     model={model}
                                     permissionMode={permissionMode}
@@ -984,12 +496,12 @@ export default function ChatPage() {
                                     mcpStatus={mcpStatus}
                                     mcpConnectivity={mcpConnectivity}
                                     sessionLoadMetrics={lastSessionLoadMetrics}
-                                    anchorCount={anchorCount}
-                                    activeAnchorLabel={activeAnchorLabel}
+                                    anchorCount={pane.anchorCount}
+                                    activeAnchorLabel={pane.activeAnchorLabel}
                                     currentCwd={currentCwd}
-                                    isStreaming={isStreaming}
-                                    statusSummary={statusSummary}
-                                    onSelectTool={handleSelectStatusTool}
+                                    isStreaming={pane.isStreaming}
+                                    statusSummary={pane.statusSummary}
+                                    onSelectTool={pane.handleSelectStatusTool}
                                     onReconnectDaemon={() => void reconnectDaemon()}
                                     onCheckMcpConnectivity={handleCheckMcpConnectivity}
                                 />
