@@ -11,6 +11,7 @@ import PlanApprovalDialog from '../components/chat/PlanApprovalDialog';
 import ToolPermissionDialog from '../components/chat/ToolPermissionDialog';
 import MessageAnchorRail from '../components/chat/MessageAnchorRail';
 import RightDock from '../components/chat/dock/RightDock';
+import DockShell from '../components/chat/dock/DockShell';
 import StatusStrip from '../components/chat/dock/StatusStrip';
 import ChatSessionSidebar from '../components/chat/ChatSessionSidebar';
 import {ChatPane} from '../components/chat/ChatPane';
@@ -53,6 +54,7 @@ import {
 import {getSessionSelectionKey, type SessionMeta} from '../types/session';
 import type {EditDiffPreviewMode} from '../components/toolBlocks/EditDiffPreview';
 import {apply1MContextSuffix, contextWindowFor} from '../components/chat/composer/constants';
+import {isDockShellEnabled} from '../utils/dockDocuments';
 
 /**
  * 交互式对话页 —— 对接 ai-bridge daemon（Claude Code / Codex）。
@@ -96,6 +98,8 @@ export default function ChatPage() {
     const pane = useChatPaneController({tabKey: activeTabKey, bindSearchShortcut: true});
 
     const [sdkModalOpen, setSdkModalOpen] = useState(false);
+    // DockShell 回滚开关（localStorage `ccg-chat-dock-shell`），仅初始化时读取。
+    const [dockShellEnabled] = useState(isDockShellEnabled);
     const [sidebarLayoutState, setSidebarLayoutState] = useState(loadChatSidebarLayoutState);
     const [diffViewMode, setDiffViewMode] = useState<EditDiffPreviewMode>('unified');
     const [diffWrapLines, setDiffWrapLines] = useState(true);
@@ -245,6 +249,8 @@ export default function ChatPage() {
         sdkName: currentSdk?.displayName,
         translate: (key, options) => t(key, options),
     });
+    // DockShell 与 RightDock 的 props 同构；开关只决定用哪个外壳（回滚见 dockDocuments）。
+    const Dock = dockShellEnabled ? DockShell : RightDock;
 
     useEffect(() => {
         mcpConnectivityTargetKeyRef.current = mcpConnectivityTargetKey;
@@ -467,7 +473,7 @@ export default function ChatPage() {
                     />
 
                     <div className="hidden xl:contents">
-                        <RightDock
+                        <Dock
                             currentCwd={currentCwd}
                             gitRoot={workspaceStatus.gitRoot}
                             allEdits={pane.statusSummary.allEdits}

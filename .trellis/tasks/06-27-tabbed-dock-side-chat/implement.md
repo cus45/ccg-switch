@@ -21,11 +21,11 @@
 
 ## Stage C — DockShell tab 外壳（收编 Files/Review/File）
 
-- [ ] C1 `utils/dockDocuments.ts`：`DockDocument` 类型 + `ccg-chat-dock-documents` 持久化（仿 `rightDockState`）。
-- [ ] C2 `components/chat/dock/DockShell.tsx` + `DockTabBar.tsx`：文档 tab 条 + `+` 菜单（新侧聊 / 文件浏览 / 审查[仅 git]）+ 切换/关闭；沿用 `rightDockState` 收起/展开；宽度策略。
-- [ ] C3 文档路由：`files`→FilesBrowser（拆现 FilesPanel 树）、`file`→FilePreview（拆现预览）、`review`→现 ReviewPanel。点开文件 push `file` 文档。
-- [ ] C4 `ChatPage` 用 `<DockShell>` 替换现 `<RightDock>`（feature 开关后保留旧 RightDock 回滚）。
-- [ ] C5 验证门 C：`tsc`/`vitest`；dockDocuments 纯函数测试；手测文件浏览→开文件 tab、审查 tab 仅 git。
+- [x] C1 `utils/dockDocuments.ts`：`DockDocument` 类型 + `ccg-chat-dock-documents` 持久化（仿 `rightDockState`）。载入时丢弃 sideChat 文档（恢复语义在 E1）。
+- [x] C2 `components/chat/dock/DockShell.tsx` + `DockTabBar.tsx`：文档 tab 条 + `+` 菜单（文件浏览 / 审查[仅 git]；新侧聊在 D1 接入）+ 切换/关闭；沿用 `rightDockState` 收起/展开；宽度策略（有文档宽态 min(46vw,820px)，空态 360px + DockMenu 启动页）。
+- [x] C3 文档路由：`files`→FilesBrowser（拆现 FilesPanel 树）、`file`→FilePreview（拆现预览）、`review`→现 ReviewPanel。点开文件 push `file` 文档。
+- [x] C4 `ChatPage` 用 `<DockShell>` 替换现 `<RightDock>`（feature 开关 `ccg-chat-dock-shell`=0/false/off 回退旧 RightDock）。
+- [x] C5 验证门 C：`tsc` ✓；`vitest` 694/694 ✓（dockDocuments 纯函数测试 17 个）；手测文件浏览→开文件 tab、审查 tab 仅 git（与 B4 手测合并做）。
 
 ## Stage D — 侧聊文档 + 并发 `[review-gate]`
 

@@ -134,6 +134,10 @@ vi.mock('../components/chat/dock/RightDock', () => ({
     default: () => createElement('aside', {'data-testid': 'chat-right-dock'}),
 }));
 
+vi.mock('../components/chat/dock/DockShell', () => ({
+    default: () => createElement('aside', {'data-testid': 'chat-right-dock'}),
+}));
+
 vi.mock('../components/chat/MessageAnchorRail', () => ({
     default: () => createElement('nav', {'data-testid': 'message-anchor-rail'}),
 }));

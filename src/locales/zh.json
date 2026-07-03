@@ -85,7 +85,10 @@
             "chatEditedSection": "本次对话编辑",
             "reviewEmpty": "暂无可审查的改动",
             "expandDiagnostics": "查看诊断",
-            "collapseDiagnostics": "收起诊断"
+            "collapseDiagnostics": "收起诊断",
+            "addTab": "新建 dock 标签页",
+            "closeTab": "关闭标签页",
+            "previewFailed": "文件加载失败。"
         },
         "layout": {
             "anchorRail": "消息锚点",

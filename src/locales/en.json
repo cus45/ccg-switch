@@ -96,7 +96,10 @@
             "chatEditedSection": "Edited in this chat",
             "reviewEmpty": "No changes to review",
             "expandDiagnostics": "Show diagnostics",
-            "collapseDiagnostics": "Hide diagnostics"
+            "collapseDiagnostics": "Hide diagnostics",
+            "addTab": "Open a dock tab",
+            "closeTab": "Close tab",
+            "previewFailed": "Failed to load this file."
         },
         "layout": {
             "anchorRail": "Message anchors",
