@@ -14,6 +14,7 @@ interface DockTabBarProps {
     onOpenFiles: () => void;
     onOpenReview: () => void;
     onOpenSideChat: () => void;
+    onCloseAll: () => void;
 }
 
 const KIND_ICON: Record<DockDocumentKind, typeof Folder> = {
@@ -33,6 +34,7 @@ export default function DockTabBar({
     onOpenFiles,
     onOpenReview,
     onOpenSideChat,
+    onCloseAll,
 }: DockTabBarProps) {
     const {t} = useTranslation();
     const tf = useCallback((key: string, fallback: string): string => {
@@ -138,6 +140,20 @@ export default function DockTabBar({
                             >
                                 <FileDiff size={14} className="text-sky-500" />
                                 {tf('chat.dock.review', 'Review')}
+                            </button>
+                        </li>
+                    )}
+                    {documents.length > 0 && (
+                        <li className="border-t border-gray-100 dark:border-base-200">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    blurActiveMenu();
+                                    onCloseAll();
+                                }}
+                            >
+                                <X size={14} className="text-gray-400" />
+                                {tf('chat.dock.closeAllTabs', 'Close all tabs')}
                             </button>
                         </li>
                     )}

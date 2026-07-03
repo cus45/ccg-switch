@@ -36,10 +36,10 @@
 
 ## Stage E — 持久化 / i18n / 打磨 / spec
 
-- [ ] E1 dock 文档结构 + 活跃文档持久化恢复（AC7）；侧聊 tab 关闭/批量关闭。
-- [ ] E2 i18n：tab 标题/+菜单/新侧聊/关闭等 zh/en + 可读 fallback。
-- [ ] E3 `.trellis/spec/frontend` 更新：dock tab 外壳 + `ChatPane`/tab 作用域 store 契约 + 并发路由契约。
-- [ ] E4 验证门 E：三层全绿；人工验收 AC1–AC8（GUI 需用户）。
+- [x] E1 dock 文档结构 + 活跃文档持久化恢复（AC7，C1 已落地；sideChat 文档载入丢弃=MVP 语义，侧聊会话不跨重启）；侧聊 tab 单个关闭（D1）+ 批量关闭（`+` 菜单「关闭全部标签页」，逐个 closeSideChat 退役）。
+- [x] E2 i18n：chat.dock 新增 addTab/closeTab/previewFailed/sideChat/newSideChat/closeAllTabs（zh/en）+ tf 可读 fallback。
+- [x] E3 `.trellis/spec/frontend` 更新：component-guidelines（DockShell 文档模型/路由/回滚开关 + ChatPane/useChatPaneController 契约，RightDock 标注 legacy）；state-management（tab 作用域 store API + requestId 并发路由 + closeSideChat 焦点回退 + canAbort 约束）。
+- [x] E4 验证门 E：tsc ✓ / vitest 695 ✓ / cargo test chat:: 41 ✓（后端未改）。人工验收 AC1–AC8 待用户 GUI 确认。
 
 ## 验证命令
 

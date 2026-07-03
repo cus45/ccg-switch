@@ -101,7 +101,8 @@
             "closeTab": "Close tab",
             "previewFailed": "Failed to load this file.",
             "sideChat": "Side chat",
-            "newSideChat": "New side chat"
+            "newSideChat": "New side chat",
+            "closeAllTabs": "Close all tabs"
         },
         "layout": {
             "anchorRail": "Message anchors",

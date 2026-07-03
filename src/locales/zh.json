@@ -90,7 +90,8 @@
             "closeTab": "关闭标签页",
             "previewFailed": "文件加载失败。",
             "sideChat": "侧边聊天",
-            "newSideChat": "新侧边聊天"
+            "newSideChat": "新侧边聊天",
+            "closeAllTabs": "关闭全部标签页"
         },
         "layout": {
             "anchorRail": "消息锚点",

@@ -13,7 +13,60 @@ and pass data + callbacks down to feature components.
 
 ---
 
-## Chat Right Tool Dock (supersedes the old right `StatusPanel` + central diff pane)
+## Chat Conversation Column: `ChatPane` + `useChatPaneController`
+
+The full conversation column (session tab strip / transcript search / transcript /
+scroll control / composer status tabs / composer) is one reusable component:
+`components/chat/ChatPane.tsx`, fed by `components/chat/useChatPaneController.ts`.
+
+- `useChatPaneController({tabKey, bindSearchShortcut})` scopes all
+  transcript-derived state (search + full-history search, scroll follow,
+  anchor navigation, `statusSummary`, selected edit) to one chat tab via
+  `useChatTab(tabKey)`. When `tabKey` is `null` or misses, it falls back to the
+  global active projection — identical to the pre-refactor `ChatPage` behavior.
+  `bindSearchShortcut` (Ctrl/Cmd+F) must be enabled **only for the main pane**
+  so multiple panes don't fight over the shortcut.
+- `ChatPage` creates ONE controller for the main pane and shares that instance
+  with the right dock (`StatusStrip` message/anchor/status data,
+  `ReviewPanel`'s `allEdits`) — do not compute the summary twice.
+- `ChatPane variant="main"` renders `ChatSessionTabs` (center session tabs) and
+  passes `tabKey={undefined}` to `ChatComposer` so the composer stays on the
+  global path (real abort). `variant="side"` skips the session tab strip, adds
+  `h-full`, and passes the tab key so the composer uses tab-scoped actions
+  (`useComposerChatBinding`): `sendInTab`/`updateTabConfig`/`setTabDraft`, with
+  `canAbort=false` because backend `chat_abort` cannot target a requestId.
+- Side chats mount `dock/SideChatPane`, which builds its **own** controller
+  instance (independent search/scroll/anchor state) and computes sdk/mcp status
+  from that tab's provider. The SDK management modal lives in `ChatPage` only.
+- Permission dialogs (ask-user/plan/tool) stay global in `ChatPage` (single
+  pending queue); side-chat permission requests still resolve by sessionId.
+
+## Chat Right Tool Dock: `DockShell` (tabbed documents; supersedes the card menu)
+
+The dock is now a **tabbed multi-document shell** (`components/chat/dock/DockShell`):
+a top `DockTabBar` (document tabs + a `+` menu) routing the body by the active
+document. Document model + persistence live in `utils/dockDocuments.ts`
+(`ccg-chat-dock-documents`): `DockDocument {id, kind, title, filePath?, chatTabKey?}`
+with pure ops `openDockDocument` (dedupe by id + focus), `closeDockDocument`
+(neighbor fallback for the active tab), `activateDockDocument`. `files`/`review`
+are singletons; `file` docs key by path; `sideChat` docs key by chat tab key and
+are **dropped on restore** (the chat tab pool does not survive restarts).
+
+- Document routing: `files` → `FilesBrowser` (tree only; opening a file pushes an
+  independent `file` doc), `file` → `FilePreview` (self-loading read-only view),
+  `review` → `ReviewPanel` (unchanged), `sideChat` → `SideChatPane`.
+- The `+` menu offers: New side chat, Files, Review (git repos only), and
+  Close-all when documents exist. Closing a `sideChat` doc must call the store's
+  `closeSideChat(chatTabKey)` (retires pending sends; falls back to center
+  `closeTab` semantics if the user promoted that tab to the active center tab).
+- Empty state reuses `DockMenu` as the launcher; width is ~360px empty and
+  `min(46vw, 820px)` with documents; collapse/expand reuses `rightDockState`
+  (only the `collapsed` field — `activePanel` is kept for the rollback path).
+- Rollback: `ChatPage` picks `DockShell` vs legacy `RightDock` via
+  `isDockShellEnabled()` (`localStorage ccg-chat-dock-shell` = `0|false|off`
+  disables). Both docks share an identical prop shape — keep it that way.
+
+## Legacy card dock (`RightDock`, rollback path only)
 
 The Chat page's right side is a single collapsible **card tool dock**
 (`components/chat/dock/RightDock`), not a fixed `StatusPanel` pane plus a

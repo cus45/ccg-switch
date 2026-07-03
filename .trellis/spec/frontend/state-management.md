@@ -1402,6 +1402,39 @@ const params = {
 
 ---
 
+## Scenario: Chat Tab-Scoped Store API and Concurrent Side Chats
+
+`useChatStore` keeps the historical shape — top-level fields are the projection
+of the active tab (`projectTabToState`) and the legacy global actions
+(`send/abort/setProvider/setModel/setDraft/...`) act on the active tab. On top
+of that, a **tab-scoped layer** enables concurrent panes:
+
+- **Read**: `useChatTab(tabKey)` returns a `ChatTabView` slice (+ derived
+  `isStreaming`) — the active tab reads the top-level projection, background
+  tabs read `openTabs[key]`; both are equivalent by contract. It returns `null`
+  for a null/unknown key; callers (e.g. `useChatPaneController`,
+  `useComposerChatBinding`) must fall back to the global projection in that
+  case so main-pane behavior stays identical.
+- **Write**: `sendInTab(tabKey, text, opts)`, `updateTabConfig(tabKey, partial)`,
+  `setTabDraft(tabKey, draft)`, `startNewSessionInTab(tabKey, cwd?)`. These are
+  the parameterized extraction of the global actions; active-turn guards,
+  permission single-flight, and requestId retirement apply **per tab**.
+- **Concurrency**: `send`-time code records `requestTabKeys[requestId] = tabKey`;
+  `chat://stream|message|done` handlers route by requestId into the target tab
+  snapshot (`updateRequestTabState`), so a background side chat keeps streaming
+  while the center chat streams its own turn. No additional concurrency
+  mechanism may be layered on top — new event kinds must route the same way.
+- **Side chats**: `openSideChat(opts?) → tabKey` creates an empty tab in the
+  same `openTabs` pool (inherits cwd) and sets `dockChatTabKey`;
+  `closeSideChat(key)` retires that tab's pending sends and, if the user
+  promoted the side tab to the active center tab, must go through `closeTab`'s
+  focus-fallback semantics (never leave `activeTabKey` dangling).
+- **Abort**: backend `chat_abort` cannot target a requestId, so tab-scoped
+  bindings expose `canAbort=false` for background tabs; only the active/global
+  path offers a real abort. Do not wire a side-chat abort to `chat_abort`.
+
+---
+
 ## When to Use Global State
 
 Promote to a Zustand store when **more than one page/component needs the same

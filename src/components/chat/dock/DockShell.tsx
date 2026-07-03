@@ -13,6 +13,7 @@ import {
     createReviewDocument,
     createSideChatDocument,
     type DockDocumentsState,
+    EMPTY_DOCK_DOCUMENTS_STATE,
     loadDockDocumentsState,
     openDockDocument,
     saveDockDocumentsState,
@@ -142,6 +143,15 @@ export default function DockShell({
         setDocState((state) => closeDockDocument(state, id));
     }, [closeSideChat, docState.documents]);
 
+    const handleCloseAll = useCallback(() => {
+        docState.documents.forEach((doc) => {
+            if (doc.kind === 'sideChat' && doc.chatTabKey) {
+                closeSideChat(doc.chatTabKey);
+            }
+        });
+        setDocState(EMPTY_DOCK_DOCUMENTS_STATE);
+    }, [closeSideChat, docState.documents]);
+
     const expandLabel = tf('chat.dock.expand', 'Expand tool dock');
     const collapseLabel = tf('chat.dock.collapse', 'Collapse tool dock');
 
@@ -177,6 +187,7 @@ export default function DockShell({
                     onOpenFiles={handleOpenFiles}
                     onOpenReview={handleOpenReview}
                     onOpenSideChat={handleOpenSideChat}
+                    onCloseAll={handleCloseAll}
                 />
                 <button
                     type="button"
