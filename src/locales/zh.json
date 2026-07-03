@@ -92,7 +92,8 @@
             "sideChat": "侧边聊天",
             "newSideChat": "新侧边聊天",
             "closeAllTabs": "关闭全部标签页",
-            "sideChatWorking": "对话进行中"
+            "sideChatWorking": "对话进行中",
+            "sideChatUnread": "有新回复"
         },
         "layout": {
             "anchorRail": "消息锚点",
@@ -357,6 +358,7 @@
         },
         "sessionTabs": {
             "label": "已打开会话",
+            "unread": "有新回复",
             "close": "关闭标签页",
             "closeOthers": "关闭其他标签页",
             "closeAll": "关闭所有标签页",

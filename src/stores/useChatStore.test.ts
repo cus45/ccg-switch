@@ -228,6 +228,52 @@ describe('useChatStore session transitions', () => {
         expect(state.dockChatTabKey).toBeNull();
     });
 
+    it('marks a background side tab unread when its turn finishes and clears it once viewed', async () => {
+        const listeners: Record<string, (event: {payload: unknown}) => void> = {};
+        tauriMocks.listen.mockImplementation(async (eventName: string, callback: (event: {payload: unknown}) => void) => {
+            listeners[eventName] = callback;
+            return vi.fn();
+        });
+        tauriMocks.invoke.mockResolvedValue(null);
+        useChatStore.setState({initialized: false});
+        await useChatStore.getState().init();
+
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        const sideTab = () => useChatStore.getState().openTabs.find((tab) => tab.key === sideKey);
+
+        // dock 正显示该侧聊（openSideChat 已置 dockChatTabKey）→ 完成不标未读。
+        tauriMocks.invoke.mockResolvedValueOnce('req-unread-1');
+        await useChatStore.getState().sendInTab(sideKey, 'hi side');
+        listeners['chat://done']?.({payload: {requestId: 'req-unread-1', success: true}});
+        expect(sideTab()?.unread).toBeFalsy();
+
+        // dock 切走（侧聊不可见）→ 完成标未读；切回可见即已读。
+        useChatStore.getState().setDockChatTabKey(null);
+        tauriMocks.invoke.mockResolvedValueOnce('req-unread-2');
+        await useChatStore.getState().sendInTab(sideKey, 'hi again');
+        listeners['chat://done']?.({payload: {requestId: 'req-unread-2', success: true}});
+        expect(sideTab()?.unread).toBe(true);
+        useChatStore.getState().setDockChatTabKey(sideKey);
+        expect(sideTab()?.unread).toBe(false);
+
+        // 再次后台完成 → 未读；中心聚焦（focusTab）同样视为已读。
+        useChatStore.getState().setDockChatTabKey(null);
+        tauriMocks.invoke.mockResolvedValueOnce('req-unread-3');
+        await useChatStore.getState().sendInTab(sideKey, 'third');
+        listeners['chat://done']?.({payload: {requestId: 'req-unread-3', success: true}});
+        expect(sideTab()?.unread).toBe(true);
+        useChatStore.getState().focusTab(sideKey);
+        expect(useChatStore.getState().activeTabKey).toBe(sideKey);
+        expect(sideTab()?.unread).toBeFalsy();
+    });
+
     it('sendInTab streams into the side tab and routes its request without disturbing the active center tab', async () => {
         useChatStore.setState({
             messages: activeMessages,

@@ -103,6 +103,8 @@ export default function ChatSessionTabs({
                 const folder = projectFolderName(tab.currentCwd ?? tab.activeSession?.projectDir ?? null);
                 const statusLabel = tabStatusLabel(t, tab.status);
                 const isBusy = tab.status === 'running' || tab.status === 'loading' || tab.status === 'queued';
+                const unreadLabel = translateWithFallback(t, 'chat.sessionTabs.unread', 'New reply');
+                const showUnread = Boolean(tab.unread) && !isBusy;
 
                 return (
                     <div
@@ -129,12 +131,19 @@ export default function ChatSessionTabs({
                             type="button"
                             className="flex min-w-0 flex-1 items-center gap-1 text-left"
                             onClick={() => onFocusTab(tab.key)}
-                            title={`${title}${folder ? ` · ${folder}` : ''} · ${statusLabel}`}
+                            title={`${title}${folder ? ` · ${folder}` : ''} · ${showUnread ? unreadLabel : statusLabel}`}
                         >
                             <ProviderBrandIcon provider={tab.provider} size={12} colored />
-                            <span className="min-w-0 flex-1 truncate font-medium">
+                            <span className={cn('min-w-0 flex-1 truncate font-medium', showUnread && 'font-semibold')}>
                                 {title}
                             </span>
+                            {showUnread && (
+                                <span
+                                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                                    title={unreadLabel}
+                                    aria-label={unreadLabel}
+                                />
+                            )}
                             {isBusy && (
                                 <span
                                     className="flex shrink-0 items-center"

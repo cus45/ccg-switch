@@ -524,3 +524,9 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 **Date**: 2026-07-03
 
 按用户截图反馈补交互细节:1) 中心会话 tab busy 小圆点→Loader2 spinner;2) dock 侧聊文档 tab 在其聊天 tab 流式/排队时图标→spinner(DockShell 计算 busyChatTabKeys:活跃 tab 读顶层投影,背景 tab 读快照);3) 侧边栏会话项对「正在工作」的会话显示 spinner+「对话进行中」(busySessionKeys 同口径);4) 流式中的 ThinkingBlock 图标→spinner+标题呼吸动画(复用 expandThinkingBlockIndex 判定)。i18n: sessionPanel.working/dock.sideChatWorking(zh/en)。注意:并发会话同时修了 useComposerChatBinding 动作稳定引用与 setTabDraft no-op 守卫(未提交,留给对方),本次提交只含我的文件。tsc/vitest 695 全绿。
+
+## Session 18 附加2: 后台 tab 完成转未读/查看转已读
+
+**Date**: 2026-07-03
+
+用户体验反馈:后台 tab 转圈结束应变未读,看过变已读。store 层:ChatSessionTab+unread 运行时字段;chat://done 完成时若目标 tab 非中心活跃且非 dock 可见侧聊(dockChatTabKey)→unread=true(retire 前先取 targetTabKey);focusTab 聚焦即已读;新增 setDockChatTabKey(key) 同步 dock 可见侧聊并顺带清 unread(DockShell 按 activeDoc+collapsed 用 effect 维护,卸载清空)。UI:中心会话 tab 与 dock 侧聊 tab 未读时显示蓝点+标题加粗+tooltip「有新回复」,busy(spinner)优先于未读。i18n sessionTabs.unread/dock.sideChatUnread。store 测试覆盖完整生命周期(可见完成不标/后台完成标/dock 切回清/focusTab 清)。tsc/vitest 699 全绿。并发会话期间提交了 b888cec(composer 循环修复),本次提交前已探测无文件交叉。

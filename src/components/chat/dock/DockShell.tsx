@@ -78,6 +78,7 @@ export default function DockShell({
     const [gitChanged, setGitChanged] = useState<GitChangedFiles>(EMPTY_GIT_CHANGED_FILES);
     const openSideChat = useChatStore((state) => state.openSideChat);
     const closeSideChat = useChatStore((state) => state.closeSideChat);
+    const setDockChatTabKey = useChatStore((state) => state.setDockChatTabKey);
     // 正在工作（流式/排队）的聊天 tab key，用于侧聊文档 tab 的 loading 指示。
     // 活跃中心 tab 的快照可能滞后，改读顶层投影；背景 tab 事件直写快照，读快照即可。
     const busyChatTabKeys = useChatStore(useShallow((state) => state.openTabs
@@ -85,6 +86,21 @@ export default function DockShell({
             ? Boolean(state.activeRequestId) || state.messages.some((message) => message.streaming)
             : tab.status === 'running' || tab.status === 'queued' || Boolean(tab.activeRequestId)))
         .map((tab) => tab.key)));
+    // 后台完成回合、用户尚未查看的聊天 tab key（侧聊文档 tab 显示未读点）。
+    const unreadChatTabKeys = useChatStore(useShallow((state) => state.openTabs
+        .filter((tab) => Boolean(tab.unread))
+        .map((tab) => tab.key)));
+
+    const activeDoc = docState.documents.find((doc) => doc.id === docState.activeDocId) ?? null;
+    // 同步「dock 当前可见的侧聊」到 store：完成回合的未读判定与聚焦即读都依赖它。
+    // dock 收起时侧聊不可见，视为 null（此时完成的回合会标未读）。
+    const visibleSideChatKey = !collapsed && activeDoc?.kind === 'sideChat'
+        ? activeDoc.chatTabKey ?? null
+        : null;
+    useEffect(() => {
+        setDockChatTabKey(visibleSideChatKey);
+        return () => setDockChatTabKey(null);
+    }, [setDockChatTabKey, visibleSideChatKey]);
 
     useEffect(() => {
         // 与旧 RightDock 共用收起状态；activePanel 字段保留给回滚路径。
@@ -177,7 +193,6 @@ export default function DockShell({
         );
     }
 
-    const activeDoc = docState.documents.find((doc) => doc.id === docState.activeDocId) ?? null;
     const hasDocuments = docState.documents.length > 0;
 
     return (
@@ -191,6 +206,7 @@ export default function DockShell({
                     activeDocId={docState.activeDocId}
                     isGit={gitChanged.isGit}
                     busyChatTabKeys={busyChatTabKeys}
+                    unreadChatTabKeys={unreadChatTabKeys}
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onOpenFiles={handleOpenFiles}

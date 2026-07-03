@@ -323,6 +323,11 @@ export interface ChatSessionTab {
     handoffContextProvider: ChatProvider | null;
     status: ChatTabStatus;
     error: string | null;
+    /**
+     * 后台完成回合后的未读标记：回合结束时该 tab 既非中心活跃 tab、
+     * 也非 dock 当前可见侧聊（dockChatTabKey）时置 true；用户聚焦后清除。
+     */
+    unread?: boolean;
     /** 子代理(Task)实时轨迹：parentToolUseId(= 父 Task 工具块 id) → 子代理消息列表。 */
     subagentRuns: Record<string, ChatMessage[]>;
     createdAt: number;
@@ -444,6 +449,8 @@ interface ChatState {
     openSideChat: (opts?: {cwd?: string | null}) => string;
     /** 关闭指定侧边聊天 tab；若是当前可见侧聊则清空 dockChatTabKey。 */
     closeSideChat: (key: string) => void;
+    /** 同步 dock 当前可见的侧聊 tab（null=dock 未显示侧聊）；置为可见即视为已读。 */
+    setDockChatTabKey: (key: string | null) => void;
     markProviderConfigDirty: () => Promise<void>;
     startNewSession: (cwd?: string | null) => Promise<void>;
     abort: () => Promise<void>;
@@ -1320,6 +1327,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (!shouldAcceptRequestEvent(stateBeforeDone, requestId)) return;
             bindPendingRequestIfNeeded(set, stateBeforeDone, requestId);
             const targetBeforeDone = requestTargetTab(get(), requestId) ?? stateBeforeDone;
+            // retire 会清 requestTabKeys，可见性判定所需的目标 key 要先取。
+            const targetTabKeyBeforeDone = requestTargetTabKey(get(), requestId);
             notifyStoppedRequestOnce(
                 requestId,
                 success ? 'success' : 'error',
@@ -1328,15 +1337,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
             );
             retireRequestOwnership(requestId);
 
-            set((state) => ({
-                ...updateRequestTabState(state, requestId, (tab) => ({
-                    ...tab,
-                    activeRequestId: null,
-                    status: success ? 'idle' : 'error',
-                    error: success ? tab.error : error || '执行失败',
-                    messages: finishStreamingAssistantMessages(tab.messages, success, error),
-                })),
-            }));
+            set((state) => {
+                // 回合结束时用户没在看这个 tab（非中心活跃、非 dock 可见侧聊）→ 未读。
+                const viewed = !targetTabKeyBeforeDone
+                    || targetTabKeyBeforeDone === state.activeTabKey
+                    || targetTabKeyBeforeDone === state.dockChatTabKey;
+                return {
+                    ...updateRequestTabState(state, requestId, (tab) => ({
+                        ...tab,
+                        activeRequestId: null,
+                        status: success ? 'idle' : 'error',
+                        error: success ? tab.error : error || '执行失败',
+                        messages: finishStreamingAssistantMessages(tab.messages, success, error),
+                        unread: viewed ? tab.unread : true,
+                    })),
+                };
+            });
         });
 
         const daemonUn = await listen<ChatDaemonEvent>('chat://daemon', (event) => {
@@ -2359,10 +2375,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const target = tabs.find((tab) => tab.key === key);
             if (!target) return {};
 
+            // 聚焦即已读。
+            const focused = target.unread ? {...target, unread: false} : target;
             return {
-                openTabs: tabs,
+                openTabs: focused === target ? tabs : upsertTab(tabs, focused),
                 activeTabKey: key,
-                ...projectTabToState(target),
+                ...projectTabToState(focused),
             };
         });
     },
@@ -2446,6 +2464,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((state) => ({
             dockChatTabKey: state.dockChatTabKey === key ? null : state.dockChatTabKey,
         }));
+    },
+
+    setDockChatTabKey: (key) => {
+        set((state) => {
+            if (state.dockChatTabKey === key) return {};
+            // 侧聊变为 dock 可见即视为已读。
+            const openTabs = key
+                ? state.openTabs.map((tab) => (tab.key === key && tab.unread ? {...tab, unread: false} : tab))
+                : state.openTabs;
+            return {dockChatTabKey: key, openTabs};
+        });
     },
 
     markProviderConfigDirty: async () => {

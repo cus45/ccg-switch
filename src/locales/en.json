@@ -103,7 +103,8 @@
             "sideChat": "Side chat",
             "newSideChat": "New side chat",
             "closeAllTabs": "Close all tabs",
-            "sideChatWorking": "Working…"
+            "sideChatWorking": "Working…",
+            "sideChatUnread": "New reply"
         },
         "layout": {
             "anchorRail": "Message anchors",
@@ -368,6 +369,7 @@
         },
         "sessionTabs": {
             "label": "Open conversations",
+            "unread": "New reply",
             "close": "Close tab",
             "closeOthers": "Close other tabs",
             "closeAll": "Close all tabs",

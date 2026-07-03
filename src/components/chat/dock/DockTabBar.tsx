@@ -11,6 +11,8 @@ interface DockTabBarProps {
     isGit: boolean;
     /** 正在工作（流式/排队）的聊天 tab key；侧聊文档 tab 据此显示 loading。 */
     busyChatTabKeys: string[];
+    /** 后台完成回合、尚未查看的聊天 tab key；侧聊文档 tab 据此显示未读点。 */
+    unreadChatTabKeys: string[];
     onActivate: (id: string) => void;
     onClose: (id: string) => void;
     onOpenFiles: () => void;
@@ -32,6 +34,7 @@ export default function DockTabBar({
     activeDocId,
     isGit,
     busyChatTabKeys,
+    unreadChatTabKeys,
     onActivate,
     onClose,
     onOpenFiles,
@@ -61,7 +64,12 @@ export default function DockTabBar({
                     const busy = doc.kind === 'sideChat'
                         && Boolean(doc.chatTabKey)
                         && busyChatTabKeys.includes(doc.chatTabKey as string);
+                    const unread = !busy
+                        && doc.kind === 'sideChat'
+                        && Boolean(doc.chatTabKey)
+                        && unreadChatTabKeys.includes(doc.chatTabKey as string);
                     const workingLabel = tf('chat.dock.sideChatWorking', 'Working…');
+                    const unreadLabel = tf('chat.dock.sideChatUnread', 'New reply');
                     return (
                         <div
                             key={doc.id}
@@ -75,7 +83,7 @@ export default function DockTabBar({
                             <button
                                 type="button"
                                 className="flex min-w-0 items-center gap-1"
-                                title={busy ? `${doc.title} · ${workingLabel}` : doc.title}
+                                title={busy ? `${doc.title} · ${workingLabel}` : unread ? `${doc.title} · ${unreadLabel}` : doc.title}
                                 onClick={() => onActivate(doc.id)}
                             >
                                 {busy ? (
@@ -83,7 +91,14 @@ export default function DockTabBar({
                                 ) : (
                                     <Icon size={13} className="shrink-0" />
                                 )}
-                                <span className="truncate">{doc.title}</span>
+                                <span className={cn('truncate', unread && 'font-semibold')}>{doc.title}</span>
+                                {unread && (
+                                    <span
+                                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                                        title={unreadLabel}
+                                        aria-label={unreadLabel}
+                                    />
+                                )}
                             </button>
                             <button
                                 type="button"
