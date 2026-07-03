@@ -13,6 +13,7 @@ interface DockTabBarProps {
     onClose: (id: string) => void;
     onOpenFiles: () => void;
     onOpenReview: () => void;
+    onOpenSideChat: () => void;
 }
 
 const KIND_ICON: Record<DockDocumentKind, typeof Folder> = {
@@ -31,6 +32,7 @@ export default function DockTabBar({
     onClose,
     onOpenFiles,
     onOpenReview,
+    onOpenSideChat,
 }: DockTabBarProps) {
     const {t} = useTranslation();
     const tf = useCallback((key: string, fallback: string): string => {
@@ -101,6 +103,18 @@ export default function DockTabBar({
                     tabIndex={0}
                     className="menu dropdown-content z-30 mt-1 w-44 rounded-lg border border-gray-100 bg-white p-1 text-sm shadow-lg dark:border-base-200 dark:bg-base-100"
                 >
+                    <li>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                blurActiveMenu();
+                                onOpenSideChat();
+                            }}
+                        >
+                            <MessageSquare size={14} className="text-emerald-500" />
+                            {tf('chat.dock.newSideChat', 'New side chat')}
+                        </button>
+                    </li>
                     <li>
                         <button
                             type="button"

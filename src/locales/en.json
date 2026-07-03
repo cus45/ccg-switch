@@ -99,7 +99,9 @@
             "collapseDiagnostics": "Hide diagnostics",
             "addTab": "Open a dock tab",
             "closeTab": "Close tab",
-            "previewFailed": "Failed to load this file."
+            "previewFailed": "Failed to load this file.",
+            "sideChat": "Side chat",
+            "newSideChat": "New side chat"
         },
         "layout": {
             "anchorRail": "Message anchors",

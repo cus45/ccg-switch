@@ -70,7 +70,7 @@ export interface ChatPaneAnchorItem {
 
 type ChatPaneView = Pick<
     ChatTabView,
-    'messages' | 'currentCwd' | 'activeSession' | 'lastSessionLoadMetrics'
+    'messages' | 'provider' | 'currentCwd' | 'activeSession' | 'lastSessionLoadMetrics'
 >;
 
 export interface ChatPaneControllerOptions {
@@ -91,6 +91,7 @@ export interface ChatPaneController {
     tabKey: string | null;
     // 会话切片
     messages: ChatMessage[];
+    provider: ChatTabView['provider'];
     currentCwd: string | null;
     hasMessages: boolean;
     isStreaming: boolean;
@@ -144,6 +145,7 @@ export function useChatPaneController({
 
     const view: ChatPaneView = tabView ?? {
         messages: globalStore.messages,
+        provider: globalStore.provider,
         currentCwd: globalStore.currentCwd,
         activeSession: globalStore.activeSession,
         lastSessionLoadMetrics: globalStore.lastSessionLoadMetrics,
@@ -544,6 +546,7 @@ export function useChatPaneController({
     return {
         tabKey,
         messages,
+        provider: view.provider,
         currentCwd: view.currentCwd,
         hasMessages,
         isStreaming,

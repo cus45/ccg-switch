@@ -209,6 +209,25 @@ describe('useChatStore session transitions', () => {
         expect(state.dockChatTabKey).toBeNull();
     });
 
+    it('closeSideChat falls back to center-close semantics when the side tab was promoted to active', () => {
+        useChatStore.setState({currentCwd: 'C:/workspace/main', openTabs: [], activeTabKey: null, dockChatTabKey: null});
+        const sideKey = useChatStore.getState().openSideChat();
+        // 用户在中心会话 tab 条聚焦了这个侧聊 tab。
+        useChatStore.getState().focusTab(sideKey);
+        expect(useChatStore.getState().activeTabKey).toBe(sideKey);
+
+        useChatStore.getState().closeSideChat(sideKey);
+        const state = useChatStore.getState();
+
+        expect(state.openTabs.find((tab) => tab.key === sideKey)).toBeUndefined();
+        // activeTabKey 不悬空：要么回退到其它 tab，要么被清空重建空会话。
+        expect(state.activeTabKey === sideKey).toBe(false);
+        if (state.activeTabKey !== null) {
+            expect(state.openTabs.some((tab) => tab.key === state.activeTabKey)).toBe(true);
+        }
+        expect(state.dockChatTabKey).toBeNull();
+    });
+
     it('sendInTab streams into the side tab and routes its request without disturbing the active center tab', async () => {
         useChatStore.setState({
             messages: activeMessages,

@@ -1,4 +1,5 @@
 import {useTranslation} from 'react-i18next';
+import {cn} from '../../utils/cn';
 import {useChatStore} from '../../stores/useChatStore';
 import MessageList from './MessageList';
 import ConversationSearch from './ConversationSearch';
@@ -47,7 +48,7 @@ export function ChatPane({
 
     return (
         <section
-            className="chat-conversation-pane"
+            className={cn('chat-conversation-pane', !isMain && 'h-full w-full')}
             style={{flex: '1 1 0%'}}
         >
             {isMain && (

@@ -29,10 +29,10 @@
 
 ## Stage D — 侧聊文档 + 并发 `[review-gate]`
 
-- [ ] D1 `+` 新建侧聊 → `openSideChat()` push `sideChat` 文档（含 `chatTabKey`）并激活。
-- [ ] D2 `sideChat` 文档渲染 `<ChatPane tabKey={doc.chatTabKey} variant="side"/>`。
-- [ ] D3 并发：主+侧同时发送，两路流式按 requestId 路由互不串扰（AC3）；侧聊 tab 切走后台保活、切回保留（AC4）。
-- [ ] D4 验证门 D：`tsc`/`vitest`（并发路由测试）；手测 AC2/AC3/AC4。`[review-gate]`。
+- [x] D1 `+` 新建侧聊 → `openSideChat()` push `sideChat` 文档（含 `chatTabKey`）并激活。标题「侧边聊天/侧边聊天 N」；关文档同时 `closeSideChat`（退役未完成发送；若已被中心聚焦则走 closeTab 焦点回退，含 store 测试）。
+- [x] D2 `sideChat` 文档渲染 `SideChatPane` → `<ChatPane tabKey variant="side"/>`（自建 controller 实例；sdk/mcp 按 tab provider 独立计算；SDK 弹窗留 ChatPage，侧聊缺 SDK 仅提示）。
+- [x] D3 并发：store 层事件按 requestId 路由到目标 tab（A5 `sendInTab` 并发测试覆盖）；侧聊 tab 切走后台保活（openTabs 池 + 事件照常写入），切回转录保留。
+- [ ] D4 验证门 D：`tsc` ✓；`vitest` 695/695 ✓（含 closeSideChat 提升为活跃 tab 的焦点回退测试）。**待用户手测** AC2（dock 新建侧聊可独立对话）/AC3（主+侧同时发送互不串扰）/AC4（切走切回保留）。`[review-gate]`。
 
 ## Stage E — 持久化 / i18n / 打磨 / spec
 

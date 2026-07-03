@@ -2,6 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 import type {ReactNode} from 'react';
 import {PanelRightClose, PanelRightOpen} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
+import {useChatStore} from '../../../stores/useChatStore';
 import type {ChatStatusEditSummary} from '../../../utils/chatStatusSummary';
 import {loadRightDockState, saveRightDockState} from '../../../utils/rightDockState';
 import {
@@ -10,6 +11,7 @@ import {
     createFileDocument,
     createFilesDocument,
     createReviewDocument,
+    createSideChatDocument,
     type DockDocumentsState,
     loadDockDocumentsState,
     openDockDocument,
@@ -26,6 +28,7 @@ import DockTabBar from './DockTabBar';
 import FilesBrowser from './FilesBrowser';
 import FilePreview from './FilePreview';
 import ReviewPanel from './ReviewPanel';
+import SideChatPane from './SideChatPane';
 
 interface DockShellProps {
     currentCwd: string | null;
@@ -71,6 +74,8 @@ export default function DockShell({
     const [docState, setDocState] = useState<DockDocumentsState>(loadDockDocumentsState);
     const [reviewTargetPath, setReviewTargetPath] = useState<string | null>(null);
     const [gitChanged, setGitChanged] = useState<GitChangedFiles>(EMPTY_GIT_CHANGED_FILES);
+    const openSideChat = useChatStore((state) => state.openSideChat);
+    const closeSideChat = useChatStore((state) => state.closeSideChat);
 
     useEffect(() => {
         // 与旧 RightDock 共用收起状态；activePanel 字段保留给回滚路径。
@@ -109,6 +114,16 @@ export default function DockShell({
         setDocState((state) => openDockDocument(state, createFileDocument(path)));
     }, []);
 
+    const handleOpenSideChat = useCallback(() => {
+        const chatTabKey = openSideChat();
+        setDocState((state) => {
+            const sideChatCount = state.documents.filter((doc) => doc.kind === 'sideChat').length;
+            const base = tf('chat.dock.sideChat', 'Side chat');
+            const title = sideChatCount > 0 ? `${base} ${sideChatCount + 1}` : base;
+            return openDockDocument(state, createSideChatDocument(chatTabKey, title));
+        });
+    }, [openSideChat, tf]);
+
     const handleJumpToReview = useCallback((path: string) => {
         setReviewTargetPath(path);
         setDocState((state) => openDockDocument(state, createReviewDocument(tf('chat.dock.review', 'Review'))));
@@ -119,8 +134,13 @@ export default function DockShell({
     }, []);
 
     const handleClose = useCallback((id: string) => {
+        // 关侧聊文档同时移除其聊天 tab（退役未完成发送），避免孤儿后台会话。
+        const doc = docState.documents.find((candidate) => candidate.id === id);
+        if (doc?.kind === 'sideChat' && doc.chatTabKey) {
+            closeSideChat(doc.chatTabKey);
+        }
         setDocState((state) => closeDockDocument(state, id));
-    }, []);
+    }, [closeSideChat, docState.documents]);
 
     const expandLabel = tf('chat.dock.expand', 'Expand tool dock');
     const collapseLabel = tf('chat.dock.collapse', 'Collapse tool dock');
@@ -156,6 +176,7 @@ export default function DockShell({
                     onClose={handleClose}
                     onOpenFiles={handleOpenFiles}
                     onOpenReview={handleOpenReview}
+                    onOpenSideChat={handleOpenSideChat}
                 />
                 <button
                     type="button"
@@ -205,6 +226,9 @@ export default function DockShell({
                         targetPath={reviewTargetPath}
                         onRefresh={() => void refreshGitChanged()}
                     />
+                )}
+                {activeDoc?.kind === 'sideChat' && activeDoc.chatTabKey && (
+                    <SideChatPane tabKey={activeDoc.chatTabKey} />
                 )}
             </div>
         </aside>

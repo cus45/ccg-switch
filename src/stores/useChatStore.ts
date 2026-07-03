@@ -2426,8 +2426,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     closeSideChat: (key) => {
         retirePendingSendsForTab(key);
+        // 侧聊 tab 与中心会话共用 openTabs 池，可能已被用户在中心 tab 条聚焦为
+        // 活跃 tab；此时按中心关闭语义走焦点回退，避免 activeTabKey 悬空。
+        if (get().activeTabKey === key) {
+            get().closeTab(key);
+        } else {
+            set((state) => ({
+                openTabs: removeTab(state.openTabs, key),
+            }));
+        }
         set((state) => ({
-            openTabs: removeTab(state.openTabs, key),
             dockChatTabKey: state.dockChatTabKey === key ? null : state.dockChatTabKey,
         }));
     },
