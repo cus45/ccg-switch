@@ -1944,7 +1944,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     setTabDraft: (tabKey, text) => {
-        set((state) => updateTabStateByKey(state, tabKey, (tab) => ({...tab, draft: text})));
+        set((state) => {
+            const tab = tabKey === state.activeTabKey
+                ? currentTopLevelTab(state)
+                : state.openTabs.find((item) => item.key === tabKey);
+            // 草稿未变时 no-op：composer 的编辑器同步 effect 会回写当前文本，
+            // 无条件写入会造成 渲染→写 store→再渲染 的循环。
+            if (!tab || tab.draft === text) return {};
+            return updateTabStateByKey(state, tabKey, (current) => ({...current, draft: text}));
+        });
     },
 
     updateTabConfig: (tabKey, config) => {

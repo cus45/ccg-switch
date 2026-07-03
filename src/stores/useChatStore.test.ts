@@ -281,6 +281,17 @@ describe('useChatStore session transitions', () => {
         expect(state.openTabs.find((tab) => tab.key === sideKey)?.draft).toBe('side draft');
     });
 
+    it('setTabDraft is a no-op when the draft text is unchanged', () => {
+        useChatStore.setState({activeTabKey: 'main-tab', messages: [], draft: '', openTabs: [], dockChatTabKey: null});
+        const sideKey = useChatStore.getState().openSideChat();
+        useChatStore.getState().setTabDraft(sideKey, 'same');
+
+        const before = useChatStore.getState().openTabs;
+        useChatStore.getState().setTabDraft(sideKey, 'same');
+
+        expect(useChatStore.getState().openTabs).toBe(before);
+    });
+
     it('updateTabConfig changes an idle tab but is a no-op while that tab is streaming', () => {
         useChatStore.setState({activeTabKey: 'main-tab', messages: [], openTabs: [], dockChatTabKey: null});
         const sideKey = useChatStore.getState().openSideChat();

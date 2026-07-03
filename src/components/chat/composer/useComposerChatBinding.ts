@@ -1,3 +1,4 @@
+import {useMemo} from 'react';
 import type {ChatAttachment} from '../../../types/chat';
 import {type ChatTabView, useChatStore, useChatTab} from '../../../stores/useChatStore';
 import {getDefaultChatModelId} from '../../../utils/chatModels';
@@ -63,8 +64,67 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
     // Hooks must run unconditionally; subscribe to both, then pick by tabKey.
     const globalStore = useChatStore();
     const tabView = useChatTab(tabKey ?? null);
+    const key = tabKey ?? null;
 
-    if (!tabKey || !tabView) {
+    // tab 作用域动作必须引用稳定（仅随 key 变化）：ChatComposer 的
+    // MutationObserver effect 依赖 setDraft，每轮渲染重建动作会导致
+    // effect 重跑 → setTabDraft 写 store → 再渲染 的无限循环。
+    // 动作内部经 getState() 读最新快照，不闭包捕获渲染期数据。
+    const tabActions = useMemo(() => {
+        if (!key) return null;
+        const readTab = () => {
+            const state = useChatStore.getState();
+            return key === state.activeTabKey
+                ? state
+                : state.openTabs.find((tab) => tab.key === key);
+        };
+        return {
+            setProvider: (p: ChatTabView['provider']) => {
+                const model = getDefaultChatModelId(p as ChatProviderId);
+                useChatStore.getState().updateTabConfig(key, {
+                    provider: p,
+                    model,
+                    reasoningEffort: correctReasoning(
+                        p as ChatProviderId,
+                        model,
+                        readTab()?.reasoningEffort ?? 'high',
+                    ),
+                });
+            },
+            setPermissionMode: (m: ChatTabView['permissionMode']) => {
+                useChatStore.getState().updateTabConfig(key, {permissionMode: m});
+            },
+            setModel: (id: string) => {
+                const model = strip1MContextSuffix(id);
+                const current = readTab();
+                useChatStore.getState().updateTabConfig(key, {
+                    model,
+                    reasoningEffort: correctReasoning(
+                        (current?.provider ?? 'claude') as ChatProviderId,
+                        model,
+                        current?.reasoningEffort ?? 'high',
+                    ),
+                });
+            },
+            setLongContextEnabled: (enabled: boolean) => {
+                useChatStore.getState().updateTabConfig(key, {longContextEnabled: enabled});
+            },
+            setReasoningEffort: (e: ChatTabView['reasoningEffort']) => {
+                useChatStore.getState().updateTabConfig(key, {reasoningEffort: e});
+            },
+            setDraft: (text: string) => useChatStore.getState().setTabDraft(key, text),
+            send: (
+                text: string,
+                opts?: {cwd?: string; model?: string; attachments?: ChatAttachment[]; displayText?: string},
+            ) => useChatStore.getState().sendInTab(key, text, opts),
+            // 后端 chat_abort 无法按 requestId 定向，侧聊不提供中止（见 canAbort）。
+            abort: async () => {},
+            readDraft: () => readTab()?.draft ?? '',
+            canAbort: false,
+        };
+    }, [key]);
+
+    if (!key || !tabView || !tabActions) {
         return {
             provider: globalStore.provider,
             permissionMode: globalStore.permissionMode,
@@ -89,8 +149,6 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
         };
     }
 
-    const key = tabKey;
-    const actions = useChatStore.getState();
     return {
         provider: tabView.provider,
         permissionMode: tabView.permissionMode,
@@ -102,29 +160,6 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
         longContextEnabled: tabView.longContextEnabled,
         activeRequestId: tabView.activeRequestId,
         activeSession: tabView.activeSession,
-        setProvider: (p) => {
-            const model = getDefaultChatModelId(p as ChatProviderId);
-            actions.updateTabConfig(key, {
-                provider: p,
-                model,
-                reasoningEffort: correctReasoning(p as ChatProviderId, model, tabView.reasoningEffort),
-            });
-        },
-        setPermissionMode: (m) => actions.updateTabConfig(key, {permissionMode: m}),
-        setModel: (id) => {
-            const model = strip1MContextSuffix(id);
-            actions.updateTabConfig(key, {
-                model,
-                reasoningEffort: correctReasoning(tabView.provider as ChatProviderId, model, tabView.reasoningEffort),
-            });
-        },
-        setLongContextEnabled: (enabled) => actions.updateTabConfig(key, {longContextEnabled: enabled}),
-        setReasoningEffort: (e) => actions.updateTabConfig(key, {reasoningEffort: e}),
-        setDraft: (text) => actions.setTabDraft(key, text),
-        send: (text, opts) => actions.sendInTab(key, text, opts),
-        // 后端 chat_abort 无法按 requestId 定向，侧聊不提供中止（见 canAbort）。
-        abort: async () => {},
-        readDraft: () => useChatStore.getState().openTabs.find((tab) => tab.key === key)?.draft ?? '',
-        canAbort: false,
+        ...tabActions,
     };
 }
