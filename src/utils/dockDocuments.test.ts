@@ -144,6 +144,18 @@ describe('persistence', () => {
 
         expect(loadDockDocumentsState().activeDocId).toBe('review');
     });
+
+    it('keeps an explicit null activeDocId (user parked on the dock menu page)', () => {
+        window.localStorage.setItem(DOCK_DOCUMENTS_STORAGE_KEY, JSON.stringify({
+            documents: [createFilesDocument()],
+            activeDocId: null,
+        }));
+
+        expect(loadDockDocumentsState()).toEqual({
+            documents: [createFilesDocument()],
+            activeDocId: null,
+        });
+    });
 });
 
 describe('isDockShellEnabled', () => {

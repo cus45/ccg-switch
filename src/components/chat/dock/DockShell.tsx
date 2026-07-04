@@ -158,6 +158,11 @@ export default function DockShell({
         setDocState((state) => activateDockDocument(state, id));
     }, []);
 
+    // 回到菜单页：保留已打开文档，仅取消活跃文档（新建入口都在菜单页）。
+    const handleShowMenu = useCallback(() => {
+        setDocState((state) => (state.activeDocId === null ? state : {...state, activeDocId: null}));
+    }, []);
+
     const handleClose = useCallback((id: string) => {
         // 关侧聊文档同时移除其聊天 tab（退役未完成发送），避免孤儿后台会话。
         const doc = docState.documents.find((candidate) => candidate.id === id);
@@ -204,15 +209,11 @@ export default function DockShell({
                 <DockTabBar
                     documents={docState.documents}
                     activeDocId={docState.activeDocId}
-                    isGit={gitChanged.isGit}
                     busyChatTabKeys={busyChatTabKeys}
                     unreadChatTabKeys={unreadChatTabKeys}
                     onActivate={handleActivate}
                     onClose={handleClose}
-                    onOpenFiles={handleOpenFiles}
-                    onOpenReview={handleOpenReview}
-                    onOpenSideChat={handleOpenSideChat}
-                    onCloseAll={handleCloseAll}
+                    onShowMenu={handleShowMenu}
                 />
                 <button
                     type="button"
@@ -235,6 +236,9 @@ export default function DockShell({
                         isGit={gitChanged.isGit}
                         onOpenFiles={handleOpenFiles}
                         onOpenReview={handleOpenReview}
+                        onOpenSideChat={handleOpenSideChat}
+                        onCloseAll={handleCloseAll}
+                        hasDocuments={hasDocuments}
                     />
                 )}
                 {activeDoc?.kind === 'files' && (

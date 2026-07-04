@@ -1,4 +1,4 @@
-import {FileDiff, FolderTree} from 'lucide-react';
+import {FileDiff, FolderTree, MessageSquarePlus, X} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 
 interface DockMenuProps {
@@ -6,9 +6,21 @@ interface DockMenuProps {
     isGit: boolean;
     onOpenFiles: () => void;
     onOpenReview: () => void;
+    /** 提供时显示「新侧边聊天」卡片（DockShell）；旧 RightDock 不传。 */
+    onOpenSideChat?: () => void;
+    /** 提供且 hasDocuments 时显示「关闭全部标签页」次要入口（DockShell）。 */
+    onCloseAll?: () => void;
+    hasDocuments?: boolean;
 }
 
-export default function DockMenu({isGit, onOpenFiles, onOpenReview}: DockMenuProps) {
+export default function DockMenu({
+    isGit,
+    onOpenFiles,
+    onOpenReview,
+    onOpenSideChat,
+    onCloseAll,
+    hasDocuments = false,
+}: DockMenuProps) {
     const {t} = useTranslation();
     const tf = (key: string, fallback: string): string => {
         const translated = t(key);
@@ -19,6 +31,22 @@ export default function DockMenu({isGit, onOpenFiles, onOpenReview}: DockMenuPro
 
     return (
         <div className="h-full space-y-2 overflow-y-auto p-3">
+            {onOpenSideChat && (
+                <button type="button" className={cardClass} onClick={onOpenSideChat}>
+                    <span className="mt-0.5 text-emerald-500">
+                        <MessageSquarePlus size={18} />
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900 dark:text-base-content">
+                            {tf('chat.dock.newSideChat', 'New side chat')}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-gray-500 dark:text-base-content/60">
+                            {tf('chat.dock.newSideChatDesc', 'Open a second, parallel chat panel')}
+                        </span>
+                    </span>
+                </button>
+            )}
+
             <button type="button" className={cardClass} onClick={onOpenFiles}>
                 <span className="mt-0.5 text-orange-500">
                     <FolderTree size={18} />
@@ -46,6 +74,17 @@ export default function DockMenu({isGit, onOpenFiles, onOpenReview}: DockMenuPro
                             {tf('chat.dock.reviewDesc', 'Inspect Git working-tree changes')}
                         </span>
                     </span>
+                </button>
+            )}
+
+            {onCloseAll && hasDocuments && (
+                <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-transparent px-3 py-2 text-xs text-gray-400 transition hover:border-gray-200 hover:text-gray-600 dark:hover:border-base-300 dark:hover:text-base-content"
+                    onClick={onCloseAll}
+                >
+                    <X size={13} />
+                    {tf('chat.dock.closeAllTabs', 'Close all tabs')}
                 </button>
             )}
         </div>

@@ -97,11 +97,12 @@
             "reviewEmpty": "No changes to review",
             "expandDiagnostics": "Show diagnostics",
             "collapseDiagnostics": "Hide diagnostics",
-            "addTab": "Open a dock tab",
+            "menu": "Dock menu",
             "closeTab": "Close tab",
             "previewFailed": "Failed to load this file.",
             "sideChat": "Side chat",
             "newSideChat": "New side chat",
+            "newSideChatDesc": "Open a second, parallel chat panel",
             "closeAllTabs": "Close all tabs",
             "sideChatWorking": "Working…",
             "sideChatUnread": "New reply"

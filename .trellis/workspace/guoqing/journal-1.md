@@ -530,3 +530,9 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 **Date**: 2026-07-03
 
 用户体验反馈:后台 tab 转圈结束应变未读,看过变已读。store 层:ChatSessionTab+unread 运行时字段;chat://done 完成时若目标 tab 非中心活跃且非 dock 可见侧聊(dockChatTabKey)→unread=true(retire 前先取 targetTabKey);focusTab 聚焦即已读;新增 setDockChatTabKey(key) 同步 dock 可见侧聊并顺带清 unread(DockShell 按 activeDoc+collapsed 用 effect 维护,卸载清空)。UI:中心会话 tab 与 dock 侧聊 tab 未读时显示蓝点+标题加粗+tooltip「有新回复」,busy(spinner)优先于未读。i18n sessionTabs.unread/dock.sideChatUnread。store 测试覆盖完整生命周期(可见完成不标/后台完成标/dock 切回清/focusTab 清)。tsc/vitest 699 全绿。并发会话期间提交了 b888cec(composer 循环修复),本次提交前已探测无文件交叉。
+
+## Session 18 附加3: dock 去掉"+"下拉,入口收进菜单页
+
+**Date**: 2026-07-04
+
+用户反馈不要用"+"号扩展功能:DockTabBar 移除"+"下拉,tab 条左端加「菜单」按钮(LayoutGrid,activeDocId===null 时高亮);新建入口(新侧边聊天/文件/审查[仅git]/关闭全部)全部收进 DockMenu 卡片启动页(新 props 可选,旧 RightDock 不受影响);DockShell 增 handleShowMenu(保留文档仅置 activeDocId=null);loadDockDocumentsState 保留显式 null(用户停在菜单页跨重启)。i18n:+menu/newSideChatDesc,-addTab。tsc/vitest 700 全绿。

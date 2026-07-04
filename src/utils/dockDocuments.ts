@@ -126,10 +126,13 @@ export function loadDockDocumentsState(): DockDocumentsState {
         const documents = parsed.documents
             .filter(isDockDocument)
             .filter((doc) => doc.kind !== 'sideChat');
-        const activeDocId = typeof parsed.activeDocId === 'string'
-            && documents.some((doc) => doc.id === parsed.activeDocId)
-            ? parsed.activeDocId
-            : (documents[documents.length - 1]?.id ?? null);
+        // 显式 null = 用户停在菜单页；仅当 activeDocId 无效（悬空/类型错）时才回退。
+        const activeDocId = parsed.activeDocId === null
+            ? null
+            : typeof parsed.activeDocId === 'string'
+                && documents.some((doc) => doc.id === parsed.activeDocId)
+                ? parsed.activeDocId
+                : (documents[documents.length - 1]?.id ?? null);
         return {documents, activeDocId};
     } catch {
         return EMPTY_DOCK_DOCUMENTS_STATE;

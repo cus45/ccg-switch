@@ -1,5 +1,5 @@
 import {useCallback} from 'react';
-import {FileDiff, FileText, Folder, Loader2, MessageSquare, Plus, X} from 'lucide-react';
+import {FileDiff, FileText, Folder, LayoutGrid, Loader2, MessageSquare, X} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import {cn} from '../../../utils/cn';
 import type {DockDocument, DockDocumentKind} from '../../../utils/dockDocuments';
@@ -7,18 +7,14 @@ import type {DockDocument, DockDocumentKind} from '../../../utils/dockDocuments'
 interface DockTabBarProps {
     documents: DockDocument[];
     activeDocId: string | null;
-    /** 非 git 工作区时 “+” 菜单不提供审查入口。 */
-    isGit: boolean;
     /** 正在工作（流式/排队）的聊天 tab key；侧聊文档 tab 据此显示 loading。 */
     busyChatTabKeys: string[];
     /** 后台完成回合、尚未查看的聊天 tab key；侧聊文档 tab 据此显示未读点。 */
     unreadChatTabKeys: string[];
     onActivate: (id: string) => void;
     onClose: (id: string) => void;
-    onOpenFiles: () => void;
-    onOpenReview: () => void;
-    onOpenSideChat: () => void;
-    onCloseAll: () => void;
+    /** 显示 dock 菜单页（新建入口都在菜单页里，tab 条不做扩展功能）。 */
+    onShowMenu: () => void;
 }
 
 const KIND_ICON: Record<DockDocumentKind, typeof Folder> = {
@@ -28,19 +24,15 @@ const KIND_ICON: Record<DockDocumentKind, typeof Folder> = {
     sideChat: MessageSquare,
 };
 
-/** dock 文档 tab 条：文档切换/关闭 + “+” 新建菜单（文件浏览 / 审查[仅 git]）。 */
+/** dock 文档 tab 条：菜单页入口 + 文档切换/关闭。新建入口收敛在菜单页（DockMenu）。 */
 export default function DockTabBar({
     documents,
     activeDocId,
-    isGit,
     busyChatTabKeys,
     unreadChatTabKeys,
     onActivate,
     onClose,
-    onOpenFiles,
-    onOpenReview,
-    onOpenSideChat,
-    onCloseAll,
+    onShowMenu,
 }: DockTabBarProps) {
     const {t} = useTranslation();
     const tf = useCallback((key: string, fallback: string): string => {
@@ -48,15 +40,27 @@ export default function DockTabBar({
         return translated === key ? fallback : translated;
     }, [t]);
 
-    const addTabLabel = tf('chat.dock.addTab', 'Open a dock tab');
+    const menuLabel = tf('chat.dock.menu', 'Dock menu');
     const closeTabLabel = tf('chat.dock.closeTab', 'Close tab');
-    // DaisyUI dropdown 以焦点驱动；点击菜单项后主动收起，避免菜单悬留。
-    const blurActiveMenu = () => {
-        (document.activeElement as HTMLElement | null)?.blur();
-    };
+    const menuActive = activeDocId === null;
 
     return (
         <div className="flex min-w-0 flex-1 items-center gap-0.5">
+            <button
+                type="button"
+                className={cn(
+                    'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
+                    menuActive
+                        ? 'bg-orange-50 text-orange-500 dark:bg-base-200 dark:text-primary'
+                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-base-content',
+                )}
+                title={menuLabel}
+                aria-label={menuLabel}
+                aria-pressed={menuActive}
+                onClick={onShowMenu}
+            >
+                <LayoutGrid size={14} />
+            </button>
             <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
                 {documents.map((doc) => {
                     const Icon = KIND_ICON[doc.kind];
@@ -115,75 +119,6 @@ export default function DockTabBar({
                         </div>
                     );
                 })}
-            </div>
-
-            <div className="dropdown dropdown-end shrink-0">
-                <button
-                    type="button"
-                    tabIndex={0}
-                    className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:hover:text-base-content"
-                    title={addTabLabel}
-                    aria-label={addTabLabel}
-                >
-                    <Plus size={15} />
-                </button>
-                <ul
-                    tabIndex={0}
-                    className="menu dropdown-content z-30 mt-1 w-44 rounded-lg border border-gray-100 bg-white p-1 text-sm shadow-lg dark:border-base-200 dark:bg-base-100"
-                >
-                    <li>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                blurActiveMenu();
-                                onOpenSideChat();
-                            }}
-                        >
-                            <MessageSquare size={14} className="text-emerald-500" />
-                            {tf('chat.dock.newSideChat', 'New side chat')}
-                        </button>
-                    </li>
-                    <li>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                blurActiveMenu();
-                                onOpenFiles();
-                            }}
-                        >
-                            <Folder size={14} className="text-orange-400" />
-                            {tf('chat.dock.files', 'Files')}
-                        </button>
-                    </li>
-                    {isGit && (
-                        <li>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    blurActiveMenu();
-                                    onOpenReview();
-                                }}
-                            >
-                                <FileDiff size={14} className="text-sky-500" />
-                                {tf('chat.dock.review', 'Review')}
-                            </button>
-                        </li>
-                    )}
-                    {documents.length > 0 && (
-                        <li className="border-t border-gray-100 dark:border-base-200">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    blurActiveMenu();
-                                    onCloseAll();
-                                }}
-                            >
-                                <X size={14} className="text-gray-400" />
-                                {tf('chat.dock.closeAllTabs', 'Close all tabs')}
-                            </button>
-                        </li>
-                    )}
-                </ul>
             </div>
         </div>
     );
