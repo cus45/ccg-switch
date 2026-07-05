@@ -343,6 +343,19 @@ export default function SubagentHistoryPanel({
     const runtimeMeta = extractSubagentResultRuntimeMeta(result);
     const renderMessages = hasLive ? (liveMessages as ChatMessage[]) : messages;
     const process = buildSubagentProcessModel(renderMessages, runtimeMeta);
+    // 轨迹限高滚动：live 流式时跟随底部；用户上滚阅读时停止跟随，回到底部附近恢复。
+    const trajectoryRef = useRef<HTMLDivElement | null>(null);
+    const followTrajectoryRef = useRef(true);
+    const handleTrajectoryScroll = () => {
+        const el = trajectoryRef.current;
+        if (!el) return;
+        followTrajectoryRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    };
+    useEffect(() => {
+        const el = trajectoryRef.current;
+        if (!el || !hasLive || !followTrajectoryRef.current) return;
+        el.scrollTop = el.scrollHeight;
+    }, [hasLive, renderMessages.length]);
     // Identity of the on-disk load; used to dedupe + recover from mid-flight
     // dep changes without leaving `loading` stuck true (the previous bug).
     // retryToken 使「重试」按钮能强制一次全新加载。
@@ -527,6 +540,9 @@ export default function SubagentHistoryPanel({
     return renderTrajectory();
 
     function renderTrajectory() {
+        // 运行中（尚无 tool_result）时在轨迹尾部保留一个活动指示，
+        // 让用户知道子代理仍在产出，而不是卡片「渲染完就停了」。
+        const stillRunning = hasLive && !result;
         return (
             <div className="tool-section">
                 <div className="tool-section-label">{t('tools.subagentHistory')}:</div>
@@ -536,7 +552,11 @@ export default function SubagentHistoryPanel({
                     currentCwd={currentCwd}
                     process={process}
                 />
-                <div className="space-y-3">
+                <div
+                    ref={trajectoryRef}
+                    className="max-h-96 space-y-3 overflow-y-auto pr-1"
+                    onScroll={handleTrajectoryScroll}
+                >
                     {renderMessages.map((message, messageIndex) => {
                         if (!shouldRenderChatMessage(message)) {
                             return null;
@@ -564,6 +584,12 @@ export default function SubagentHistoryPanel({
                             </div>
                         );
                     })}
+                    {stillRunning && (
+                        <div className="flex items-center gap-1.5 py-1 text-xs text-base-content/50">
+                            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                            <span>{t('tools.subagentRunning', '子代理运行中…')}</span>
+                        </div>
+                    )}
                 </div>
             </div>
         );
