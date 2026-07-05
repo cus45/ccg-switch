@@ -517,10 +517,12 @@ export default function ChatPage() {
                 </div>
             </div>
 
-            {/* 错误提示 */}
+            {/* 错误提示（daemon ready 超时等 i18n key 型错误需翻译后展示） */}
             {error && (
                 <div className="px-4 pb-2">
-                    <div className="alert alert-error py-2 text-sm">{error}</div>
+                    <div className="alert alert-error py-2 text-sm">
+                        {getChatDaemonDiagnosticDisplayText({diagnosticText: error, translate: t}) ?? error}
+                    </div>
                 </div>
             )}
 

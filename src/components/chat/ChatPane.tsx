@@ -1,6 +1,8 @@
 import {useTranslation} from 'react-i18next';
 import {cn} from '../../utils/cn';
 import {useChatStore} from '../../stores/useChatStore';
+import {getChatDaemonDiagnosticDisplayText} from '../../utils/chatDaemonStatus';
+import {ChatPaneTabContext} from './paneTabContext';
 import MessageList from './MessageList';
 import ConversationSearch from './ConversationSearch';
 import ScrollControl from './ScrollControl';
@@ -47,10 +49,11 @@ export function ChatPane({
     const isMain = variant === 'main';
 
     return (
-        <section
-            className={cn('chat-conversation-pane', !isMain && 'h-full w-full')}
-            style={{flex: '1 1 0%'}}
-        >
+        <ChatPaneTabContext.Provider value={isMain ? null : controller.tabKey}>
+            <section
+                className={cn('chat-conversation-pane', !isMain && 'h-full w-full')}
+                style={{flex: '1 1 0%'}}
+            >
             {isMain && (
                 <ChatSessionTabs
                     tabs={openTabs}
@@ -106,6 +109,16 @@ export function ChatPane({
                 mcpStatus={mcpStatus}
                 collapseStatusTabsOnDesktop
             />
+            {/* 侧聊没有页面级错误横幅：tab 错误就地显示（主聊天沿用 ChatPage 横幅）。 */}
+            {!isMain && controller.error && (
+                <div
+                    className="mx-2 mb-1 rounded-lg border border-error/30 bg-error/10 px-3 py-1.5 text-xs text-error"
+                    role="alert"
+                >
+                    {getChatDaemonDiagnosticDisplayText({diagnosticText: controller.error, translate: t})
+                        ?? controller.error}
+                </div>
+            )}
             <ChatComposer
                 sdkMissing={sdkMissing}
                 onSdkMissing={onSdkMissing}
@@ -116,6 +129,7 @@ export function ChatPane({
                 onWorkspaceStatusChange={onWorkspaceStatusChange}
                 tabKey={isMain ? undefined : controller.tabKey}
             />
-        </section>
+            </section>
+        </ChatPaneTabContext.Provider>
     );
 }

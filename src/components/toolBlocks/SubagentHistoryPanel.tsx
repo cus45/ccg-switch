@@ -9,6 +9,7 @@ import {
     ListTree,
     Loader2,
     Pencil,
+    RefreshCw,
     Search,
     Terminal,
     Wrench
@@ -18,7 +19,8 @@ import type {ChatMessage, ToolResultBlock} from '../../types/chat';
 import type {UnifiedSessionMessage} from '../../types/session';
 import {findToolResult, getRenderableContentBlocks, shouldRenderChatMessage} from '../../utils/chatMessageFlow';
 import {loadClaudeSubagentHistory} from '../../services/subagentHistoryService';
-import {useChatStore} from '../../stores/useChatStore';
+import {useChatStore, useChatTab} from '../../stores/useChatStore';
+import {useChatPaneTabKey} from '../chat/paneTabContext';
 import {openFile} from '../../utils/bridge';
 import {
     buildSubagentProcessModel,
@@ -306,13 +308,25 @@ export default function SubagentHistoryPanel({
     const [loading, setLoading] = useState(false);
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const activeProvider = useChatStore((state) => state.activeSession?.providerId ?? state.provider);
-    const sessionId = useChatStore((state) => state.sessionId);
-    const sourcePath = useChatStore((state) => state.activeSession?.sourcePath ?? null);
-    const currentCwd = useChatStore((state) => state.currentCwd);
+    const [retryToken, setRetryToken] = useState(0);
+    // 宿主 pane 绑定的 tab（侧聊）；null/未命中回退全局活跃投影（主聊天）。
+    // 不按 pane 区分会让侧聊里的子代理卡片误用主聊天的会话上下文与 live 轨迹。
+    const paneTabKey = useChatPaneTabKey();
+    const paneTab = useChatTab(paneTabKey);
+    const globalProvider = useChatStore((state) => state.activeSession?.providerId ?? state.provider);
+    const globalSessionId = useChatStore((state) => state.sessionId);
+    const globalSourcePath = useChatStore((state) => state.activeSession?.sourcePath ?? null);
+    const globalCwd = useChatStore((state) => state.currentCwd);
     // Live trajectory streamed into this Task card (keyed by the Task tool_use id).
     // When present it takes over from the on-disk history load.
-    const liveMessages = useChatStore((state) => (toolId ? state.subagentRuns[toolId] : undefined));
+    const globalLiveMessages = useChatStore((state) => (toolId ? state.subagentRuns[toolId] : undefined));
+    const activeProvider = paneTab ? (paneTab.activeSession?.providerId ?? paneTab.provider) : globalProvider;
+    const sessionId = paneTab ? paneTab.sessionId : globalSessionId;
+    const sourcePath = paneTab ? (paneTab.activeSession?.sourcePath ?? null) : globalSourcePath;
+    const currentCwd = paneTab ? paneTab.currentCwd : globalCwd;
+    const liveMessages = paneTab
+        ? (toolId ? paneTab.subagentRuns[toolId] : undefined)
+        : globalLiveMessages;
     const hasLive = Boolean(liveMessages && liveMessages.length > 0);
     const historyRequest = resolveSubagentHistoryRequest({
         sessionId,
@@ -331,7 +345,8 @@ export default function SubagentHistoryPanel({
     const process = buildSubagentProcessModel(renderMessages, runtimeMeta);
     // Identity of the on-disk load; used to dedupe + recover from mid-flight
     // dep changes without leaving `loading` stuck true (the previous bug).
-    const loadKey = `${activeProvider}|${requestSessionId ?? ''}|${requestSourcePath ?? ''}|${agentId ?? ''}|${description ?? ''}`;
+    // retryToken 使「重试」按钮能强制一次全新加载。
+    const loadKey = `${activeProvider}|${requestSessionId ?? ''}|${requestSourcePath ?? ''}|${agentId ?? ''}|${description ?? ''}|${retryToken}`;
     const loadedKeyRef = useRef<string>('');
 
     useEffect(() => {
@@ -478,8 +493,18 @@ export default function SubagentHistoryPanel({
                     <History className="agent-history-placeholder-icon" aria-hidden="true" />
                     <span>{t('tools.subagentHistory')}</span>
                 </div>
-                <div className="agent-history-placeholder-note text-error" title={error}>
-                    {t('tools.subagentHistoryLoadFailed')}
+                <div className="agent-history-placeholder-note flex items-center gap-2">
+                    <span className="text-error" title={error}>
+                        {t('tools.subagentHistoryLoadFailed')}
+                    </span>
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-xs h-5 min-h-0 gap-1 px-1.5 text-error"
+                        onClick={() => setRetryToken((token) => token + 1)}
+                    >
+                        <RefreshCw size={11} />
+                        {t('tools.subagentHistoryRetry', '重试')}
+                    </button>
                 </div>
             </div>
         );

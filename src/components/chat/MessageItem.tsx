@@ -1,7 +1,8 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AlertTriangle, Check, Copy, User} from 'lucide-react';
+import {AlertTriangle, Check, CircleSlash, Copy, User} from 'lucide-react';
 import type {ChatMessage, ContentBlock, TextBlock, ThinkingBlock, ToolResultBlock} from '../../types/chat';
+import {STOPPED_OUTPUT_ERROR} from '../../stores/useChatStore';
 import {cn} from '../../utils/cn';
 import {getRenderableContentBlocks, shouldRenderChatMessage,} from '../../utils/chatMessageFlow';
 import ContentBlockRenderer from './ContentBlockRenderer';
@@ -107,6 +108,28 @@ export default function MessageItem({
         'chat.message.streamingConnected',
         'Connected, generating response...',
     );
+    const turnFailedLabel = translateWithFallback(t, 'chat.message.turnFailed', 'This turn failed');
+    const stoppedByUserLabel = translateWithFallback(t, 'chat.message.stoppedByUser', 'Output stopped');
+    const isStoppedByUser = message.error === STOPPED_OUTPUT_ERROR;
+    // 失败/中止的可见反馈：内容为空时用户不该面对一个空气泡（尤其 send 直接抛错的场景）。
+    const assistantErrorNotice = isAssistant && !message.streaming && message.error
+        ? (isStoppedByUser
+            ? (
+                <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-base-content/50">
+                    <CircleSlash size={12} className="shrink-0" />
+                    <span>{stoppedByUserLabel}</span>
+                </div>
+            )
+            : (
+                <div className="mt-2 flex items-start gap-2 rounded-lg border border-error/30 bg-error/5 px-3 py-2 text-xs text-error">
+                    <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                    <span className="min-w-0 whitespace-pre-wrap break-words">
+                        <span className="font-medium">{turnFailedLabel}</span>
+                        {message.error.trim() ? `: ${message.error.trim()}` : ''}
+                    </span>
+                </div>
+            ))
+        : null;
 
     const roleLabel = isUser
         ? userLabel
@@ -235,7 +258,7 @@ export default function MessageItem({
                 className={cn(
                     'chat-message-row assistant-message-flow group relative mx-auto w-full max-w-4xl px-4 py-3 transition-colors',
                     isSearchMatch && 'rounded-lg bg-primary/5 ring-1 ring-primary/15',
-                    message.error && 'rounded-lg bg-error/5 ring-1 ring-error/20',
+                    message.error && !isStoppedByUser && 'rounded-lg bg-error/5 ring-1 ring-error/20',
                 )}
             >
                 {canCopy && copyButton}
@@ -248,6 +271,8 @@ export default function MessageItem({
                 )}
 
                 {messageContent}
+
+                {assistantErrorNotice}
 
                 {!message.streaming && (
                     <footer className="assistant-message-meta mt-1">

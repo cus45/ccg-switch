@@ -19,6 +19,8 @@ vi.mock('../../services/subagentHistoryService', () => ({
 
 vi.mock('../../stores/useChatStore', () => ({
   useChatStore: (selector: (state: MockChatState) => unknown) => useChatStoreMock(selector),
+  // 面板在无 pane 上下文（tab 未命中）时回退全局投影。
+  useChatTab: () => null,
 }));
 
 function mockStoreState(overrides: Partial<MockChatState> = {}) {

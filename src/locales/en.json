@@ -64,7 +64,9 @@
             "unknownBlock": "Unknown content block",
             "showEarlier": "{{total}} earlier messages are collapsed. Click to load {{count}} more",
             "waiting": "Waiting for response…",
-            "streamingConnected": "Connected, generating response…"
+            "streamingConnected": "Connected, generating response…",
+            "turnFailed": "This turn failed",
+            "stoppedByUser": "Output stopped"
         },
         "thinking": {
             "title": "AI is thinking…"
@@ -562,6 +564,7 @@
         "subagentRunning": "Sub-agent running…",
         "subagentHistoryUnavailable": "No matching subagent history was found for this session.",
         "subagentHistoryLoadFailed": "Failed to load subagent history",
+        "subagentHistoryRetry": "Retry",
         "subagentHistoryEmpty": "No renderable subagent execution content was found.",
         "subagentHistoryPending": "Detailed execution steps will appear here after session-history support lands.",
         "subagentHistoryPendingEmpty": "Only the current call summary is available for now; full subagent execution history will be added next.",

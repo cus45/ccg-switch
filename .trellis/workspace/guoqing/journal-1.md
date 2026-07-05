@@ -536,3 +536,9 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 **Date**: 2026-07-04
 
 用户反馈不要用"+"号扩展功能:DockTabBar 移除"+"下拉,tab 条左端加「菜单」按钮(LayoutGrid,activeDocId===null 时高亮);新建入口(新侧边聊天/文件/审查[仅git]/关闭全部)全部收进 DockMenu 卡片启动页(新 props 可选,旧 RightDock 不受影响);DockShell 增 handleShowMenu(保留文档仅置 activeDocId=null);loadDockDocumentsState 保留显式 null(用户停在菜单页跨重启)。i18n:+menu/newSideChatDesc,-addTab。tsc/vitest 700 全绿。
+
+## Session 19: AI 调用失败可见性 + 子代理 pane 上下文修复
+
+**Date**: 2026-07-05
+
+新 goal(聊天体验深挖)第一轮:1) MessageItem assistant 失败消息渲染错误块(AlertTriangle+错误原文,空内容失败不再是空白泡),用户主动中止(STOPPED_OUTPUT_ERROR 导出)显示中性「已停止输出」不标红;2) ChatPane 侧聊变体就地错误条(controller 暴露 error,主聊天沿用页面横幅);3) 全局错误横幅/侧聊错误条对 chat.daemon.readyTimeoutError 这类 i18n key 型错误翻译后展示(复用 getChatDaemonDiagnosticDisplayText);4) 新建 ChatPaneTabContext,SubagentHistoryPanel 按宿主 pane 的 tab 快照取 sessionId/sourcePath/cwd/subagentRuns(修复侧聊里子代理卡片误读主聊天上下文导致的无法加载/串台),回退全局投影;5) 子代理历史加载失败态加「重试」按钮(retryToken 进 loadKey)。i18n: chat.message.turnFailed/stoppedByUser + tools.subagentHistoryRetry(zh/en)。tsc/vitest 700 全绿。

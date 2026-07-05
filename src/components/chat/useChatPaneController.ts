@@ -70,7 +70,7 @@ export interface ChatPaneAnchorItem {
 
 type ChatPaneView = Pick<
     ChatTabView,
-    'messages' | 'provider' | 'currentCwd' | 'activeSession' | 'lastSessionLoadMetrics'
+    'messages' | 'provider' | 'currentCwd' | 'activeSession' | 'lastSessionLoadMetrics' | 'error'
 >;
 
 export interface ChatPaneControllerOptions {
@@ -93,6 +93,8 @@ export interface ChatPaneController {
     messages: ChatMessage[];
     provider: ChatTabView['provider'];
     currentCwd: string | null;
+    /** 该 tab 的最近错误（发送失败/回合失败）；侧聊 pane 就地展示。 */
+    error: string | null;
     hasMessages: boolean;
     isStreaming: boolean;
     // 转录搜索
@@ -149,6 +151,7 @@ export function useChatPaneController({
         currentCwd: globalStore.currentCwd,
         activeSession: globalStore.activeSession,
         lastSessionLoadMetrics: globalStore.lastSessionLoadMetrics,
+        error: globalStore.error,
     };
     const messages = view.messages;
     const lastSessionLoadMetrics = view.lastSessionLoadMetrics;
@@ -548,6 +551,7 @@ export function useChatPaneController({
         messages,
         provider: view.provider,
         currentCwd: view.currentCwd,
+        error: view.error,
         hasMessages,
         isStreaming,
         searchQuery,

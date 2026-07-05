@@ -53,7 +53,9 @@
             "unknownBlock": "未知内容块",
             "showEarlier": "已折叠更早 {{total}} 条消息，点击加载 {{count}} 条",
             "waiting": "正在等待响应…",
-            "streamingConnected": "已连接，正在生成回复…"
+            "streamingConnected": "已连接，正在生成回复…",
+            "turnFailed": "本轮回复失败",
+            "stoppedByUser": "已停止输出"
         },
         "thinking": {
             "title": "AI 正在思考…"
@@ -551,6 +553,7 @@
         "subagentRunning": "子代理运行中…",
         "subagentHistoryUnavailable": "当前会话缺少可匹配的子代理历史。",
         "subagentHistoryLoadFailed": "加载子代理历史失败",
+        "subagentHistoryRetry": "重试",
         "subagentHistoryEmpty": "未找到可展示的子代理执行内容。",
         "subagentHistoryPending": "详细执行轨迹会在会话历史管理完善后接入这里。",
         "subagentHistoryPendingEmpty": "当前仅保留本次调用摘要，后续会补充完整子代理执行轨迹。",
