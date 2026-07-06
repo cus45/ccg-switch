@@ -38,8 +38,17 @@ scroll control / composer status tabs / composer) is one reusable component:
 - Side chats mount `dock/SideChatPane`, which builds its **own** controller
   instance (independent search/scroll/anchor state) and computes sdk/mcp status
   from that tab's provider. The SDK management modal lives in `ChatPage` only.
-- Permission dialogs (ask-user/plan/tool) stay global in `ChatPage` (single
-  pending queue); side-chat permission requests still resolve by sessionId.
+- Permission dialogs (ask-user/plan/tool) keep the single global pending queue
+  in the store, but rendering is routed: when the request's `sessionId` matches
+  the session of the dock's visible side chat (`dockChatTabKey`), `ChatPane`
+  renders the dialog **inline** (`container="inline"`, absolutely positioned
+  over the side pane, which is `position: relative`); everything else — main
+  chat, background side chats, requests without a sessionId — falls back to the
+  center modal in `ChatPage` so a request always has somewhere to be answered
+  (`shouldRoutePermissionToSideChat` in `utils/chatUiBehavior.ts`). Inline
+  dialogs must NOT register global keyboard shortcuts (Esc/Enter) — the center
+  modal owns them; a same-time center modal + side inline pair would otherwise
+  double-fire.
 
 ## Chat Right Tool Dock: `DockShell` (tabbed documents; supersedes the card menu)
 

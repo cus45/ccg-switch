@@ -2,7 +2,11 @@ import {useTranslation} from 'react-i18next';
 import {cn} from '../../utils/cn';
 import {useChatStore} from '../../stores/useChatStore';
 import {getChatDaemonDiagnosticDisplayText} from '../../utils/chatDaemonStatus';
+import {getActivePermissionDialog, shouldRoutePermissionToSideChat} from '../../utils/chatUiBehavior';
 import {ChatPaneTabContext} from './paneTabContext';
+import AskUserQuestionDialog from './AskUserQuestionDialog';
+import PlanApprovalDialog from './PlanApprovalDialog';
+import ToolPermissionDialog from './ToolPermissionDialog';
 import MessageList from './MessageList';
 import ConversationSearch from './ConversationSearch';
 import ScrollControl from './ScrollControl';
@@ -45,13 +49,55 @@ export function ChatPane({
     onWorkspaceStatusChange,
 }: ChatPaneProps) {
     const {t} = useTranslation();
-    const {openTabs, activeTabKey, focusTab, closeTab, closeOtherTabs, closeAllTabs} = useChatStore();
+    const {
+        openTabs,
+        activeTabKey,
+        focusTab,
+        closeTab,
+        closeOtherTabs,
+        closeAllTabs,
+        dockChatTabKey,
+        pendingAskUserQuestion,
+        pendingPlanApproval,
+        pendingToolPermission,
+        answerAskUserQuestion,
+        answerToolPermission,
+        approvePlan,
+    } = useChatStore();
     const isMain = variant === 'main';
+
+    // 权限请求就地弹出：仅当本 pane 是 dock 当前可见侧聊，且请求 sessionId
+    // 与本 pane 会话一致时接管渲染（其余场景由 ChatPage 中心 modal 兜底）。
+    const isVisibleSideChat = !isMain
+        && controller.tabKey !== null
+        && controller.tabKey === dockChatTabKey;
+    const paneSessionId = isVisibleSideChat
+        ? openTabs.find((tab) => tab.key === controller.tabKey)?.sessionId ?? null
+        : null;
+    const routesToPane = (requestSessionId?: string | null) => isVisibleSideChat
+        && shouldRoutePermissionToSideChat({requestSessionId, sideChatSessionId: paneSessionId});
+    const paneAskUserQuestion = pendingAskUserQuestion && routesToPane(pendingAskUserQuestion.sessionId)
+        ? pendingAskUserQuestion
+        : null;
+    const panePlanApproval = pendingPlanApproval && routesToPane(pendingPlanApproval.sessionId)
+        ? pendingPlanApproval
+        : null;
+    const paneToolPermission = pendingToolPermission && routesToPane(pendingToolPermission.sessionId)
+        ? pendingToolPermission
+        : null;
+    const panePermissionDialog = getActivePermissionDialog({
+        hasAskUserQuestion: Boolean(paneAskUserQuestion),
+        askUserQuestionTimestamp: paneAskUserQuestion?.timestamp ?? null,
+        hasPlanApproval: Boolean(panePlanApproval),
+        planApprovalTimestamp: panePlanApproval?.timestamp ?? null,
+        hasToolPermission: Boolean(paneToolPermission),
+        toolPermissionTimestamp: paneToolPermission?.timestamp ?? null,
+    });
 
     return (
         <ChatPaneTabContext.Provider value={isMain ? null : controller.tabKey}>
             <section
-                className={cn('chat-conversation-pane', !isMain && 'h-full w-full')}
+                className={cn('chat-conversation-pane', !isMain && 'relative h-full w-full')}
                 style={{flex: '1 1 0%'}}
             >
             {isMain && (
@@ -129,6 +175,31 @@ export function ChatPane({
                 onWorkspaceStatusChange={onWorkspaceStatusChange}
                 tabKey={isMain ? undefined : controller.tabKey}
             />
+
+            {/* 本侧聊触发的权限请求就地弹出（覆盖本 pane，不遮挡主聊天） */}
+            {panePermissionDialog === 'ask-user-question' && paneAskUserQuestion && (
+                <AskUserQuestionDialog
+                    container="inline"
+                    request={paneAskUserQuestion}
+                    onAnswer={(answers) => answerAskUserQuestion(paneAskUserQuestion.requestId, answers)}
+                    onCancel={() => answerAskUserQuestion(paneAskUserQuestion.requestId, {})}
+                />
+            )}
+            {panePermissionDialog === 'plan-approval' && panePlanApproval && (
+                <PlanApprovalDialog
+                    container="inline"
+                    request={panePlanApproval}
+                    onApprove={(approved, targetMode) => approvePlan(panePlanApproval.requestId, approved, targetMode)}
+                    onCancel={() => approvePlan(panePlanApproval.requestId, false, 'default')}
+                />
+            )}
+            {panePermissionDialog === 'tool-permission' && paneToolPermission && (
+                <ToolPermissionDialog
+                    container="inline"
+                    request={paneToolPermission}
+                    onAnswer={(allow) => answerToolPermission(paneToolPermission.requestId, allow)}
+                />
+            )}
             </section>
         </ChatPaneTabContext.Provider>
     );

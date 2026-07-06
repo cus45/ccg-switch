@@ -14,6 +14,8 @@ import {
 interface ToolPermissionDialogProps {
     request: ToolPermissionRequest;
     onAnswer: (allow: boolean) => void;
+    /** 'modal'=全屏居中（默认）；'inline'=限定在最近的 relative 祖先内（侧聊面板就地弹出）。 */
+    container?: 'modal' | 'inline';
 }
 
 type ToolPermissionShortcutAction = 'allow' | 'deny' | null;
@@ -215,6 +217,7 @@ export function submitToolPermissionDecision(
 export default function ToolPermissionDialog({
     request,
     onAnswer,
+    container = 'modal',
 }: ToolPermissionDialogProps) {
     const {t} = useTranslation();
     const [submitted, setSubmitted] = useState(false);
@@ -283,6 +286,8 @@ export default function ToolPermissionDialog({
     }, [primaryInput, primaryInputCopyText]);
 
     useEffect(() => {
+        // inline（侧聊就地弹出）不占用全局快捷键，避免与中心 modal 双触发。
+        if (container === 'inline') return undefined;
         const handleKeyDown = (event: KeyboardEvent) => {
             const action = resolveToolPermissionShortcutAction(event.key, event.target);
             if (!action) return;
@@ -296,21 +301,18 @@ export default function ToolPermissionDialog({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleAllow, handleDeny]);
+    }, [container, handleAllow, handleDeny]);
 
-    return createPortal(
-        <>
-            <div
-                className="fixed top-0 left-0 right-0 h-8 z-[9998]"
-                data-tauri-drag-region
-            />
-
-            <div
-                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-6"
-                onClick={handleDeny}
-            >
+    const inline = container === 'inline';
+    const overlay = (
+        <div
+            className={inline
+                ? 'absolute inset-0 z-30 flex items-center justify-center bg-black/30 p-3'
+                : 'fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-6'}
+            onClick={handleDeny}
+        >
                 <div
-                    className="flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl"
+                    className={`flex ${inline ? 'max-h-full' : 'max-h-[82vh]'} w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl`}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby={TOOL_PERMISSION_TITLE_ID}
@@ -476,7 +478,20 @@ export default function ToolPermissionDialog({
                         </div>
                     </div>
                 </div>
-            </div>
+        </div>
+    );
+
+    if (inline) {
+        return overlay;
+    }
+
+    return createPortal(
+        <>
+            <div
+                className="fixed top-0 left-0 right-0 h-8 z-[9998]"
+                data-tauri-drag-region
+            />
+            {overlay}
         </>,
         document.body,
     );

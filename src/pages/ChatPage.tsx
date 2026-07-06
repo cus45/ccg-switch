@@ -23,6 +23,7 @@ import {
     getChatTopChromeActionLabel,
     getSdkMissingBannerText,
     shouldIgnoreChatSessionSelection,
+    shouldRoutePermissionToSideChat,
 } from '../utils/chatUiBehavior';
 import {
     canReconnectChatDaemon,
@@ -84,7 +85,9 @@ export default function ChatPage() {
         pendingAskUserQuestion,
         pendingPlanApproval,
         pendingToolPermission,
+        openTabs,
         activeTabKey,
+        dockChatTabKey,
         init,
         reconnectDaemon,
         clear,
@@ -193,13 +196,30 @@ export default function ChatPage() {
         translate: t,
     });
     const sessionSidebarCollapsed = sidebarLayoutState.sessionSidebarCollapsed;
+    // 已路由到 dock 可见侧聊的权限请求由 ChatPane 就地渲染，中心不再弹出。
+    const visibleSideChatSessionId = dockChatTabKey
+        ? openTabs.find((tab) => tab.key === dockChatTabKey)?.sessionId ?? null
+        : null;
+    const routedToSideChat = (requestSessionId?: string | null) => shouldRoutePermissionToSideChat({
+        requestSessionId,
+        sideChatSessionId: visibleSideChatSessionId,
+    });
+    const centerAskUserQuestion = pendingAskUserQuestion && !routedToSideChat(pendingAskUserQuestion.sessionId)
+        ? pendingAskUserQuestion
+        : null;
+    const centerPlanApproval = pendingPlanApproval && !routedToSideChat(pendingPlanApproval.sessionId)
+        ? pendingPlanApproval
+        : null;
+    const centerToolPermission = pendingToolPermission && !routedToSideChat(pendingToolPermission.sessionId)
+        ? pendingToolPermission
+        : null;
     const activePermissionDialog = getActivePermissionDialog({
-        hasAskUserQuestion: Boolean(pendingAskUserQuestion),
-        askUserQuestionTimestamp: pendingAskUserQuestion?.timestamp ?? null,
-        hasPlanApproval: Boolean(pendingPlanApproval),
-        planApprovalTimestamp: pendingPlanApproval?.timestamp ?? null,
-        hasToolPermission: Boolean(pendingToolPermission),
-        toolPermissionTimestamp: pendingToolPermission?.timestamp ?? null,
+        hasAskUserQuestion: Boolean(centerAskUserQuestion),
+        askUserQuestionTimestamp: centerAskUserQuestion?.timestamp ?? null,
+        hasPlanApproval: Boolean(centerPlanApproval),
+        planApprovalTimestamp: centerPlanApproval?.timestamp ?? null,
+        hasToolPermission: Boolean(centerToolPermission),
+        toolPermissionTimestamp: centerToolPermission?.timestamp ?? null,
     });
     const daemonStatusKind = getChatDaemonStatusKind({daemonReady, daemonStatus, daemonReconnecting});
     const showDaemonReconnect = daemonReconnecting
@@ -541,32 +561,32 @@ export default function ChatPage() {
             </ModalDialog>
 
             {/* AskUserQuestion 权限请求弹窗 */}
-            {activePermissionDialog === 'ask-user-question' && pendingAskUserQuestion && (
+            {activePermissionDialog === 'ask-user-question' && centerAskUserQuestion && (
                 <AskUserQuestionDialog
-                    request={pendingAskUserQuestion}
+                    request={centerAskUserQuestion}
                     onAnswer={(answers) =>
-                        answerAskUserQuestion(pendingAskUserQuestion.requestId, answers)
+                        answerAskUserQuestion(centerAskUserQuestion.requestId, answers)
                     }
-                    onCancel={() => answerAskUserQuestion(pendingAskUserQuestion.requestId, {})}
+                    onCancel={() => answerAskUserQuestion(centerAskUserQuestion.requestId, {})}
                 />
             )}
 
             {/* PlanApproval 权限请求弹窗 */}
-            {activePermissionDialog === 'plan-approval' && pendingPlanApproval && (
+            {activePermissionDialog === 'plan-approval' && centerPlanApproval && (
                 <PlanApprovalDialog
-                    request={pendingPlanApproval}
+                    request={centerPlanApproval}
                     onApprove={(approved, targetMode) =>
-                        approvePlan(pendingPlanApproval.requestId, approved, targetMode)
+                        approvePlan(centerPlanApproval.requestId, approved, targetMode)
                     }
-                    onCancel={() => approvePlan(pendingPlanApproval.requestId, false, 'default')}
+                    onCancel={() => approvePlan(centerPlanApproval.requestId, false, 'default')}
                 />
             )}
 
             {/* 普通工具权限请求弹窗 */}
-            {activePermissionDialog === 'tool-permission' && pendingToolPermission && (
+            {activePermissionDialog === 'tool-permission' && centerToolPermission && (
                 <ToolPermissionDialog
-                    request={pendingToolPermission}
-                    onAnswer={(allow) => answerToolPermission(pendingToolPermission.requestId, allow)}
+                    request={centerToolPermission}
+                    onAnswer={(allow) => answerToolPermission(centerToolPermission.requestId, allow)}
                 />
             )}
         </div>

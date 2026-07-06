@@ -17,6 +17,8 @@ interface PlanApprovalDialogProps {
     request: PlanApprovalRequest;
     onApprove: (approved: boolean, targetMode: string) => void;
     onCancel: () => void;
+    /** 'modal'=全屏居中（默认）；'inline'=限定在最近的 relative 祖先内（侧聊面板就地弹出）。 */
+    container?: 'modal' | 'inline';
 }
 
 const PLAN_APPROVAL_TITLE_ID = 'plan-approval-title';
@@ -127,6 +129,7 @@ export default function PlanApprovalDialog({
     request,
     onApprove,
     onCancel,
+    container = 'modal',
 }: PlanApprovalDialogProps) {
     const {t} = useTranslation();
     const [planExpanded, setPlanExpanded] = useState(true);
@@ -170,6 +173,8 @@ export default function PlanApprovalDialog({
     }, [markSubmitted, onCancel]);
 
     useEffect(() => {
+        // inline（侧聊就地弹出）不占用全局快捷键，避免与中心 modal 双触发。
+        if (container === 'inline') return undefined;
         const handleKeyDown = (event: KeyboardEvent) => {
             const action = resolvePlanApprovalShortcutAction(event.key, event.target);
             if (!action) return;
@@ -183,23 +188,18 @@ export default function PlanApprovalDialog({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleApprove, handleDeny]);
+    }, [container, handleApprove, handleDeny]);
 
-    return createPortal(
-        <>
-            {/* 拖拽条 */}
-            <div
-                className="fixed top-0 left-0 right-0 h-8 z-[9998]"
-                data-tauri-drag-region
-            />
-
-            {/* 背景蒙层 */}
-            <div
-                className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6"
-                onClick={handleCancel}
-            >
+    const inline = container === 'inline';
+    const overlay = (
+        <div
+            className={inline
+                ? 'absolute inset-0 z-30 flex items-center justify-center bg-black/30 p-3'
+                : 'fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6'}
+            onClick={handleCancel}
+        >
                 <div
-                    className="bg-white dark:bg-base-100 rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+                    className={`bg-white dark:bg-base-100 rounded-xl shadow-2xl max-w-4xl w-full ${inline ? 'max-h-full' : 'max-h-[85vh]'} overflow-hidden flex flex-col`}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby={PLAN_APPROVAL_TITLE_ID}
@@ -340,7 +340,21 @@ export default function PlanApprovalDialog({
                         </p>
                     </div>
                 </div>
-            </div>
+        </div>
+    );
+
+    if (inline) {
+        return overlay;
+    }
+
+    return createPortal(
+        <>
+            {/* 拖拽条 */}
+            <div
+                className="fixed top-0 left-0 right-0 h-8 z-[9998]"
+                data-tauri-drag-region
+            />
+            {overlay}
         </>,
         document.body,
     );

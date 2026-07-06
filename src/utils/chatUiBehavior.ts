@@ -685,6 +685,25 @@ function parsePermissionTimestamp(timestamp: string | null | undefined): number 
     return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
 }
 
+/**
+ * 权限请求是否应路由到 dock 当前可见的侧聊面板就地弹出。
+ *
+ * 仅当请求的 sessionId 与可见侧聊 tab 的 sessionId 均非空且一致时成立；
+ * 其余情况（无 sessionId 的新会话、后台侧聊、主聊天）一律回退中心弹窗，
+ * 保证请求永远有处可答。
+ */
+export function shouldRoutePermissionToSideChat({
+    requestSessionId,
+    sideChatSessionId,
+}: {
+    requestSessionId?: string | null;
+    sideChatSessionId?: string | null;
+}): boolean {
+    const request = requestSessionId?.trim();
+    const sideChat = sideChatSessionId?.trim();
+    return Boolean(request && sideChat && request === sideChat);
+}
+
 function isPermissionDialogCandidatePresent(
     hasCandidate: boolean | undefined,
     timestamp: string | null | undefined,

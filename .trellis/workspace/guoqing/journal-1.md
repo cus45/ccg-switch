@@ -548,3 +548,9 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 **Date**: 2026-07-06
 
 继续错误反馈链路:1) send/sendInTab catch 加 toastSendFailure(错误截断 160 字,5s error toast)——发送期失败(daemon 掉线等)不再依赖视口内的消息错误块;2) store 新增 retryLastUserMessage(tabKey|null):取该 tab 最后一条 user 消息原始文本(raw text block 优先,附件消息/回合进行中/无消息返回 false)按 tab 路由重发;MessageItem 失败错误块(isLast)加「重新发送」按钮,经 paneTabContext 路由主/侧聊,false 时 warning toast 说明原因;3) dock 侧聊 tab 增失败红点(errorChatTabKeys,优先于未读蓝点),后台失败与新回复可区分。store 测试+2(重发成功路由/拒绝进行中与附件)。tsc/vitest 702 全绿。
+
+## Session 19 附加2: 权限弹窗按面板就地弹出 + Codex 子代理格式实证
+
+**Date**: 2026-07-06
+
+1) 权限就地弹窗:三个权限 dialog(AskUser/Plan/Tool)加 container='modal'|'inline'(inline 不 portal、absolute 覆盖宿主 pane、不注册全局快捷键防与中心 modal 双触发);新增 shouldRoutePermissionToSideChat(request.sessionId 与 dock 可见侧聊 tab.sessionId 均非空且相等才路由,其余一律中心兜底);ChatPane(side,relative)就地渲染归属本 pane 的请求,ChatPage 中心过滤已路由请求(getActivePermissionDialog 输入用过滤后的 center*)。spec component-guidelines 权限段同步改写。2) Codex 子代理历史:实证本机 ~/.codex/sessions 近 60 个真实会话(5500 shell 调用),0 条 spawn_agent/Task 子代理工具调用记录——无格式可依,暂缓实现(避免猜格式),结论入 journal。tsc/vitest 704 全绿(+2 路由测试)。

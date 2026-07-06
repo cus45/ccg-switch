@@ -11,6 +11,8 @@ interface AskUserQuestionDialogProps {
     request: AskUserQuestionRequest;
     onAnswer: (answers: Record<string, string>) => void;
     onCancel: () => void;
+    /** 'modal'=全屏居中（默认）；'inline'=限定在最近的 relative 祖先内（侧聊面板就地弹出）。 */
+    container?: 'modal' | 'inline';
 }
 
 const ASK_USER_QUESTION_FALLBACKS = {
@@ -235,6 +237,7 @@ export default function AskUserQuestionDialog({
     request,
     onAnswer,
     onCancel,
+    container = 'modal',
 }: AskUserQuestionDialogProps) {
     const {t} = useTranslation();
     const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -292,6 +295,8 @@ export default function AskUserQuestionDialog({
     }, [markSubmitted, onCancel]);
 
     useEffect(() => {
+        // inline（侧聊就地弹出）不占用全局快捷键，避免与中心 modal 双触发。
+        if (container === 'inline') return undefined;
         const handleKeyDown = (event: KeyboardEvent) => {
             const action = resolveAskUserQuestionShortcutAction(event.key, event.target);
             if (!action) return;
@@ -301,23 +306,18 @@ export default function AskUserQuestionDialog({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleCancel]);
+    }, [container, handleCancel]);
 
-    return createPortal(
-        <>
-            {/* 拖拽条（防止模态层遮挡窗口标题栏） */}
-            <div
-                className="fixed top-0 left-0 right-0 h-8 z-[9998]"
-                data-tauri-drag-region
-            />
-
-            {/* 背景蒙层 */}
-            <div
-                className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6"
-                onClick={handleCancel}
-            >
+    const inline = container === 'inline';
+    const overlay = (
+        <div
+            className={inline
+                ? 'absolute inset-0 z-30 flex items-center justify-center bg-black/30 p-3'
+                : 'fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6'}
+            onClick={handleCancel}
+        >
                 <div
-                    className="bg-white dark:bg-base-100 rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+                    className={`bg-white dark:bg-base-100 rounded-xl shadow-2xl max-w-2xl w-full ${inline ? 'max-h-full' : 'max-h-[80vh]'} overflow-hidden flex flex-col`}
                     aria-busy={submitted}
                     role="dialog"
                     aria-modal="true"
@@ -548,7 +548,21 @@ export default function AskUserQuestionDialog({
                         </div>
                     </div>
                 </div>
-            </div>
+        </div>
+    );
+
+    if (inline) {
+        return overlay;
+    }
+
+    return createPortal(
+        <>
+            {/* 拖拽条（防止模态层遮挡窗口标题栏） */}
+            <div
+                className="fixed top-0 left-0 right-0 h-8 z-[9998]"
+                data-tauri-drag-region
+            />
+            {overlay}
         </>,
         document.body,
     );

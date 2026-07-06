@@ -23,6 +23,7 @@ import {
     getNextTabAfterClose,
     getPaneResizeHandleLabel,
     getPaneWidthsAfterResize,
+    shouldRoutePermissionToSideChat,
     getRevealStateAfterServerExpansion,
     getScrollTopAfterPrepend,
     getSdkMissingBannerText,
@@ -906,6 +907,38 @@ describe('chat UI behavior', () => {
             sessionKey: 'codex::C:/sessions/active.jsonl',
             activeSessionKey: 'codex::C:/sessions/active.jsonl',
             pendingSessionKey: 'codex::C:/sessions/pending.jsonl',
+        })).toBe(false);
+    });
+});
+
+describe('shouldRoutePermissionToSideChat', () => {
+    it('routes only when both session ids are present and equal', () => {
+        expect(shouldRoutePermissionToSideChat({
+            requestSessionId: 'session-a',
+            sideChatSessionId: 'session-a',
+        })).toBe(true);
+        expect(shouldRoutePermissionToSideChat({
+            requestSessionId: ' session-a ',
+            sideChatSessionId: 'session-a',
+        })).toBe(true);
+    });
+
+    it('falls back to the center modal for missing or mismatched sessions', () => {
+        expect(shouldRoutePermissionToSideChat({
+            requestSessionId: 'session-a',
+            sideChatSessionId: 'session-b',
+        })).toBe(false);
+        expect(shouldRoutePermissionToSideChat({
+            requestSessionId: null,
+            sideChatSessionId: 'session-a',
+        })).toBe(false);
+        expect(shouldRoutePermissionToSideChat({
+            requestSessionId: 'session-a',
+            sideChatSessionId: null,
+        })).toBe(false);
+        expect(shouldRoutePermissionToSideChat({
+            requestSessionId: '  ',
+            sideChatSessionId: '  ',
         })).toBe(false);
     });
 });
