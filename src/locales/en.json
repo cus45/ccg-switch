@@ -66,7 +66,9 @@
             "waiting": "Waiting for response…",
             "streamingConnected": "Connected, generating response…",
             "turnFailed": "This turn failed",
-            "stoppedByUser": "Output stopped"
+            "stoppedByUser": "Output stopped",
+            "retryTurn": "Resend",
+            "retryUnavailable": "Cannot resend automatically: no previous message, it has attachments, or a turn is running"
         },
         "thinking": {
             "title": "AI is thinking…"
@@ -107,7 +109,8 @@
             "newSideChatDesc": "Open a second, parallel chat panel",
             "closeAllTabs": "Close all tabs",
             "sideChatWorking": "Working…",
-            "sideChatUnread": "New reply"
+            "sideChatUnread": "New reply",
+            "sideChatFailed": "Last turn failed"
         },
         "layout": {
             "anchorRail": "Message anchors",

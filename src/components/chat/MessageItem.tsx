@@ -1,8 +1,10 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AlertTriangle, Check, CircleSlash, Copy, User} from 'lucide-react';
+import {AlertTriangle, Check, CircleSlash, Copy, RefreshCw, User} from 'lucide-react';
 import type {ChatMessage, ContentBlock, TextBlock, ThinkingBlock, ToolResultBlock} from '../../types/chat';
-import {STOPPED_OUTPUT_ERROR} from '../../stores/useChatStore';
+import {STOPPED_OUTPUT_ERROR, useChatStore} from '../../stores/useChatStore';
+import {useChatPaneTabKey} from './paneTabContext';
+import {showToast} from '../common/ToastContainer';
 import {cn} from '../../utils/cn';
 import {getRenderableContentBlocks, shouldRenderChatMessage,} from '../../utils/chatMessageFlow';
 import ContentBlockRenderer from './ContentBlockRenderer';
@@ -67,6 +69,8 @@ export default function MessageItem({
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const copyTimerRef = useRef<number | null>(null);
+    // 宿主 pane 的 tab（侧聊）；null=主聊天全局投影。重发按钮据此路由到正确会话。
+    const paneTabKey = useChatPaneTabKey();
 
     const isUser = message.role === 'user';
     const isAssistant = message.role === 'assistant';
@@ -110,7 +114,18 @@ export default function MessageItem({
     );
     const turnFailedLabel = translateWithFallback(t, 'chat.message.turnFailed', 'This turn failed');
     const stoppedByUserLabel = translateWithFallback(t, 'chat.message.stoppedByUser', 'Output stopped');
+    const retryTurnLabel = translateWithFallback(t, 'chat.message.retryTurn', 'Resend');
+    const retryUnavailableLabel = translateWithFallback(
+        t,
+        'chat.message.retryUnavailable',
+        'Cannot resend automatically: no previous message, it has attachments, or a turn is running',
+    );
     const isStoppedByUser = message.error === STOPPED_OUTPUT_ERROR;
+    const handleRetryTurn = () => {
+        void useChatStore.getState().retryLastUserMessage(paneTabKey).then((ok) => {
+            if (!ok) showToast(retryUnavailableLabel, 'warning');
+        });
+    };
     // 失败/中止的可见反馈：内容为空时用户不该面对一个空气泡（尤其 send 直接抛错的场景）。
     const assistantErrorNotice = isAssistant && !message.streaming && message.error
         ? (isStoppedByUser
@@ -123,10 +138,20 @@ export default function MessageItem({
             : (
                 <div className="mt-2 flex items-start gap-2 rounded-lg border border-error/30 bg-error/5 px-3 py-2 text-xs text-error">
                     <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                    <span className="min-w-0 whitespace-pre-wrap break-words">
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
                         <span className="font-medium">{turnFailedLabel}</span>
                         {message.error.trim() ? `: ${message.error.trim()}` : ''}
                     </span>
+                    {isLast && (
+                        <button
+                            type="button"
+                            className="btn btn-ghost btn-xs h-6 min-h-0 shrink-0 gap-1 px-2 text-error"
+                            onClick={handleRetryTurn}
+                        >
+                            <RefreshCw size={12} />
+                            {retryTurnLabel}
+                        </button>
+                    )}
                 </div>
             ))
         : null;

@@ -28,7 +28,7 @@ import {
 import {AskUserQuestionRequest, PlanApprovalRequest, ToolPermissionRequest,} from '../types/permission';
 import type {ChatProviderId, PermissionMode, ReasoningEffort,} from '../components/chat/composer/constants';
 import {apply1MContextSuffix, reasoningLevelsFor, strip1MContextSuffix,} from '../components/chat/composer/constants';
-import {isProtocolContextText, mergeRawChatMessage, TOOL_RESULT_CONTENT} from '../utils/chatMessageFlow';
+import {getContentBlocksFromRaw, isProtocolContextText, mergeRawChatMessage, TOOL_RESULT_CONTENT} from '../utils/chatMessageFlow';
 import {
     type ChatTurnStopOutcome,
     notifyChatTurnStopped,
@@ -37,6 +37,7 @@ import {
 import {CHAT_DAEMON_READY_TIMEOUT_ERROR_KEY} from '../utils/chatDaemonStatus';
 import {CHAT_MODEL_SELECTION_KEY_PREFIX, getDefaultChatModelId,} from '../utils/chatModels';
 import {getNextTabAfterClose} from '../utils/chatUiBehavior';
+import {showToast} from '../components/common/ToastContainer';
 
 const DRAFT_KEY_PREFIX = 'ccg-chat-draft:';
 const REASONING_KEY = 'ccg-chat-reasoning';
@@ -51,6 +52,16 @@ const SESSION_HISTORY_FIRST_PAINT_LIMIT = 120;
 const SESSION_HISTORY_FULL_MAP_CHUNK_SIZE = 250;
 /** 用户主动中止一轮回复时写入 assistant 消息的 error 标记（UI 据此区分中止与失败）。 */
 export const STOPPED_OUTPUT_ERROR = '已停止输出';
+
+/**
+ * 发送本身失败（未建立流）时的即时反馈：消息流里的错误块可能在视口外
+ * （用户上滚或失败发生在后台侧聊），toast 保证失败不静默。
+ */
+function toastSendFailure(error: unknown): void {
+    const detail = String(error).trim().replace(/\s+/g, ' ');
+    const clipped = detail.length > 160 ? `${detail.slice(0, 159)}…` : detail;
+    showToast(clipped ? `发送失败: ${clipped}` : '发送失败', 'error', 5000);
+}
 const DEFAULT_PERMISSION_SESSION_ID = 'default';
 const CHAT_DAEMON_READY_TIMEOUT_MS = 15_000;
 const DAEMON_LOG_LIMIT = 500;
@@ -452,6 +463,11 @@ interface ChatState {
     closeSideChat: (key: string) => void;
     /** 同步 dock 当前可见的侧聊 tab（null=dock 未显示侧聊）；置为可见即视为已读。 */
     setDockChatTabKey: (key: string | null) => void;
+    /**
+     * 重发指定 tab（null=全局活跃投影）最后一条用户消息（失败回复的「重新发送」）。
+     * 无用户消息、消息含附件（无法可靠还原）、或该 tab 仍在回合中时返回 false。
+     */
+    retryLastUserMessage: (tabKey?: string | null) => Promise<boolean>;
     markProviderConfigDirty: () => Promise<void>;
     startNewSession: (cwd?: string | null) => Promise<void>;
     abort: () => Promise<void>;
@@ -1808,6 +1824,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             return true;
         } catch (e) {
             pendingSendOwners.delete(assistantMsg.id);
+            toastSendFailure(e);
             notifyStoppedRequestOnce(
                 `send-error:${assistantMsg.id}`,
                 'error',
@@ -1940,6 +1957,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             return true;
         } catch (e) {
             pendingSendOwners.delete(assistantMsg.id);
+            toastSendFailure(e);
             notifyStoppedRequestOnce(
                 `send-error:${assistantMsg.id}`,
                 'error',
@@ -2476,6 +2494,38 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 : state.openTabs;
             return {dockChatTabKey: key, openTabs};
         });
+    },
+
+    retryLastUserMessage: async (tabKey) => {
+        const state = get();
+        const key = tabKey ?? null;
+        const source = !key || key === state.activeTabKey
+            ? state
+            : state.openTabs.find((tab) => tab.key === key);
+        if (!source) return false;
+        // 该 tab 仍有进行中的回合时不重发，避免连点造成并发混乱。
+        if (source.activeRequestId) return false;
+
+        const lastUser = [...source.messages].reverse().find((message) => message.role === 'user');
+        if (!lastUser) return false;
+        const blocks = getContentBlocksFromRaw(lastUser.raw);
+        // 图片附件无法从历史消息可靠还原（临时文件可能已清理），不自动重发。
+        if (blocks.some((block) => block.type === 'image' || block.type === 'input_image')) {
+            return false;
+        }
+        // 优先取原始发送文本（content 可能是增强后的展示文本）。
+        const rawText = blocks
+            .filter((block) => block.type === 'text')
+            .map((block) => block.text)
+            .join('\n')
+            .trim();
+        const text = rawText || lastUser.content.trim();
+        if (!text) return false;
+
+        if (key && key !== state.activeTabKey) {
+            return get().sendInTab(key, text);
+        }
+        return get().send(text);
     },
 
     markProviderConfigDirty: async () => {

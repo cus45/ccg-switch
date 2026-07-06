@@ -55,7 +55,9 @@
             "waiting": "正在等待响应…",
             "streamingConnected": "已连接，正在生成回复…",
             "turnFailed": "本轮回复失败",
-            "stoppedByUser": "已停止输出"
+            "stoppedByUser": "已停止输出",
+            "retryTurn": "重新发送",
+            "retryUnavailable": "无法自动重发：没有上一条消息、消息包含附件，或回合仍在进行"
         },
         "thinking": {
             "title": "AI 正在思考…"
@@ -96,7 +98,8 @@
             "newSideChatDesc": "开启并行的第二个聊天面板",
             "closeAllTabs": "关闭全部标签页",
             "sideChatWorking": "对话进行中",
-            "sideChatUnread": "有新回复"
+            "sideChatUnread": "有新回复",
+            "sideChatFailed": "上轮回复失败"
         },
         "layout": {
             "anchorRail": "消息锚点",

@@ -90,6 +90,10 @@ export default function DockShell({
     const unreadChatTabKeys = useChatStore(useShallow((state) => state.openTabs
         .filter((tab) => Boolean(tab.unread))
         .map((tab) => tab.key)));
+    // 上轮失败的聊天 tab key（侧聊文档 tab 显示失败红点，优先于未读蓝点）。
+    const errorChatTabKeys = useChatStore(useShallow((state) => state.openTabs
+        .filter((tab) => tab.status === 'error')
+        .map((tab) => tab.key)));
 
     const activeDoc = docState.documents.find((doc) => doc.id === docState.activeDocId) ?? null;
     // 同步「dock 当前可见的侧聊」到 store：完成回合的未读判定与聚焦即读都依赖它。
@@ -211,6 +215,7 @@ export default function DockShell({
                     activeDocId={docState.activeDocId}
                     busyChatTabKeys={busyChatTabKeys}
                     unreadChatTabKeys={unreadChatTabKeys}
+                    errorChatTabKeys={errorChatTabKeys}
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onShowMenu={handleShowMenu}

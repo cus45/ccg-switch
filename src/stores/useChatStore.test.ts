@@ -274,6 +274,70 @@ describe('useChatStore session transitions', () => {
         expect(sideTab()?.unread).toBeFalsy();
     });
 
+    it('retryLastUserMessage resends the last user text into its tab', async () => {
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        tauriMocks.invoke.mockResolvedValueOnce('req-retry-1');
+        await useChatStore.getState().sendInTab(sideKey, 'retry me');
+        // 模拟回合失败结束：请求退役、状态 error。
+        useChatStore.setState((state) => ({
+            openTabs: state.openTabs.map((tab) => (
+                tab.key === sideKey ? {...tab, activeRequestId: null, status: 'error' as const} : tab
+            )),
+        }));
+
+        tauriMocks.invoke.mockResolvedValueOnce('req-retry-2');
+        const ok = await useChatStore.getState().retryLastUserMessage(sideKey);
+
+        expect(ok).toBe(true);
+        const side = useChatStore.getState().openTabs.find((tab) => tab.key === sideKey);
+        const userMessages = side?.messages.filter((message) => message.role === 'user') ?? [];
+        expect(userMessages).toHaveLength(2);
+        expect(userMessages[1].content).toBe('retry me');
+    });
+
+    it('retryLastUserMessage refuses in-flight turns and attachment messages', async () => {
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        tauriMocks.invoke.mockResolvedValueOnce('req-retry-busy');
+        await useChatStore.getState().sendInTab(sideKey, 'still running');
+        // 回合仍在进行（activeRequestId 未清）→ 拒绝重发。
+        expect(await useChatStore.getState().retryLastUserMessage(sideKey)).toBe(false);
+
+        // 附件消息（图片无法可靠还原）→ 拒绝重发。
+        useChatStore.setState((state) => ({
+            openTabs: state.openTabs.map((tab) => (
+                tab.key === sideKey
+                    ? {
+                        ...tab,
+                        activeRequestId: null,
+                        status: 'error' as const,
+                        messages: [{
+                            id: 'user-attach',
+                            role: 'user' as const,
+                            content: 'Please analyze the attached image(s).',
+                            raw: {content: [{type: 'image', media_type: 'image/png', data: 'x'}]} as never,
+                            createdAt: Date.now(),
+                        }],
+                    }
+                    : tab
+            )),
+        }));
+        expect(await useChatStore.getState().retryLastUserMessage(sideKey)).toBe(false);
+    });
+
     it('sendInTab streams into the side tab and routes its request without disturbing the active center tab', async () => {
         useChatStore.setState({
             messages: activeMessages,

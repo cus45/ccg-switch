@@ -11,6 +11,8 @@ interface DockTabBarProps {
     busyChatTabKeys: string[];
     /** 后台完成回合、尚未查看的聊天 tab key；侧聊文档 tab 据此显示未读点。 */
     unreadChatTabKeys: string[];
+    /** 上轮失败的聊天 tab key；侧聊文档 tab 显示失败红点（优先于未读）。 */
+    errorChatTabKeys: string[];
     onActivate: (id: string) => void;
     onClose: (id: string) => void;
     /** 显示 dock 菜单页（新建入口都在菜单页里，tab 条不做扩展功能）。 */
@@ -30,6 +32,7 @@ export default function DockTabBar({
     activeDocId,
     busyChatTabKeys,
     unreadChatTabKeys,
+    errorChatTabKeys,
     onActivate,
     onClose,
     onShowMenu,
@@ -72,8 +75,14 @@ export default function DockTabBar({
                         && doc.kind === 'sideChat'
                         && Boolean(doc.chatTabKey)
                         && unreadChatTabKeys.includes(doc.chatTabKey as string);
+                    const failed = !busy
+                        && doc.kind === 'sideChat'
+                        && Boolean(doc.chatTabKey)
+                        && errorChatTabKeys.includes(doc.chatTabKey as string);
                     const workingLabel = tf('chat.dock.sideChatWorking', 'Working…');
                     const unreadLabel = tf('chat.dock.sideChatUnread', 'New reply');
+                    const failedLabel = tf('chat.dock.sideChatFailed', 'Last turn failed');
+                    const statusHint = busy ? workingLabel : failed ? failedLabel : unread ? unreadLabel : null;
                     return (
                         <div
                             key={doc.id}
@@ -87,7 +96,7 @@ export default function DockTabBar({
                             <button
                                 type="button"
                                 className="flex min-w-0 items-center gap-1"
-                                title={busy ? `${doc.title} · ${workingLabel}` : unread ? `${doc.title} · ${unreadLabel}` : doc.title}
+                                title={statusHint ? `${doc.title} · ${statusHint}` : doc.title}
                                 onClick={() => onActivate(doc.id)}
                             >
                                 {busy ? (
@@ -95,14 +104,20 @@ export default function DockTabBar({
                                 ) : (
                                     <Icon size={13} className="shrink-0" />
                                 )}
-                                <span className={cn('truncate', unread && 'font-semibold')}>{doc.title}</span>
-                                {unread && (
+                                <span className={cn('truncate', (unread || failed) && 'font-semibold')}>{doc.title}</span>
+                                {failed ? (
+                                    <span
+                                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-error"
+                                        title={failedLabel}
+                                        aria-label={failedLabel}
+                                    />
+                                ) : unread ? (
                                     <span
                                         className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
                                         title={unreadLabel}
                                         aria-label={unreadLabel}
                                     />
-                                )}
+                                ) : null}
                             </button>
                             <button
                                 type="button"
