@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-      {
+        {
+    version: '1.6.6',
+    date: '2026-07-07',
+    type: 'minor',
+    changes: [
+      { type: 'feature', text: '优化聊天交互' }
+    ]
+  },
+{
     version: '1.6.5',
     date: '2026-06-26',
     type: 'minor',
