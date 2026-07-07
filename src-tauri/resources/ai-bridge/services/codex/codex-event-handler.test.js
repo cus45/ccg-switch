@@ -83,6 +83,46 @@ test('Codex item.updated agent_message emits incremental content deltas before c
   });
 });
 
+test('Codex turn.completed emits a [USAGE] line for the frontend context ring', async () => {
+  const emittedMessages = [];
+  const state = createInitialEventState((message) => emittedMessages.push(message));
+
+  const captured = await captureStdout(async () => {
+    await processCodexEventStream(
+      eventsFrom([
+        {
+          type: 'turn.completed',
+          usage: { input_tokens: 1200, cached_input_tokens: 300, output_tokens: 45 },
+        },
+      ]),
+      state,
+      makeConfig(),
+    );
+  });
+
+  const usageLines = tagLines(captured, '[USAGE]');
+  assert.equal(usageLines.length, 1);
+  const payload = JSON.parse(usageLines[0].slice('[USAGE]'.length).trim());
+  assert.equal(payload.input_tokens, 1200);
+  assert.equal(payload.cache_read_input_tokens, 300);
+  assert.equal(payload.output_tokens, 45);
+  assert.equal(payload.cache_creation_input_tokens, 0);
+  // Codex 侧不知上下文窗口：不发 max_tokens，前端回退静态模型表。
+  assert.equal('max_tokens' in payload, false);
+
+  // 既有 result/usage 消息通道保持不变。
+  const usageMessages = emittedMessages.filter(
+    (message) => message.type === 'result' && message.subtype === 'usage',
+  );
+  assert.equal(usageMessages.length, 1);
+  assert.deepEqual(usageMessages[0].usage, {
+    input_tokens: 1200,
+    output_tokens: 45,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 300,
+  });
+});
+
 test('isWindowsTaskkillParseNoise: matches English SUCCESS taskkill output', () => {
   const message =
     'Failed to parse item: SUCCESS: The process with PID 12345 (child process of PID 67890) has been terminated.';

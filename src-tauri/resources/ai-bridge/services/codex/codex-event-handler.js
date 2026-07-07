@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { readFile, unlink, writeFile } from 'fs/promises';
 import { requestPermissionFromJava } from '../../permission-handler.js';
+import { emitAccumulatedUsage } from '../../utils/usage-utils.js';
 import { findSessionFileByThreadId } from './codex-agents-loader.js';
 import { extractPatchFromResponseItemPayload, parseApplyPatchToOperations } from './codex-patch-parser.js';
 import {
@@ -756,6 +757,9 @@ export async function processCodexEventStream(events, state, config) {
             cache_creation_input_tokens: 0,
             cache_read_input_tokens: event.usage.cached_input_tokens || 0
           };
+          // 跨层协议契约：Claude/Codex 回合后都要发 [USAGE] 行驱动前端用量环。
+          // Codex 侧不知上下文窗口，省略 max_tokens 由前端回退静态模型表。
+          emitAccumulatedUsage(claudeUsage);
           state.emitMessage({
             type: 'result', subtype: 'usage', is_error: false,
             usage: claudeUsage, session_id: state.currentThreadId, uuid: randomUUID()
