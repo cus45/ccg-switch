@@ -12,7 +12,7 @@ impl Database {
     pub fn list_providers(&self) -> Result<Vec<Provider>, String> {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
-            .prepare("SELECT id, name, app_type, api_key, url, default_sonnet_model, default_opus_model, default_haiku_model, default_reasoning_model, custom_params, settings_config, meta, icon, in_failover_queue, description, tags, is_active, created_at, last_used, proxy_config FROM providers ORDER BY name ASC")
+            .prepare("SELECT id, name, app_type, api_key, url, default_sonnet_model, default_opus_model, default_haiku_model, default_reasoning_model, custom_params, settings_config, meta, icon, in_failover_queue, description, tags, is_active, created_at, last_used, proxy_config FROM providers ORDER BY sort_order ASC, name ASC")
             .map_err(|e| format!("Failed to prepare query: {e}"))?;
 
         let rows = stmt
@@ -125,8 +125,29 @@ impl Database {
             .as_ref()
             .and_then(|v| serde_json::to_string(v).ok());
 
+        // 新增行排到队尾（MAX(sort_order)+1）；更新已有行时不触碰 sort_order，保持用户拖拽顺序
         conn.execute(
-            "INSERT OR REPLACE INTO providers (id, name, app_type, api_key, url, default_sonnet_model, default_opus_model, default_haiku_model, default_reasoning_model, custom_params, settings_config, meta, icon, in_failover_queue, description, tags, is_active, created_at, last_used, proxy_config) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+            "INSERT INTO providers (id, name, app_type, api_key, url, default_sonnet_model, default_opus_model, default_haiku_model, default_reasoning_model, custom_params, settings_config, meta, icon, in_failover_queue, description, tags, is_active, created_at, last_used, proxy_config, sort_order) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM providers))
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                app_type = excluded.app_type,
+                api_key = excluded.api_key,
+                url = excluded.url,
+                default_sonnet_model = excluded.default_sonnet_model,
+                default_opus_model = excluded.default_opus_model,
+                default_haiku_model = excluded.default_haiku_model,
+                default_reasoning_model = excluded.default_reasoning_model,
+                custom_params = excluded.custom_params,
+                settings_config = excluded.settings_config,
+                meta = excluded.meta,
+                icon = excluded.icon,
+                in_failover_queue = excluded.in_failover_queue,
+                description = excluded.description,
+                tags = excluded.tags,
+                is_active = excluded.is_active,
+                created_at = excluded.created_at,
+                last_used = excluded.last_used,
+                proxy_config = excluded.proxy_config",
             rusqlite::params![
                 provider.id,
                 provider.name,
@@ -151,6 +172,24 @@ impl Database {
             ],
         )
         .map_err(|e| format!("Failed to upsert provider: {e}"))?;
+        Ok(())
+    }
+
+    /// 按给定 id 顺序重写 sort_order（0..n），用于拖拽排序持久化
+    pub fn update_provider_sort_orders(&self, ordered_ids: &[String]) -> Result<(), String> {
+        let mut conn = lock_conn!(self.conn);
+        let tx = conn
+            .transaction()
+            .map_err(|e| format!("Failed to begin transaction: {e}"))?;
+        for (index, id) in ordered_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE providers SET sort_order = ?1 WHERE id = ?2",
+                rusqlite::params![index as i64, id],
+            )
+            .map_err(|e| format!("Failed to update sort order: {e}"))?;
+        }
+        tx.commit()
+            .map_err(|e| format!("Failed to commit sort order: {e}"))?;
         Ok(())
     }
 
@@ -191,7 +230,7 @@ impl Database {
     pub fn list_providers_by_app(&self, app_type: &str) -> Result<Vec<Provider>, String> {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
-            .prepare("SELECT id, name, app_type, api_key, url, default_sonnet_model, default_opus_model, default_haiku_model, default_reasoning_model, custom_params, settings_config, meta, icon, in_failover_queue, description, tags, is_active, created_at, last_used, proxy_config FROM providers WHERE app_type = ?1 ORDER BY name ASC")
+            .prepare("SELECT id, name, app_type, api_key, url, default_sonnet_model, default_opus_model, default_haiku_model, default_reasoning_model, custom_params, settings_config, meta, icon, in_failover_queue, description, tags, is_active, created_at, last_used, proxy_config FROM providers WHERE app_type = ?1 ORDER BY sort_order ASC, name ASC")
             .map_err(|e| format!("Failed to prepare query: {e}"))?;
 
         let rows = stmt

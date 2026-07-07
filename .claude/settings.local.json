@@ -69,7 +69,11 @@
       "Bash(npx vitest *)",
       "Bash(dir *)",
       "Bash(cargo test *)",
-      "Bash([ -f \"$f\" ])"
+      "Bash([ -f \"$f\" ])",
+      "Read(//c/Program Files/Microsoft Visual Studio/18/Community/VC/Auxiliary/Build/**)",
+      "Read(//c/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/**)",
+      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo_check.bat\")",
+      "Bash(printf '@echo off\\\\ncall \"C:\\\\\\\\Program Files\\\\\\\\Microsoft Visual Studio\\\\\\\\18\\\\\\\\Community\\\\\\\\VC\\\\\\\\Auxiliary\\\\\\\\Build\\\\\\\\vcvars64.bat\" >nul 2>&1\\\\ncd /d C:\\\\\\\\guodevelop\\\\\\\\ccg-switch\\\\\\\\src-tauri\\\\ncargo test chat_commands 2>&1\\\\necho CARGO_EXIT_%%ERRORLEVEL%%\\\\n')"
     ]
   }
 }

@@ -51,7 +51,8 @@ impl Database {
 
     fn create_tables(&self) -> Result<(), String> {
         let conn = lock_conn!(self.conn);
-        schema::create_tables(&conn)
+        schema::create_tables(&conn)?;
+        schema::migrate(&conn)
     }
 
     #[cfg(test)]

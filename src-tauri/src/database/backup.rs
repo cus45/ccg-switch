@@ -4,6 +4,27 @@ use std::path::{Path, PathBuf};
 
 use crate::database::{lock_conn, Database};
 
+/// 读取指定 schema（main / backup_src）下某表的列名列表；表不存在时返回空
+fn table_columns(
+    conn: &rusqlite::Connection,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT name FROM {schema}.pragma_table_info('{table}')"
+        ))
+        .map_err(|e| format!("Failed to inspect table '{table}': {e}"))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Failed to read columns of '{table}': {e}"))?;
+    let mut cols = Vec::new();
+    for row in rows {
+        cols.push(row.map_err(|e| format!("Failed to read column name: {e}"))?);
+    }
+    Ok(cols)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupEntry {
@@ -168,13 +189,29 @@ impl Database {
         };
 
         // 逐表恢复：删除当前表数据，从备份复制
+        // 按两侧共有列的交集复制，兼容备份文件与当前库的 schema 列差异（如老备份缺新增列）
         for table in &table_names {
             // 安全检查：表名不应包含特殊字符
             if table.contains('\'') || table.contains('"') || table.contains(';') {
                 continue;
             }
+            let main_cols = table_columns(&conn, "main", table)?;
+            let backup_cols: std::collections::HashSet<String> =
+                table_columns(&conn, "backup_src", table)?.into_iter().collect();
+            let common: Vec<String> = main_cols
+                .into_iter()
+                .filter(|c| backup_cols.contains(c))
+                .collect();
+            if common.is_empty() {
+                continue;
+            }
+            let col_list = common
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
             conn.execute_batch(&format!(
-                "DELETE FROM main.\"{table}\"; INSERT INTO main.\"{table}\" SELECT * FROM backup_src.\"{table}\";"
+                "DELETE FROM main.\"{table}\"; INSERT INTO main.\"{table}\" ({col_list}) SELECT {col_list} FROM backup_src.\"{table}\";"
             ))
             .map_err(|e| format!("Failed to restore table '{table}': {e}"))?;
         }

@@ -156,12 +156,9 @@ pub fn move_provider_in_db(
     let insert_at = target_index.min(all.len());
     all.insert(insert_at, provider);
 
-    // 重新写入所有 providers
-    for p in all {
-        db.upsert_provider(&p)?;
-    }
-
-    Ok(())
+    // 按新顺序持久化 sort_order（0..n）
+    let ordered_ids: Vec<String> = all.into_iter().map(|p| p.id).collect();
+    db.update_provider_sort_orders(&ordered_ids)
 }
 
 /// 列出指定应用的 providers（兼容旧版，使用 DB）
@@ -975,4 +972,73 @@ fn sync_to_gemini_config(provider: &Provider) -> Result<(), io::Error> {
     crate::services::storage::json_store::write_json(&settings_path, &settings)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn test_provider(id: &str, name: &str) -> Provider {
+        Provider {
+            id: id.to_string(),
+            name: name.to_string(),
+            app_type: AppType::Claude,
+            api_key: "sk-test".to_string(),
+            url: None,
+            default_sonnet_model: None,
+            default_opus_model: None,
+            default_haiku_model: None,
+            default_reasoning_model: None,
+            custom_params: None,
+            settings_config: None,
+            meta: None,
+            icon: None,
+            in_failover_queue: false,
+            description: None,
+            tags: None,
+            is_active: false,
+            created_at: Utc::now(),
+            last_used: None,
+            proxy_config: None,
+        }
+    }
+
+    fn ids(providers: &[Provider]) -> Vec<&str> {
+        providers.iter().map(|p| p.id.as_str()).collect()
+    }
+
+    #[test]
+    fn move_provider_persists_new_order() {
+        let db = Arc::new(Database::in_memory().expect("init in-memory db"));
+        for (id, name) in [("p1", "Alpha"), ("p2", "Beta"), ("p3", "Gamma")] {
+            db.upsert_provider(&test_provider(id, name))
+                .expect("seed provider");
+        }
+
+        move_provider_in_db(&db, "p3", 0).expect("move provider");
+
+        let providers = db.list_providers().expect("list providers");
+        assert_eq!(ids(&providers), vec!["p3", "p1", "p2"]);
+    }
+
+    #[test]
+    fn upsert_keeps_position_on_update_and_appends_new() {
+        let db = Arc::new(Database::in_memory().expect("init in-memory db"));
+        for (id, name) in [("p1", "Alpha"), ("p2", "Beta")] {
+            db.upsert_provider(&test_provider(id, name))
+                .expect("seed provider");
+        }
+        move_provider_in_db(&db, "p2", 0).expect("move provider");
+
+        // 更新已有 provider（即使改名）不应改变其拖拽后的位置
+        db.upsert_provider(&test_provider("p1", "Zulu"))
+            .expect("update provider");
+        // 新增 provider 应排到队尾（即使名称字典序最小）
+        db.upsert_provider(&test_provider("p3", "AAA"))
+            .expect("add provider");
+
+        let providers = db.list_providers().expect("list providers");
+        assert_eq!(ids(&providers), vec!["p2", "p1", "p3"]);
+    }
 }

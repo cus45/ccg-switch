@@ -77,7 +77,8 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
             is_active BOOLEAN NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL,
             last_used INTEGER,
-            proxy_config TEXT
+            proxy_config TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0
         );
 
         -- 全局代理配置表（单行表）
@@ -130,4 +131,30 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
         ",
     )
     .map_err(|e| format!("Failed to create tables: {e}"))
+}
+
+/// 幂等迁移：老库补齐新增列
+pub fn migrate(conn: &Connection) -> Result<(), String> {
+    let has_sort_order: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('providers') WHERE name = 'sort_order'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Failed to inspect providers schema: {e}"))?;
+
+    if !has_sort_order {
+        // 按迁移前的展示顺序（名称升序）初始化，避免升级后列表顺序跳变
+        conn.execute_batch(
+            "ALTER TABLE providers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+             UPDATE providers SET sort_order = (
+                 SELECT COUNT(*) FROM providers p2
+                 WHERE p2.name < providers.name
+                    OR (p2.name = providers.name AND p2.id < providers.id)
+             );",
+        )
+        .map_err(|e| format!("Failed to add providers.sort_order: {e}"))?;
+    }
+
+    Ok(())
 }
