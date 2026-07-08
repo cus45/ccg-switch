@@ -899,8 +899,8 @@ export default function ChatSessionSidebar({
     };
 
     return (
-        <aside className="hidden w-72 shrink-0 border-r border-base-300 bg-base-100/80 lg:flex lg:flex-col">
-            <div className="flex items-center justify-between border-b border-base-300 px-3 py-2">
+        <aside className="hidden w-72 shrink-0 border-r border-base-200/60 bg-base-100/80 lg:flex lg:flex-col">
+            <div className="flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-base-content">
                     <MessageSquare size={15}/>
                     {panelTitleLabel}
@@ -940,7 +940,7 @@ export default function ChatSessionSidebar({
                 </div>
             </div>
 
-            <div className="border-b border-base-300 p-2">
+            <div className="p-2">
                 <div className="chat-session-sidebar-mode-switch grid grid-cols-2 gap-1 rounded-md bg-base-200/60 p-1">
                     <button
                         type="button"

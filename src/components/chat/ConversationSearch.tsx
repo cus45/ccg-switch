@@ -30,8 +30,8 @@ const ConversationSearch = forwardRef<HTMLInputElement, ConversationSearchProps>
     };
 
     return (
-        <div className="border-b border-base-300 bg-base-100/90 px-4 py-2 shadow-sm backdrop-blur">
-            <div className="mx-auto flex w-full max-w-4xl items-center gap-2 rounded-full border border-base-300 bg-base-200/40 px-3 py-1.5 text-xs text-base-content/60 transition-colors focus-within:border-base-content/30 focus-within:bg-base-100 hover:border-base-content/20">
+        <div className="bg-base-100/90 px-4 py-2 backdrop-blur">
+            <div className="mx-auto flex w-full max-w-4xl items-center gap-2 rounded-full border border-base-200/70 bg-base-200/40 px-3 py-1.5 text-xs text-base-content/60 transition-colors focus-within:border-base-content/30 focus-within:bg-base-100 hover:border-base-content/20">
                 <Search size={14} className="flex-shrink-0 text-base-content/40" />
                 <input
                     ref={ref}

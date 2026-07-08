@@ -383,7 +383,7 @@ export default function ChatPage() {
     return (
         <div className="flex flex-col h-full">
             {/* 头部：daemon 状态 + 依赖 + 清空 */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-base-300">
+            <div className="flex items-center justify-between px-4 py-2.5">
                 <div className="flex items-center gap-1.5 text-xs" title={daemonDiagnosticDisplayText ?? daemonStatusText}>
                     <span
                         className={`inline-block w-2 h-2 rounded-full ${daemonIndicatorClass}`}

@@ -95,7 +95,7 @@ export default function ChatSessionTabs({
         <div
             role="tablist"
             aria-label={tabListLabel}
-            className="chat-session-tabs-strip relative flex h-8 min-h-8 shrink-0 items-end gap-0.5 overflow-hidden border-b border-base-300 bg-base-100/85 px-1 pt-1"
+            className="chat-session-tabs-strip relative flex h-8 min-h-8 shrink-0 items-end gap-0.5 overflow-hidden border-b border-base-200/60 bg-base-100/85 px-1 pt-1"
         >
             {tabs.map((tab) => {
                 const active = tab.key === activeTabKey;

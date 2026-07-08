@@ -192,7 +192,7 @@ export default function DockShell({
         // 同位同样式（同一个开关的两个状态），不再用悬浮圆球。
         return (
             <aside
-                className="flex h-full w-9 shrink-0 flex-col items-center border-l border-gray-100 bg-white py-1.5 dark:border-base-200 dark:bg-base-100"
+                className="flex h-full w-9 shrink-0 flex-col items-center border-l border-base-200/60 bg-white py-1.5 dark:bg-base-100"
                 data-chat-right-dock="true"
             >
                 <button
@@ -212,10 +212,10 @@ export default function DockShell({
 
     return (
         <aside
-            className={`flex h-full ${hasDocuments ? 'w-[min(46vw,820px)]' : 'w-[360px]'} shrink-0 flex-col border-l border-gray-100 bg-white dark:border-base-200 dark:bg-base-100`}
+            className={`flex h-full ${hasDocuments ? 'w-[min(46vw,820px)]' : 'w-[360px]'} shrink-0 flex-col border-l border-base-200/60 bg-white dark:bg-base-100`}
             data-chat-right-dock="true"
         >
-            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-2 py-1.5 dark:border-base-200">
+            <div className="flex items-center justify-between gap-2 border-b border-base-200/60 px-2 py-1.5">
                 <DockTabBar
                     documents={docState.documents}
                     activeDocId={docState.activeDocId}
@@ -238,7 +238,7 @@ export default function DockShell({
             </div>
 
             {statusStrip && (
-                <div className="border-b border-gray-100 dark:border-base-200">{statusStrip}</div>
+                <div>{statusStrip}</div>
             )}
 
             <div className="min-h-0 flex-1 overflow-hidden">

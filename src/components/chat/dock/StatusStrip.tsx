@@ -102,7 +102,7 @@ export default function StatusStrip({
 
             {expanded && (
                 <div
-                    className="flex min-h-0 flex-col overflow-hidden border-t border-gray-100 dark:border-base-200"
+                    className="flex min-h-0 flex-col overflow-hidden border-t border-base-200/60"
                     style={{height: 'min(50vh, 460px)'}}
                 >
                     <StatusPanel showEdits={false} {...diagnostics} />
