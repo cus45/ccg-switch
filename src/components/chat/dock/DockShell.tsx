@@ -43,9 +43,8 @@ interface DockShellProps {
     onDiffWrapLinesChange: (wrap: boolean) => void;
     /**
      * Optional status strip rendered above the dock body (daemon / context usage).
-     * Wired in by ChatPage; the collapsed dock occupies no layout width, so the
-     * parent flex container must be `position: relative` for the floating expand
-     * button to anchor to the conversation area's top-right corner.
+     * Wired in by ChatPage. Collapsed state keeps a fixed narrow rail (w-9) in
+     * normal flow — the expand button sits where the header collapse button is.
      */
     statusStrip?: ReactNode;
 }
@@ -189,16 +188,23 @@ export default function DockShell({
     const collapseLabel = tf('chat.dock.collapse', 'Collapse tool dock');
 
     if (collapsed) {
+        // 收起态保留一个固定窄条停靠右缘：展开按钮与展开态 header 的收起按钮
+        // 同位同样式（同一个开关的两个状态），不再用悬浮圆球。
         return (
-            <button
-                type="button"
-                className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm hover:text-gray-700 dark:border-base-300 dark:bg-base-100 dark:text-base-content/70"
-                title={expandLabel}
-                aria-label={expandLabel}
-                onClick={() => setCollapsed(false)}
+            <aside
+                className="flex h-full w-9 shrink-0 flex-col items-center border-l border-gray-100 bg-white py-1.5 dark:border-base-200 dark:bg-base-100"
+                data-chat-right-dock="true"
             >
-                <PanelRightOpen size={16} />
-            </button>
+                <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-gray-600 dark:hover:text-base-content"
+                    title={expandLabel}
+                    aria-label={expandLabel}
+                    onClick={() => setCollapsed(false)}
+                >
+                    <PanelRightOpen size={16} />
+                </button>
+            </aside>
         );
     }
 

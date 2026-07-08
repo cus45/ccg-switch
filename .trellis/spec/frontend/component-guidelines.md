@@ -71,6 +71,10 @@ are **dropped on restore** (the chat tab pool does not survive restarts).
 - Empty state reuses `DockMenu` as the launcher; width is ~360px empty and
   `min(46vw, 820px)` with documents; collapse/expand reuses `rightDockState`
   (only the `collapsed` field — `activePanel` is kept for the rollback path).
+  Collapsed `DockShell` renders a fixed narrow rail (`w-9`, normal flex flow)
+  with the expand button at the top — same size/style/position as the header's
+  collapse button, NOT a floating bubble over the conversation area (the
+  floating-button pattern remains only in the legacy `RightDock`).
 - Rollback: `ChatPage` picks `DockShell` vs legacy `RightDock` via
   `isDockShellEnabled()` (`localStorage ccg-chat-dock-shell` = `0|false|off`
   disables). Both docks share an identical prop shape — keep it that way.
