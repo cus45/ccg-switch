@@ -2401,6 +2401,10 @@
   gap: 12px;
 }
 
+.subagent-process-header > div {
+  min-width: 0;
+}
+
 .subagent-process-title {
   font-size: 12px;
   font-weight: 600;
@@ -2412,6 +2416,7 @@
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 11px;
   color: oklch(var(--bc) / 0.5);
+  overflow-wrap: anywhere;
 }
 
 .subagent-process-stats {

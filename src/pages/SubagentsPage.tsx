@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next';
-import { Bot, Plus, RefreshCw, Trash2, Edit, Eye } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useSubagentStore } from '../stores/useSubagentStore';
+import {useTranslation} from 'react-i18next';
+import {Bot, Edit, Eye, Plus, RefreshCw, Trash2} from 'lucide-react';
+import {useEffect, useState} from 'react';
+import {useSubagentStore} from '../stores/useSubagentStore';
 import ModalDialog from '../components/common/ModalDialog';
-import { showToast } from '../components/common/ToastContainer';
+import {showToast} from '../components/common/ToastContainer';
 
 function SubagentsPage() {
     const { t } = useTranslation();
@@ -149,7 +149,7 @@ function SubagentsPage() {
                                     </div>
                                 </div>
                                 {previewName === agent.name && (
-                                    <pre className="mt-3 p-3 bg-gray-50 dark:bg-base-200 rounded-lg text-sm text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
+                                    <pre className="mt-3 p-3 bg-gray-50 dark:bg-base-200 rounded-lg text-sm text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
                                         {agent.content}
                                     </pre>
                                 )}
