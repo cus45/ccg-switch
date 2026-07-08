@@ -554,7 +554,7 @@ export default function SubagentHistoryPanel({
                 />
                 <div
                     ref={trajectoryRef}
-                    className="max-h-96 space-y-3 overflow-y-auto pr-1"
+                    className="max-h-96 space-y-3 overflow-y-auto overflow-x-hidden pr-1"
                     onScroll={handleTrajectoryScroll}
                 >
                     {renderMessages.map((message, messageIndex) => {
@@ -564,7 +564,10 @@ export default function SubagentHistoryPanel({
                         const blocks = getRenderableContentBlocks(message.raw);
                         if (blocks.length > 0) {
                             return (
-                                <div key={message.id} className="agent-history-message assistant-message-flow">
+                                <div
+                                    key={message.id}
+                                    className="agent-history-message assistant-message-flow min-w-0 max-w-full overflow-x-hidden"
+                                >
                                     <ContentBlockRenderer
                                         blocks={blocks}
                                         findToolResult={(id) => findToolResult(renderMessages, id, messageIndex)}

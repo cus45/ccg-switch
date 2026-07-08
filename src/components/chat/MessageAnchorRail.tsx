@@ -249,7 +249,7 @@ export default function MessageAnchorRail({
 
     return (
         <aside
-            className="hidden w-14 flex-shrink-0 bg-transparent lg:flex lg:flex-col lg:items-center lg:gap-3 lg:py-4"
+            className="relative z-40 hidden w-14 flex-shrink-0 bg-transparent lg:flex lg:flex-col lg:items-center lg:gap-3 lg:py-4"
             aria-label={anchorRailLabel}
         >
             <div className="flex h-8 w-8 items-center justify-center rounded-full border border-base-300 bg-base-100 text-base-content/50 shadow-sm">
