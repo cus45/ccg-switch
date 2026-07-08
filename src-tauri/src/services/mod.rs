@@ -12,6 +12,7 @@ pub mod prompt_service;
 pub mod prompt_service_v2;
 pub mod provider_service;
 pub mod proxy_service;
+pub mod proxy_takeover;
 pub mod sandbox_service;
 pub mod skill_discovery;
 pub mod skill_service;

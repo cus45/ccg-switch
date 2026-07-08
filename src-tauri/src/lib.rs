@@ -945,6 +945,9 @@ pub fn run() {
                 eprintln!("Migration v2→v3 warning: {e}");
             }
 
+            // 代理接管崩溃恢复：上次异常退出时未还原的 Live 配置在此恢复
+            services::proxy_service::recover_takeover_on_startup(&db_arc);
+
             let state = store::AppState::new(db_arc);
             app.manage(state);
 
@@ -1037,6 +1040,12 @@ pub fn run() {
             // 退出时优雅关闭 ai-bridge daemon（避免遗留孤儿 node 进程；
             // daemon 自身也有父进程监控兜底）。
             if let tauri::RunEvent::Exit = _event {
+                // 停止代理并恢复被接管的 Live 配置（未开启代理时为 no-op）
+                if let Some(app_state) = _app_handle.try_state::<store::AppState>() {
+                    let db = app_state.db.clone();
+                    tauri::async_runtime::block_on(services::proxy_service::shutdown_on_exit(&db));
+                }
+
                 if let Some(chat_state) = _app_handle.try_state::<chat_commands::ChatState>() {
                     tauri::async_runtime::block_on(chat_state.manager.shutdown());
                 }

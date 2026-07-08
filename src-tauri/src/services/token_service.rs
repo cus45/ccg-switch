@@ -58,6 +58,26 @@ fn normalize_optional_value(value: Option<&str>) -> Option<String> {
         .map(|v| v.trim_end_matches('/').to_ascii_lowercase())
 }
 
+/// 检测 settings.json 是否处于代理接管状态（Token 为占位符或 BASE_URL 指向本地代理）
+fn is_settings_proxied(settings: &serde_json::Value) -> bool {
+    use crate::services::proxy_takeover;
+
+    let Some(env) = settings.get("env") else {
+        return false;
+    };
+
+    if env.get("ANTHROPIC_AUTH_TOKEN").and_then(|v| v.as_str())
+        == Some(proxy_takeover::PROXY_TOKEN_PLACEHOLDER)
+    {
+        return true;
+    }
+
+    env.get("ANTHROPIC_BASE_URL")
+        .and_then(|v| v.as_str())
+        .map(proxy_takeover::is_local_proxy_url)
+        .unwrap_or(false)
+}
+
 pub fn list_tokens() -> Result<Vec<ApiToken>, io::Error> {
     let tokens_path = get_tokens_path()?;
 
@@ -86,6 +106,11 @@ fn verify_active_token(tokens: &mut Vec<ApiToken>) -> Result<(), io::Error> {
         let settings_content = fs::read_to_string(&settings_path)?;
         let settings: serde_json::Value = serde_json::from_str(&settings_content)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        // 代理接管期间 settings.json 是占位符配置，据此校验会错误清空激活状态
+        if is_settings_proxied(&settings) {
+            return Ok(());
+        }
 
         let env = settings.get("env");
         let current_api_key = env
@@ -222,6 +247,12 @@ pub fn switch_token(token_id: &str) -> Result<(), io::Error> {
     let settings_content = fs::read_to_string(&settings_path)?;
     let mut settings: serde_json::Value = serde_json::from_str(&settings_content)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    // 代理接管期间不改写 settings.json（Live 配置指向本地代理，改写会破坏反代）；
+    // tokens.json 的激活状态已更新，代理转发按数据库/激活配置实时生效。
+    if is_settings_proxied(&settings) {
+        return Ok(());
+    }
 
     // 确保 env 对象存在
     if !settings.is_object() || settings.get("env").is_none() {

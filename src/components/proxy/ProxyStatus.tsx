@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Power, Activity, RefreshCw, Settings, Save, Copy, Check } from 'lucide-react';
-import { useProxyStore } from '../../stores/useProxyStore';
-import { showToast } from '../common/ToastContainer';
+import {useEffect, useState} from 'react';
+import {Activity, Check, Copy, Power, RefreshCw, Save, Settings} from 'lucide-react';
+import {useProxyStore} from '../../stores/useProxyStore';
+import {showToast} from '../common/ToastContainer';
 
 export default function ProxyStatus() {
     const { proxyState, config, loading, loadStatus, loadConfig, startProxy, stopProxy, updateConfig } = useProxyStore();
@@ -32,7 +32,15 @@ export default function ProxyStatus() {
 
     const handleStart = async () => {
         try {
-            await startProxy(config.host, config.port);
+            // 启动前把表单当前值落盘，避免"改了没保存就启动"用到旧配置
+            let host = config.host;
+            let port = config.port;
+            if (portValid && hostValid) {
+                host = localHost.trim();
+                port = portNum;
+                await updateConfig({ host, port, takeoverMode: localTakeover });
+            }
+            await startProxy(host, port);
             showToast('代理服务已启动', 'success');
         } catch (error) {
             showToast('启动失败: ' + String(error), 'error');
@@ -94,6 +102,14 @@ export default function ProxyStatus() {
                                     : <Copy className="w-3 h-3" />
                                 }
                             </button>
+                            {proxyState.takeoverActive && (
+                                <span
+                                    className="text-[10px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded-full"
+                                    title={`已改写 ${proxyState.takenOverApps.join('、')} 的配置文件指向本地代理，停止时自动恢复`}
+                                >
+                                    已接管: {proxyState.takenOverApps.join(' / ')}
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>
@@ -192,7 +208,12 @@ export default function ProxyStatus() {
                             disabled={running}
                             className="toggle toggle-xs toggle-success disabled:opacity-60"
                         />
-                        <span className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">接管模式</span>
+                        <span
+                            className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                            title="启动代理时自动改写 Claude/Codex/Gemini 的配置文件指向本地代理（原配置备份，停止时恢复）；关闭则需手动把 BASE_URL 指向代理地址"
+                        >
+                            接管模式
+                        </span>
                     </div>
 
                     {/* Save */}

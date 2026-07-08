@@ -12,6 +12,12 @@ pub struct ProxyState {
     pub host: String,
     #[serde(rename = "requestCount")]
     pub request_count: u64,
+    /// 是否处于 Live 接管状态（已改写 CLI 配置指向本地代理）
+    #[serde(rename = "takeoverActive", default)]
+    pub takeover_active: bool,
+    /// 已接管的应用列表（claude / codex / gemini）
+    #[serde(rename = "takenOverApps", default)]
+    pub taken_over_apps: Vec<String>,
 }
 
 impl Default for ProxyState {
@@ -21,6 +27,8 @@ impl Default for ProxyState {
             port: 9876,
             host: "0.0.0.0".to_string(),
             request_count: 0,
+            takeover_active: false,
+            taken_over_apps: Vec::new(),
         }
     }
 }

@@ -6,16 +6,62 @@ use tracing::{debug, error, info};
 
 use crate::models::provider::ProviderProxyConfig;
 
-/// 全局 HTTP 客户端（无代理或使用系统代理）
+/// 全局 HTTP 客户端（跟随系统代理，用于外部上游）
+///
+/// 注意：不设置总超时。SSE 流式响应可持续远超任何固定时长，
+/// 总超时会在中途掐断长回复；非流式请求的超时由调用方按请求设置。
 fn global_client() -> &'static Client {
     static CLIENT: OnceLock<Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         Client::builder()
-            .timeout(Duration::from_secs(300))
             .connect_timeout(Duration::from_secs(30))
+            .pool_idle_timeout(Duration::from_secs(90))
             .build()
             .expect("Failed to create HTTP client")
     })
+}
+
+/// 直连客户端（绕过一切代理，用于回环地址上游）
+///
+/// 系统代理（HTTP_PROXY 等）常见于国内环境；若把发往 127.0.0.1 上游的请求
+/// 也交给外部代理，会出现连接黑洞/超时，且存在代理自环风险，因此回环目标强制直连。
+fn direct_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .connect_timeout(Duration::from_secs(30))
+            .pool_idle_timeout(Duration::from_secs(90))
+            .no_proxy()
+            .build()
+            .expect("Failed to create direct HTTP client")
+    })
+}
+
+/// 判断目标 URL 是否指向本机回环地址
+fn is_loopback_target(target_url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(target_url) else {
+        return false;
+    };
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
+}
+
+/// 按目标地址选择客户端：回环直连，其余跟随系统代理
+fn client_for_target(target_url: &str) -> &'static Client {
+    if is_loopback_target(target_url) {
+        direct_client()
+    } else {
+        global_client()
+    }
 }
 
 /// 根据 Provider 代理配置构建代理 URL
@@ -71,8 +117,8 @@ pub fn build_client_for_provider(proxy_config: Option<&ProviderProxyConfig>) -> 
     };
 
     match Client::builder()
-        .timeout(Duration::from_secs(300))
         .connect_timeout(Duration::from_secs(30))
+        .pool_idle_timeout(Duration::from_secs(90))
         .proxy(proxy)
         .build()
     {
@@ -129,13 +175,19 @@ pub async fn forward_request(
     url: &str,
     headers: reqwest::header::HeaderMap,
     body: Bytes,
+    timeout: Option<Duration>,
 ) -> Result<reqwest::Response, reqwest::Error> {
-    global_client()
+    let mut request = client_for_target(url)
         .request(method, url)
         .headers(headers)
-        .body(body)
-        .send()
-        .await
+        .body(body);
+
+    // 仅非流式请求设置总超时；流式响应依赖 connect_timeout + 客户端主动断开
+    if let Some(t) = timeout {
+        request = request.timeout(t);
+    }
+
+    request.send().await
 }
 
 /// 使用指定代理配置转发请求
@@ -146,12 +198,27 @@ pub async fn forward_request_with_proxy(
     headers: reqwest::header::HeaderMap,
     body: Bytes,
     proxy_config: Option<&ProviderProxyConfig>,
+    timeout: Option<Duration>,
 ) -> Result<reqwest::Response, reqwest::Error> {
     let client = get_for_provider(proxy_config);
-    client
-        .request(method, url)
-        .headers(headers)
-        .body(body)
-        .send()
-        .await
+    let mut request = client.request(method, url).headers(headers).body(body);
+    if let Some(t) = timeout {
+        request = request.timeout(t);
+    }
+    request.send().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loopback_targets_are_detected() {
+        assert!(is_loopback_target("http://127.0.0.1:8080/v1/messages"));
+        assert!(is_loopback_target("http://localhost:3000/api"));
+        assert!(is_loopback_target("http://[::1]:9000/v1"));
+        assert!(!is_loopback_target("https://api.anthropic.com/v1/messages"));
+        assert!(!is_loopback_target("http://192.168.1.10:3000"));
+        assert!(!is_loopback_target("not a url"));
+    }
 }

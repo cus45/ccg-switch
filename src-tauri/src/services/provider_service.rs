@@ -89,8 +89,9 @@ pub fn update_provider_in_db(
 
     db.upsert_provider(&provider)?;
 
-    // 如果是 active provider，立即同步到应用配置
-    if provider.is_active {
+    // 如果是 active provider，立即同步到应用配置。
+    // 接管模式下跳过：Live 配置指向本地代理，代理按请求实时读取数据库配置。
+    if provider.is_active && !crate::services::proxy_takeover::has_backup(db, provider.app_type) {
         sync_provider_to_app_config(&provider).map_err(|e| e.to_string())?;
     }
 
@@ -129,11 +130,15 @@ pub fn switch_provider_in_db(
         db.upsert_provider(&p)?;
     }
 
-    // 4. 同步到应用配置
+    // 4. 同步到应用配置。
+    //    接管模式下跳过（热切换）：Live 配置保持指向本地代理，
+    //    代理转发时实时读取活跃 provider，停止代理后由恢复逻辑重新同步。
     let active = db
         .get_provider(provider_id)?
         .ok_or_else(|| format!("Provider {} not found", provider_id))?;
-    sync_provider_to_app_config(&active).map_err(|e| e.to_string())?;
+    if !crate::services::proxy_takeover::has_backup(db, active.app_type) {
+        sync_provider_to_app_config(&active).map_err(|e| e.to_string())?;
+    }
 
     Ok(())
 }
@@ -506,7 +511,7 @@ fn merge_provider_to_env(
 }
 
 /// 写入 Codex 的 TOML 配置
-fn write_codex_toml_config(
+pub(crate) fn write_codex_toml_config(
     config_path: &std::path::Path,
     base_url: &str,
     model: &str,
@@ -810,7 +815,7 @@ fn preview_generic_settings(
 // ── 配置同步 ──────────────────────────────────────────────
 
 /// 将 provider 配置同步到对应应用的配置文件
-fn sync_provider_to_app_config(provider: &Provider) -> Result<(), io::Error> {
+pub(crate) fn sync_provider_to_app_config(provider: &Provider) -> Result<(), io::Error> {
     match provider.app_type {
         AppType::Claude => sync_to_claude_settings(provider),
         AppType::Codex => sync_to_codex_config(provider),

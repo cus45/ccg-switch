@@ -17,39 +17,39 @@ pub struct ModelMapping {
 
 impl ModelMapping {
     /// 从 Provider 配置中提取模型映射
+    ///
+    /// 优先读取 Provider 的一级字段（ProvidersPage 编辑的即这些字段），
+    /// 缺失时回退到 settings_config.env 中的同名环境变量。
     pub fn from_provider(provider: &Provider) -> Self {
-        // 当前项目 settings_config 是 Option<Value>
         let env = provider
             .settings_config
             .as_ref()
             .and_then(|sc| sc.get("env"));
 
+        let from_env = |key: &str| -> Option<String> {
+            env.and_then(|e| e.get(key))
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        };
+        let from_field = |field: &Option<String>| -> Option<String> {
+            field
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        };
+
         Self {
-            haiku_model: env
-                .and_then(|e| e.get("ANTHROPIC_DEFAULT_HAIKU_MODEL"))
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(String::from),
-            sonnet_model: env
-                .and_then(|e| e.get("ANTHROPIC_DEFAULT_SONNET_MODEL"))
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(String::from),
-            opus_model: env
-                .and_then(|e| e.get("ANTHROPIC_DEFAULT_OPUS_MODEL"))
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(String::from),
-            default_model: env
-                .and_then(|e| e.get("ANTHROPIC_MODEL"))
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(String::from),
-            reasoning_model: env
-                .and_then(|e| e.get("ANTHROPIC_REASONING_MODEL"))
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(String::from),
+            haiku_model: from_field(&provider.default_haiku_model)
+                .or_else(|| from_env("ANTHROPIC_DEFAULT_HAIKU_MODEL")),
+            sonnet_model: from_field(&provider.default_sonnet_model)
+                .or_else(|| from_env("ANTHROPIC_DEFAULT_SONNET_MODEL")),
+            opus_model: from_field(&provider.default_opus_model)
+                .or_else(|| from_env("ANTHROPIC_DEFAULT_OPUS_MODEL")),
+            default_model: from_env("ANTHROPIC_MODEL"),
+            reasoning_model: from_field(&provider.default_reasoning_model)
+                .or_else(|| from_env("ANTHROPIC_REASONING_MODEL")),
         }
     }
 
