@@ -35,7 +35,6 @@ describe('shouldBlockChatComposerSubmit', () => {
         expect(shouldBlockChatComposerSubmit({
             hasPromptText: true,
             hasAttachments: false,
-            isStreaming: false,
             isSending: true,
         })).toBe(true);
     });
@@ -44,24 +43,24 @@ describe('shouldBlockChatComposerSubmit', () => {
         expect(shouldBlockChatComposerSubmit({
             hasPromptText: true,
             hasAttachments: false,
-            isStreaming: false,
             isSending: false,
         })).toBe(false);
     });
 
-    it('blocks empty submits and active streaming turns', () => {
+    it('blocks empty submits', () => {
         expect(shouldBlockChatComposerSubmit({
             hasPromptText: false,
             hasAttachments: false,
-            isStreaming: false,
             isSending: false,
         })).toBe(true);
+    });
+
+    it('allows submit during a streaming turn (message is queued by the store)', () => {
         expect(shouldBlockChatComposerSubmit({
             hasPromptText: true,
             hasAttachments: false,
-            isStreaming: true,
             isSending: false,
-        })).toBe(true);
+        })).toBe(false);
     });
 });
 

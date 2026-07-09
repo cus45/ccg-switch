@@ -1139,6 +1139,45 @@ fn parse_git_porcelain(
     files
 }
 
+/// `chat_fork_claude_session` 的返回：新会话 id 与新会话文件路径。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatForkSessionResult {
+    pub forked_session_id: String,
+    pub forked_source_path: String,
+}
+
+/// 把 Claude 会话在目标 user 消息处截断复制为新会话（消息级 rewind/fork 的会话分支步骤）。
+///
+/// `source_path` 缺省或失效时按 `session_id` 在 `~/.claude/projects/**` 下查找。
+/// 文件恢复（checkpoint rewind）由前端另行通过 daemon 的 `claude.rewindFiles` 完成。
+#[tauri::command]
+pub async fn chat_fork_claude_session(
+    session_id: String,
+    message_uuid: String,
+    source_path: Option<String>,
+) -> Result<ChatForkSessionResult, String> {
+    let session_id = session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id 不能为空".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let resolved = source_path
+            .map(PathBuf::from)
+            .filter(|path| path.is_file())
+            .or_else(|| crate::chat::locate_claude_session_file(&session_id))
+            .ok_or_else(|| format!("找不到会话文件: {session_id}"))?;
+        let outcome =
+            crate::chat::fork_claude_session_file(&resolved, &session_id, &message_uuid)?;
+        Ok(ChatForkSessionResult {
+            forked_session_id: outcome.forked_session_id,
+            forked_source_path: outcome.forked_source_path.to_string_lossy().into_owned(),
+        })
+    })
+    .await
+    .map_err(|e| format!("fork 任务执行失败: {e}"))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

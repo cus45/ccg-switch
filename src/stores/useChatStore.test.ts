@@ -130,6 +130,7 @@ function resetStore() {
         dockChatTabKey: null,
         providerConfigDirty: false,
         lastSessionLoadMetrics: null,
+        queuedMessages: [],
     });
 }
 
@@ -285,10 +286,19 @@ describe('useChatStore session transitions', () => {
         const sideKey = useChatStore.getState().openSideChat();
         tauriMocks.invoke.mockResolvedValueOnce('req-retry-1');
         await useChatStore.getState().sendInTab(sideKey, 'retry me');
-        // 模拟回合失败结束：请求退役、状态 error。
+        // 模拟回合失败结束：请求退役、状态 error、流式占位收尾（与 done 处理器行为一致）。
         useChatStore.setState((state) => ({
             openTabs: state.openTabs.map((tab) => (
-                tab.key === sideKey ? {...tab, activeRequestId: null, status: 'error' as const} : tab
+                tab.key === sideKey
+                    ? {
+                        ...tab,
+                        activeRequestId: null,
+                        status: 'error' as const,
+                        messages: tab.messages.map((message) => (
+                            message.streaming ? {...message, streaming: false, error: 'failed'} : message
+                        )),
+                    }
+                    : tab
             )),
         }));
 
@@ -2940,6 +2950,7 @@ describe('useChatStore session transitions', () => {
                 {
                     key: 'session:active',
                     subagentRuns: {},
+                    queuedMessages: [],
                     messages: [{id: 'active-message', role: 'user', content: 'active', createdAt: 1}],
                     provider: 'claude',
                     permissionMode: 'default',
@@ -2964,6 +2975,7 @@ describe('useChatStore session transitions', () => {
                 {
                     key: 'session:target',
                     subagentRuns: {},
+                    queuedMessages: [],
                     messages: [{id: 'target-message', role: 'user', content: 'target', createdAt: 2}],
                     provider: 'codex',
                     permissionMode: 'bypassPermissions',
@@ -2988,6 +3000,7 @@ describe('useChatStore session transitions', () => {
                 {
                     key: 'session:other',
                     subagentRuns: {},
+                    queuedMessages: [],
                     messages: [],
                     provider: 'claude',
                     permissionMode: 'default',
@@ -3042,6 +3055,7 @@ describe('useChatStore session transitions', () => {
                 {
                     key: 'session:active',
                     subagentRuns: {},
+                    queuedMessages: [],
                     messages: [{id: 'active-message', role: 'user', content: 'active', createdAt: 1}],
                     provider: 'codex',
                     permissionMode: 'default',
@@ -3793,5 +3807,125 @@ describe('useChatStore session transitions', () => {
                 fileName: 'clipboard.png',
             },
         ]);
+    });
+});
+
+describe('useChatStore message queue (queue follow-ups while busy)', () => {
+    beforeEach(() => {
+        tauriMocks.invoke.mockReset();
+        tauriMocks.listen.mockClear();
+        notificationMocks.notifyChatTurnStopped.mockClear();
+        notificationMocks.prepareChatTurnStoppedNotificationPermission.mockClear();
+        vi.stubGlobal('localStorage', localStorageMock);
+        localStorageEntries.clear();
+        clearChatSessionHistoryCache();
+        resetStore();
+    });
+
+    async function initWithListeners() {
+        const listeners: Record<string, (event: { payload: unknown }) => void> = {};
+        tauriMocks.listen.mockImplementation(async (eventName: string, callback: (event: { payload: unknown }) => void) => {
+            listeners[eventName] = callback;
+            return vi.fn();
+        });
+        tauriMocks.invoke.mockResolvedValue(null);
+        useChatStore.setState({initialized: false});
+        await useChatStore.getState().init();
+        return listeners;
+    }
+
+    function chatSendCalls(): string[] {
+        return tauriMocks.invoke.mock.calls
+            .filter(([command]) => command === 'chat_send')
+            .map(([, args]) => String((args as {params: {message: string}}).params.message));
+    }
+
+    it('sendInTab queues follow-ups while the tab turn is running and drains after done', async () => {
+        const listeners = await initWithListeners();
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        const sideTab = () => useChatStore.getState().openTabs.find((tab) => tab.key === sideKey);
+
+        tauriMocks.invoke.mockResolvedValueOnce('req-queue-1');
+        await useChatStore.getState().sendInTab(sideKey, 'first message');
+        expect(sideTab()?.activeRequestId).toBe('req-queue-1');
+
+        // 回合进行中继续发送 → 入队而不是并发发送
+        const queuedOk = await useChatStore.getState().sendInTab(sideKey, 'second message');
+        expect(queuedOk).toBe(true);
+        expect(chatSendCalls()).toEqual(['first message']);
+        expect(sideTab()?.queuedMessages).toHaveLength(1);
+        expect(sideTab()?.queuedMessages[0]?.text).toBe('second message');
+
+        // 本轮成功结束 → 队首自动出队发送
+        tauriMocks.invoke.mockResolvedValueOnce('req-queue-2');
+        listeners['chat://done']?.({payload: {requestId: 'req-queue-1', success: true}});
+        expect(sideTab()?.queuedMessages).toHaveLength(0);
+        await new Promise((resolve) => setTimeout(resolve, 90));
+        expect(chatSendCalls()).toEqual(['first message', 'second message']);
+    });
+
+    it('send queues into the active tab while a global turn is running', async () => {
+        await initWithListeners();
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            activeRequestId: 'req-busy',
+            openTabs: [],
+        });
+
+        const queued = await useChatStore.getState().send('queued while busy');
+        expect(queued).toBe(true);
+        expect(chatSendCalls()).toEqual([]);
+        expect(useChatStore.getState().queuedMessages).toHaveLength(1);
+        expect(useChatStore.getState().queuedMessages[0]?.text).toBe('queued while busy');
+    });
+
+    it('failed turns keep the queue for manual handling', async () => {
+        const listeners = await initWithListeners();
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        const sideTab = () => useChatStore.getState().openTabs.find((tab) => tab.key === sideKey);
+
+        tauriMocks.invoke.mockResolvedValueOnce('req-queue-err');
+        await useChatStore.getState().sendInTab(sideKey, 'first message');
+        await useChatStore.getState().sendInTab(sideKey, 'second message');
+        expect(sideTab()?.queuedMessages).toHaveLength(1);
+
+        listeners['chat://done']?.({payload: {requestId: 'req-queue-err', success: false, error: 'boom'}});
+        await new Promise((resolve) => setTimeout(resolve, 90));
+        expect(sideTab()?.queuedMessages).toHaveLength(1);
+        expect(chatSendCalls()).toEqual(['first message']);
+    });
+
+    it('removeQueuedMessage deletes a queued item by id', async () => {
+        await initWithListeners();
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            activeRequestId: 'req-busy',
+            openTabs: [],
+        });
+        await useChatStore.getState().send('queued one');
+        await useChatStore.getState().send('queued two');
+        const queue = useChatStore.getState().queuedMessages;
+        expect(queue).toHaveLength(2);
+
+        useChatStore.getState().removeQueuedMessage('main-tab', queue[0]!.id);
+        const rest = useChatStore.getState().queuedMessages;
+        expect(rest).toHaveLength(1);
+        expect(rest[0]?.text).toBe('queued two');
     });
 });

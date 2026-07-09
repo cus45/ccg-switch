@@ -90,6 +90,7 @@ describe('useProviderStore', () => {
         const runningTab: ChatSessionTab = {
             key: 'session:background',
             subagentRuns: {},
+            queuedMessages: [],
             messages: [{
                 id: 'assistant-1',
                 role: 'assistant',

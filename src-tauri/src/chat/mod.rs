@@ -22,6 +22,7 @@ mod permission_watcher;
 mod protocol;
 mod resources;
 mod sdk_installer;
+mod session_fork;
 mod slash_commands;
 
 pub use manager::ChatManager;
@@ -32,4 +33,5 @@ pub use permission_watcher::{
 };
 pub use resources::permission_dir;
 pub use sdk_installer::SdkStatus;
+pub use session_fork::{fork_claude_session_file, locate_claude_session_file};
 pub use slash_commands::list_slash_commands;

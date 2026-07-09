@@ -29,3 +29,6 @@ export type { AgentGroupBlockProps } from './AgentGroupBlock';
 
 export { default as TaskExecutionBlock } from './TaskExecutionBlock';
 export type { TaskExecutionBlockProps } from './TaskExecutionBlock';
+
+export { default as TodoToolBlock } from './TodoToolBlock';
+export type { TodoToolBlockProps } from './TodoToolBlock';

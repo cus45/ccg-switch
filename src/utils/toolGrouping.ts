@@ -88,7 +88,8 @@ export function groupToolBlocks(blocks: ContentBlock[]): GroupedBlock[] {
 
     const toolType = getToolType(block.name);
 
-    if (currentToolType === toolType && toolType !== 'generic') {
+    // todo 计划块始终单独渲染（每次 TodoWrite 都是完整计划快照，分组无意义）
+    if (currentToolType === toolType && toolType !== 'generic' && toolType !== 'todo') {
       // 同类型工具，加入当前组
       currentGroup.push(block);
     } else {

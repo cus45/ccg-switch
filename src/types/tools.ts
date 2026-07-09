@@ -34,6 +34,43 @@ export interface ToolInput {
   name?: string;
   agent_id?: string;
   agentId?: string;
+  todos?: unknown[];
+}
+
+/** TodoWrite 单条计划项状态 */
+export type TodoItemStatus = 'pending' | 'in_progress' | 'completed';
+
+/** TodoWrite 单条计划项（宽松解析后的规范形态） */
+export interface TodoItem {
+  content: string;
+  status: TodoItemStatus;
+  activeForm?: string;
+}
+
+/**
+ * 从 TodoWrite 工具入参宽松解析计划项列表。
+ * 非法条目跳过，未知状态归为 pending。
+ */
+export function parseTodoItems(input?: ToolInput | null): TodoItem[] {
+  const rawList = input?.todos;
+  if (!Array.isArray(rawList)) return [];
+
+  const items: TodoItem[] = [];
+  for (const raw of rawList) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const record = raw as Record<string, unknown>;
+    const content = typeof record.content === 'string' ? record.content.trim() : '';
+    if (!content) continue;
+    const rawStatus = typeof record.status === 'string' ? record.status : '';
+    const status: TodoItemStatus = rawStatus === 'completed' || rawStatus === 'in_progress'
+      ? rawStatus
+      : 'pending';
+    const activeForm = typeof record.activeForm === 'string' && record.activeForm.trim()
+      ? record.activeForm.trim()
+      : undefined;
+    items.push({ content, status, activeForm });
+  }
+  return items;
 }
 
 /** Read 工具名称集合 */
@@ -98,8 +135,13 @@ export const AGENT_TOOL_NAMES = new Set([
   'Task',
 ]);
 
+/** Todo 计划工具名称集合（集合内为规范化后的名称） */
+export const TODO_TOOL_NAMES = new Set([
+  'todowrite',
+]);
+
 /** 工具类型 */
-export type ToolType = 'bash' | 'read' | 'edit' | 'search' | 'agent' | 'generic';
+export type ToolType = 'bash' | 'read' | 'edit' | 'search' | 'agent' | 'todo' | 'generic';
 
 /**
  * 规范化工具名称（小写 + 移除下划线和连字符）
@@ -136,6 +178,7 @@ export function getToolType(name: string): ToolType {
   if (BASH_TOOL_NAMES.has(normalized)) return 'bash';
   if (SEARCH_TOOL_NAMES.has(normalized)) return 'search';
   if (AGENT_TOOL_NAMES.has(normalized)) return 'agent';
+  if (TODO_TOOL_NAMES.has(normalized)) return 'todo';
 
   return 'generic';
 }

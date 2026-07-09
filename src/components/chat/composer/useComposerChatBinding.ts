@@ -16,6 +16,7 @@ type ComposerReadSlice = Pick<
     | 'longContextEnabled'
     | 'activeRequestId'
     | 'activeSession'
+    | 'queuedMessages'
 >;
 
 export interface ComposerChatBinding extends ComposerReadSlice {
@@ -34,6 +35,8 @@ export interface ComposerChatBinding extends ComposerReadSlice {
     abort: () => Promise<void>;
     /** 读取当前绑定 tab 的最新草稿（避免闭包旧值）。 */
     readDraft: () => string;
+    /** 从待发队列移除一条消息。 */
+    removeQueuedMessage: (id: string) => void;
     /**
      * 是否可中止当前回合。主聊天可；侧聊(背景 tab)不可——后端 `chat_abort`
      * 无法按 requestId 定向，避免误杀主会话回合，故侧聊不提供中止。
@@ -120,6 +123,7 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
             // 后端 chat_abort 无法按 requestId 定向，侧聊不提供中止（见 canAbort）。
             abort: async () => {},
             readDraft: () => readTab()?.draft ?? '',
+            removeQueuedMessage: (id: string) => useChatStore.getState().removeQueuedMessage(key, id),
             canAbort: false,
         };
     }, [key]);
@@ -136,6 +140,7 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
             longContextEnabled: globalStore.longContextEnabled,
             activeRequestId: globalStore.activeRequestId,
             activeSession: globalStore.activeSession,
+            queuedMessages: globalStore.queuedMessages,
             setProvider: globalStore.setProvider,
             setPermissionMode: globalStore.setPermissionMode,
             setModel: globalStore.setModel,
@@ -145,6 +150,10 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
             send: globalStore.send,
             abort: globalStore.abort,
             readDraft: () => useChatStore.getState().draft,
+            removeQueuedMessage: (id: string) => {
+                const state = useChatStore.getState();
+                if (state.activeTabKey) state.removeQueuedMessage(state.activeTabKey, id);
+            },
             canAbort: true,
         };
     }
@@ -160,6 +169,7 @@ export function useComposerChatBinding(tabKey?: string | null): ComposerChatBind
         longContextEnabled: tabView.longContextEnabled,
         activeRequestId: tabView.activeRequestId,
         activeSession: tabView.activeSession,
+        queuedMessages: tabView.queuedMessages,
         ...tabActions,
     };
 }

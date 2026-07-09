@@ -926,6 +926,7 @@ pub fn run() {
             chat_commands::chat_read_text_file,
             chat_commands::chat_git_changed_files,
             chat_commands::chat_git_file_contents,
+            chat_commands::chat_fork_claude_session,
             // Editor 命令
             commands::editor_commands::open_file_in_editor,
         ])

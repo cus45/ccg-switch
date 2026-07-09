@@ -15,6 +15,7 @@ import {
     DaemonLogEntry,
     ImageBlock,
     MessageRaw,
+    QueuedChatMessage,
     SubagentMessageEvent,
     TokenUsage,
 } from '../types/chat';
@@ -342,6 +343,8 @@ export interface ChatSessionTab {
     unread?: boolean;
     /** 子代理(Task)实时轨迹：parentToolUseId(= 父 Task 工具块 id) → 子代理消息列表。 */
     subagentRuns: Record<string, ChatMessage[]>;
+    /** 忙时排队的待发消息，回合成功结束后按序自动发送。 */
+    queuedMessages: QueuedChatMessage[];
     createdAt: number;
     updatedAt: number;
 }
@@ -350,6 +353,8 @@ interface ChatState {
     messages: ChatMessage[];
     /** 子代理(Task)实时轨迹：parentToolUseId → 子代理消息列表（activeTab 投影）。 */
     subagentRuns: Record<string, ChatMessage[]>;
+    /** 忙时排队的待发消息（activeTab 投影）。 */
+    queuedMessages: QueuedChatMessage[];
     /** 当前 provider */
     provider: ChatProvider;
     /**
@@ -445,6 +450,10 @@ interface ChatState {
     }) => Promise<boolean>;
     /** 设置指定 tab 的输入草稿（侧聊草稿存于 tab 快照，不写全局 localStorage）。 */
     setTabDraft: (tabKey: string, text: string) => void;
+    /** 把消息加入指定 tab 的待发队列（回合进行中时由 send/sendInTab 自动调用）。 */
+    queueMessageInTab: (tabKey: string, text: string, attachments?: ChatAttachment[]) => void;
+    /** 从指定 tab 的待发队列移除一条消息。 */
+    removeQueuedMessage: (tabKey: string, id: string) => void;
     /** 更新指定 tab 的会话配置（provider/model/权限/推理/1M）；流式进行中为 no-op。 */
     updateTabConfig: (
         tabKey: string,
@@ -468,6 +477,17 @@ interface ChatState {
      * 无用户消息、消息含附件（无法可靠还原）、或该 tab 仍在回合中时返回 false。
      */
     retryLastUserMessage: (tabKey?: string | null) => Promise<boolean>;
+    /**
+     * 回退到指定 user 消息重来（消息级 rewind/fork，仅 Claude）：
+     * fork 会话文件在该消息处截断 → 本地 transcript 同步截断 → 原文回填草稿；
+     * `restoreFiles` 时先经 daemon `claude.rewindFiles` 把工作区文件恢复到该时点。
+     * 目标消息缺 uuid、tab 在回合中、或 provider 不支持时返回 false。
+     */
+    rewindToMessage: (
+        tabKey: string | null,
+        messageId: string,
+        opts?: {restoreFiles?: boolean},
+    ) => Promise<boolean>;
     markProviderConfigDirty: () => Promise<void>;
     startNewSession: (cwd?: string | null) => Promise<void>;
     abort: () => Promise<void>;
@@ -521,6 +541,7 @@ function createTabFromState(
         status: hasActiveChatTurn(state) ? 'running' : 'idle',
         error: state.error,
         subagentRuns: state.subagentRuns,
+        queuedMessages: state.queuedMessages,
         createdAt: now,
         updatedAt: now,
         ...overrides,
@@ -554,6 +575,7 @@ function createEmptyTabFromState(
         status: 'idle',
         error: null,
         subagentRuns: {},
+        queuedMessages: [],
         createdAt: timestamp,
         updatedAt: timestamp,
     };
@@ -563,6 +585,7 @@ function projectTabToState(tab: ChatSessionTab): Partial<ChatState> {
     return {
         messages: tab.messages,
         subagentRuns: tab.subagentRuns,
+        queuedMessages: tab.queuedMessages,
         provider: tab.provider,
         permissionMode: tab.permissionMode,
         model: tab.model,
@@ -718,6 +741,111 @@ function saveProjectionBeforeSwitch(state: ChatState): ChatSessionTab[] {
         return upsertTab(state.openTabs, createTabFromState(key, state));
     }
     return state.openTabs;
+}
+
+/**
+ * 回合成功结束后按序发送该 tab 排队中的下一条消息。
+ * 出队与发送分离：先原子出队，再延迟一拍走 sendInTab（让 done 的状态更新先落地）；
+ * 若期间 tab 又进入回合，sendInTab 的忙时检查会把消息重新入队，不会丢失。
+ */
+function drainQueuedMessagesForTab(tabKey: string | null): void {
+    if (!tabKey) return;
+    const state = useChatStore.getState();
+    const tab = tabKey === state.activeTabKey
+        ? currentTopLevelTab(state)
+        : state.openTabs.find((item) => item.key === tabKey);
+    if (!tab || tab.queuedMessages.length === 0) return;
+    if (hasActiveTabTurn(tab)) return;
+
+    const [next] = tab.queuedMessages;
+    useChatStore.setState((current) => updateTabStateByKey(current, tabKey, (item) => ({
+        ...item,
+        queuedMessages: item.queuedMessages.slice(1),
+    })));
+    setTimeout(() => {
+        void useChatStore.getState().sendInTab(tabKey, next.text, {attachments: next.attachments});
+    }, 50);
+}
+
+const REWIND_FILES_TIMEOUT_MS = 30_000;
+
+/**
+ * 经 daemon `claude.rewindFiles`（SDK 文件 checkpoint）把工作区文件恢复到目标
+ * user 消息时点。结果 JSON 以该请求的 stream line 传回，done 事件收尾；此处
+ * 独立监听这一 requestId（store 的常规监听器因无 tab 归属会忽略这些事件）。
+ */
+async function rewindFilesViaDaemon(
+    sessionId: string,
+    userMessageUuid: string,
+    cwd: string | null,
+): Promise<void> {
+    const streamLines: ChatStreamEvent[] = [];
+    const doneEvents: ChatDoneEvent[] = [];
+    let evaluate: (() => void) | null = null;
+    // 先注册监听再发请求，避免 daemon 响应先于监听器就绪。
+    const unStream = await listen<ChatStreamEvent>('chat://stream', (event) => {
+        streamLines.push(event.payload);
+        evaluate?.();
+    });
+    const unDone = await listen<ChatDoneEvent>('chat://done', (event) => {
+        doneEvents.push(event.payload);
+        evaluate?.();
+    });
+    try {
+        const requestId = await invoke<string>('chat_send', {
+            provider: 'claude',
+            command: 'rewindFiles',
+            params: {
+                sessionId,
+                userMessageId: userMessageUuid,
+                cwd: cwd ?? undefined,
+            },
+        });
+        await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const timer = window.setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(new Error('rewind files timeout'));
+            }, REWIND_FILES_TIMEOUT_MS);
+            evaluate = () => {
+                if (settled) return;
+                const done = doneEvents.find((event) => event.requestId === requestId);
+                if (!done) return;
+                settled = true;
+                window.clearTimeout(timer);
+                // rewindFiles 内部 catch 错误后仍正常完成（done.success=true），
+                // 真实结果在最后一条 JSON line 的 success 字段里。
+                let result: {success: boolean; error?: string} | null = null;
+                for (const line of streamLines) {
+                    if (line.requestId !== requestId || line.kind !== 'line') continue;
+                    const text = line.text.trim();
+                    if (!text.startsWith('{')) continue;
+                    try {
+                        const parsed = JSON.parse(text) as {success?: unknown; error?: unknown};
+                        if (typeof parsed.success === 'boolean') {
+                            result = {
+                                success: parsed.success,
+                                error: typeof parsed.error === 'string' ? parsed.error : undefined,
+                            };
+                        }
+                    } catch {
+                        // 非结果 JSON 行，忽略
+                    }
+                }
+                const success = result ? result.success : done.success;
+                if (success) {
+                    resolve();
+                } else {
+                    reject(new Error(result?.error ?? done.error ?? 'rewind files failed'));
+                }
+            };
+            evaluate();
+        });
+    } finally {
+        unStream();
+        unDone();
+    }
 }
 
 function isTextBlock(block: ContentBlock): block is Extract<ContentBlock, { type: 'text' }> {
@@ -1189,6 +1317,7 @@ function mergeSubagentRun(
 export const useChatStore = create<ChatState>((set, get) => ({
     messages: [],
     subagentRuns: {},
+    queuedMessages: [],
     provider: 'claude',
     permissionMode: 'default',
     model: defaultModel('claude'),
@@ -1370,6 +1499,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     })),
                 };
             });
+            // 本轮成功结束 → 自动发送该 tab 排队中的下一条消息。
+            if (success) {
+                drainQueuedMessagesForTab(targetTabKeyBeforeDone ?? get().activeTabKey);
+            }
         });
 
         const daemonUn = await listen<ChatDaemonEvent>('chat://daemon', (event) => {
@@ -1648,6 +1781,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         )) ?? [];
         const hasAttachments = attachments.length > 0;
         if (!trimmed && !hasAttachments) return false;
+        // 回合进行中：不打断，入队等待本轮结束后自动发送（对标 queue follow-ups）。
+        const busyState = get();
+        if (busyState.activeTabKey && hasActiveChatTurn(busyState)) {
+            get().queueMessageInTab(busyState.activeTabKey, trimmed, attachments);
+            return true;
+        }
         latestSessionLoadToken += 1;
         prepareChatTurnStoppedNotificationPermission();
 
@@ -1856,6 +1995,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const tab = get().openTabs.find((item) => item.key === tabKey);
         if (!tab) return false;
 
+        // 回合进行中：入队等待本轮结束后自动发送。活跃 tab 的实时状态在顶层投影。
+        const liveTab = tabKey === get().activeTabKey ? currentTopLevelTab(get()) : tab;
+        if (hasActiveTabTurn(liveTab)) {
+            get().queueMessageInTab(tabKey, trimmed, attachments);
+            return true;
+        }
+
         prepareChatTurnStoppedNotificationPermission();
         const messageText = trimmed || ATTACHMENT_ONLY_MESSAGE;
         const displayText = opts?.displayText?.trim() || messageText;
@@ -1988,6 +2134,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (!tab || tab.draft === text) return {};
             return updateTabStateByKey(state, tabKey, (current) => ({...current, draft: text}));
         });
+    },
+
+    queueMessageInTab: (tabKey, text, attachments) => {
+        const trimmed = text.trim();
+        const safeAttachments = attachments?.filter((attachment) => attachment.fileName.trim().length > 0) ?? [];
+        if (!trimmed && safeAttachments.length === 0) return;
+        const item: QueuedChatMessage = {
+            id: newId(),
+            text: trimmed,
+            attachments: safeAttachments.length > 0 ? safeAttachments : undefined,
+            queuedAt: Date.now(),
+        };
+        set((state) => updateTabStateByKey(state, tabKey, (current) => ({
+            ...current,
+            queuedMessages: [...current.queuedMessages, item],
+            draft: '',
+        })));
+    },
+
+    removeQueuedMessage: (tabKey, id) => {
+        set((state) => updateTabStateByKey(state, tabKey, (current) => ({
+            ...current,
+            queuedMessages: current.queuedMessages.filter((item) => item.id !== id),
+        })));
     },
 
     updateTabConfig: (tabKey, config) => {
@@ -2528,6 +2698,73 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return get().send(text);
     },
 
+    rewindToMessage: async (tabKey, messageId, opts) => {
+        const state = get();
+        const key = tabKey ?? state.activeTabKey;
+        if (!key) return false;
+        const tab = key === state.activeTabKey
+            ? currentTopLevelTab(state)
+            : state.openTabs.find((item) => item.key === key);
+        if (!tab) return false;
+        // 仅 Claude 支持（会话文件截断 + SDK checkpoint 都是 Claude 侧机制）。
+        if (tab.provider !== 'claude') return false;
+        if (hasActiveTabTurn(tab)) return false;
+        const sessionId = tab.sessionId?.trim();
+        if (!sessionId) return false;
+
+        const index = tab.messages.findIndex((message) => message.id === messageId);
+        if (index < 0) return false;
+        const target = tab.messages[index];
+        const targetUuid = target.raw?.uuid?.trim();
+        if (target.role !== 'user' || !targetUuid) return false;
+
+        try {
+            if (opts?.restoreFiles) {
+                // 文件恢复要在 fork 前做：checkpoint 挂在原会话上。
+                await rewindFilesViaDaemon(sessionId, targetUuid, tab.currentCwd);
+            }
+            const fork = await invoke<{forkedSessionId: string; forkedSourcePath: string}>(
+                'chat_fork_claude_session',
+                {
+                    sessionId,
+                    messageUuid: targetUuid,
+                    sourcePath: tab.activeSession?.sourcePath ?? null,
+                },
+            );
+            // 原始发送文本回填草稿，便于修改后重发。
+            const blocks = getContentBlocksFromRaw(target.raw);
+            const rawText = blocks
+                .filter((block) => block.type === 'text')
+                .map((block) => block.text)
+                .join('\n')
+                .trim();
+            const draftText = rawText || target.content.trim();
+
+            set((current) => updateTabStateByKey(current, key, (item) => ({
+                ...item,
+                messages: item.messages.slice(0, index),
+                sessionId: fork.forkedSessionId,
+                activeSession: item.activeSession
+                    ? {
+                        ...item.activeSession,
+                        sessionId: fork.forkedSessionId,
+                        sourcePath: fork.forkedSourcePath,
+                    }
+                    : null,
+                draft: draftText,
+                status: 'idle',
+                error: null,
+            })));
+            return true;
+        } catch (e) {
+            set((current) => updateTabStateByKey(current, key, (item) => ({
+                ...item,
+                error: String(e),
+            })));
+            return false;
+        }
+    },
+
     markProviderConfigDirty: async () => {
         const currentState = get();
         if (hasAnyActiveChatTurn(currentState)) {
@@ -2621,6 +2858,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 error: abortError,
                 contextTokens: 0,
                 contextMaxTokens: null,
+                queuedMessages: [],
             };
             return applyActiveTabProjection(state, partial, {status: 'idle'});
         });
@@ -2749,6 +2987,7 @@ export interface ChatTabView {
     subagentRuns: Record<string, ChatMessage[]>;
     error: string | null;
     isStreaming: boolean;
+    queuedMessages: QueuedChatMessage[];
 }
 
 /**
@@ -2783,6 +3022,7 @@ export function useChatTab(tabKey: string | null): ChatTabView | null {
             subagentRuns: source.subagentRuns,
             error: source.error,
             isStreaming: source.messages.some((message) => message.streaming),
+            queuedMessages: source.queuedMessages,
         };
     }));
 }

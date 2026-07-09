@@ -25,6 +25,7 @@ import {
     ReadToolGroupBlock,
     SearchToolGroupBlock,
     TaskExecutionBlock,
+    TodoToolBlock,
 } from '../toolBlocks';
 import MarkdownBlock from './MarkdownBlock';
 import ThinkingBlock from './ThinkingBlock';
@@ -321,6 +322,17 @@ export default function ContentBlockRenderer({
                 }
                 return (
                     <AgentGroupBlock
+                        name={block.name}
+                        input={block.input}
+                        result={result}
+                        toolId={block.id}
+                        compact={compact}
+                    />
+                );
+
+            case 'todo':
+                return (
+                    <TodoToolBlock
                         name={block.name}
                         input={block.input}
                         result={result}

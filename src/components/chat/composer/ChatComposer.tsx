@@ -17,6 +17,7 @@ import type {ChatAttachment} from '../../../types/chat';
 import {type ChatWorkspaceProjectOption, ContextBar} from './ContextBar';
 import {ButtonArea} from './ButtonArea';
 import {CompletionMenu} from './CompletionMenu';
+import {MessageQueueBar} from './MessageQueueBar';
 import {PromptEnhancerDialog} from './PromptEnhancerDialog';
 import {useCompletions} from './useCompletions';
 import {apply1MContextSuffix, type ChatProviderId, contextWindowFor} from './constants';
@@ -150,17 +151,19 @@ export function restoreFailedSendAttachments(
 interface ChatComposerSubmitState {
     hasPromptText: boolean;
     hasAttachments: boolean;
-    isStreaming: boolean;
     isSending: boolean;
 }
 
+/**
+ * 只在无内容或本地发送流程尚未落盘时阻止提交。
+ * 流式进行中不再阻止：send/sendInTab 的忙时检查会把消息放入待发队列。
+ */
 export function shouldBlockChatComposerSubmit({
     hasPromptText,
     hasAttachments,
-    isStreaming,
     isSending,
 }: ChatComposerSubmitState): boolean {
-    return (!hasPromptText && !hasAttachments) || isStreaming || isSending;
+    return (!hasPromptText && !hasAttachments) || isSending;
 }
 
 interface PromptEnhanceState {
@@ -203,6 +206,7 @@ export function ChatComposer({
         longContextEnabled,
         activeRequestId,
         activeSession,
+        queuedMessages,
         setProvider,
         setPermissionMode,
         setModel,
@@ -212,6 +216,7 @@ export function ChatComposer({
         send,
         abort,
         readDraft,
+        removeQueuedMessage,
     } = useComposerChatBinding(tabKey);
     const {
         providers,
@@ -448,7 +453,6 @@ export function ChatComposer({
         if (shouldBlockChatComposerSubmit({
             hasPromptText: text.length > 0,
             hasAttachments: attachments.length > 0,
-            isStreaming,
             isSending: sendInFlightRef.current,
         })) return;
         if (sdkMissing) {
@@ -758,6 +762,9 @@ export function ChatComposer({
     return (
         <div className="bg-base-200/20 px-2 pb-4 pt-2 sm:px-3">
             <div className="w-full rounded-xl border border-base-300 bg-base-100/95 p-2 shadow-lg shadow-base-300/30 backdrop-blur">
+                {/* 忙时排队的待发消息 */}
+                <MessageQueueBar items={queuedMessages} onRemove={removeQueuedMessage} />
+
                 {/* 顶部上下文栏 */}
                 <ContextBar
                     attachments={attachments}
@@ -868,7 +875,6 @@ export function ChatComposer({
                     canSubmit={!shouldBlockChatComposerSubmit({
                         hasPromptText: hasEditorPromptText,
                         hasAttachments: attachments.length > 0,
-                        isStreaming,
                         isSending,
                     })}
                     hasPromptText={hasEditorPromptText}

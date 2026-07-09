@@ -110,7 +110,8 @@
             "closeAllTabs": "Close all tabs",
             "sideChatWorking": "Working…",
             "sideChatUnread": "New reply",
-            "sideChatFailed": "Last turn failed"
+            "sideChatFailed": "Last turn failed",
+            "resize": "Drag to resize the tool dock; double-click to reset"
         },
         "layout": {
             "anchorRail": "Message anchors",
@@ -256,6 +257,23 @@
         "removeFileContext": "Remove file context",
         "removeAttachment": "Remove attachment",
         "imageAttachment": "[Image: {{name}}]",
+        "queue": {
+            "title": "Queued · sends after this turn ({{count}})",
+            "remove": "Remove queued message",
+            "attachmentOnly": "(attachments only)",
+            "attachmentCount": "{{count}} attachment(s)"
+        },
+        "rewind": {
+            "action": "Rewind to this message",
+            "title": "Rewind to this message",
+            "description": "The conversation forks at this message: later turns are excluded from the new branch and the original text is restored to the composer. The original session file is kept unchanged.",
+            "conversationOnly": "Conversation only",
+            "conversationOnlyHint": "Workspace files stay as they are now.",
+            "withFiles": "Conversation + restore files",
+            "withFilesHint": "Also restore workspace files to the checkpoint taken at this message (Claude file checkpointing).",
+            "confirm": "Rewind",
+            "unavailable": "Cannot rewind: only Claude sessions support this, and the current turn must be finished."
+        },
         "collapsePanel": "Collapse status panel",
         "expandPanel": "Expand status panel",
         "providerLabel": "AI provider",
@@ -542,6 +560,9 @@
         "denied": "Denied",
         "agent": "Agent",
         "task": "Task",
+        "todo": "Plan",
+        "todoProgress": "{{completed}}/{{total}} done",
+        "todoDetailsToggle": "Toggle plan details",
         "agentDetailsToggle": "Toggle agent details: {{target}}",
         "taskDetailsToggle": "Toggle task details: {{target}}",
         "genericDetailsToggle": "Toggle tool details: {{target}}",
@@ -876,6 +897,28 @@
             "refresh_msg": "Are you sure you want to refresh the quota for the current account?",
             "batch_refresh_msg": "Are you sure you want to refresh quotas for the selected {{count}} accounts? This may take some time."
         }
+    },
+    "usage_script": {
+        "title": "Usage Query",
+        "enable": "Enable usage query",
+        "template": "Preset Template",
+        "template_generic": "Generic",
+        "template_newapi": "New API",
+        "template_custom": "Custom",
+        "fallback_provider": "empty = use provider config",
+        "timeout": "Timeout (seconds)",
+        "auto_interval": "Auto query interval (minutes, 0 = off)",
+        "script": "Query Script",
+        "test": "Test Script",
+        "test_failed": "Test failed",
+        "loading": "Querying...",
+        "query_failed": "Query failed",
+        "invalid": "Invalid",
+        "used": "Used",
+        "remaining": "Left",
+        "refresh": "Refresh usage",
+        "save_success": "Usage query config saved",
+        "save_failed": "Save failed: {{error}}"
     },
     "providers": {
         "title": "Providers",

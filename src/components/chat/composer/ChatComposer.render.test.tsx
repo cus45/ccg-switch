@@ -29,6 +29,8 @@ vi.mock('../../../stores/useChatStore', () => ({
         contextMaxTokens: mockedContextMaxTokens,
         longContextEnabled: mockedLongContextEnabled,
         activeRequestId: null,
+        queuedMessages: [],
+        removeQueuedMessage: vi.fn(),
         setProvider: vi.fn(),
         setPermissionMode: vi.fn(),
         setModel: vi.fn(),

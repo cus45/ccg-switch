@@ -31,6 +31,14 @@ export interface ChatAttachment {
     size?: number;
 }
 
+/** 忙时排队的待发消息（回合结束后自动按序发送） */
+export interface QueuedChatMessage {
+    id: string;
+    text: string;
+    attachments?: ChatAttachment[];
+    queuedAt: number;
+}
+
 /** Token 用量（对应 daemon [USAGE] 标签的 JSON） */
 export interface TokenUsage {
     input_tokens: number;

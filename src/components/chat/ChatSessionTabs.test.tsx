@@ -46,6 +46,7 @@ function createTab(overrides: Partial<ChatSessionTab>): ChatSessionTab {
         status: 'idle',
         error: null,
         subagentRuns: {},
+        queuedMessages: [],
         createdAt: 1,
         updatedAt: 1,
         ...overrides,

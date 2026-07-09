@@ -99,7 +99,8 @@
             "closeAllTabs": "关闭全部标签页",
             "sideChatWorking": "对话进行中",
             "sideChatUnread": "有新回复",
-            "sideChatFailed": "上轮回复失败"
+            "sideChatFailed": "上轮回复失败",
+            "resize": "拖拽调整工具坞宽度，双击恢复默认"
         },
         "layout": {
             "anchorRail": "消息锚点",
@@ -245,6 +246,23 @@
         "removeFileContext": "移除文件上下文",
         "removeAttachment": "移除附件",
         "imageAttachment": "[图片: {{name}}]",
+        "queue": {
+            "title": "排队中 · 本轮结束后自动发送 ({{count}})",
+            "remove": "移除排队消息",
+            "attachmentOnly": "（仅附件）",
+            "attachmentCount": "{{count}} 个附件"
+        },
+        "rewind": {
+            "action": "回退到此消息重来",
+            "title": "回退到此消息",
+            "description": "会话将在此消息处分叉：之后的对话不进入新分支，原消息文本会回填到输入框供修改重发。原会话文件保留不变。",
+            "conversationOnly": "仅回退对话",
+            "conversationOnlyHint": "工作区文件保持当前状态。",
+            "withFiles": "回退对话 + 恢复文件",
+            "withFilesHint": "同时把工作区文件恢复到该消息时点的 checkpoint（Claude 文件检查点）。",
+            "confirm": "回退",
+            "unavailable": "无法回退：仅 Claude 会话支持，且需等当前回合结束。"
+        },
         "collapsePanel": "收起状态面板",
         "expandPanel": "展开状态面板",
         "providerLabel": "AI 提供方",
@@ -531,6 +549,9 @@
         "denied": "已拒绝",
         "agent": "子代理",
         "task": "任务",
+        "todo": "任务计划",
+        "todoProgress": "{{completed}}/{{total}} 已完成",
+        "todoDetailsToggle": "切换任务计划详情",
         "agentDetailsToggle": "切换子代理详情：{{target}}",
         "taskDetailsToggle": "切换任务详情：{{target}}",
         "genericDetailsToggle": "切换工具详情：{{target}}",
@@ -762,6 +783,28 @@
         "delete_title": "删除子代理",
         "delete_success": "删除成功",
         "delete_failed": "删除失败"
+    },
+    "usage_script": {
+        "title": "用量查询",
+        "enable": "启用用量查询",
+        "template": "预设模板",
+        "template_generic": "通用",
+        "template_newapi": "New API",
+        "template_custom": "自定义",
+        "fallback_provider": "留空使用服务商配置",
+        "timeout": "超时时间（秒）",
+        "auto_interval": "自动查询间隔（分钟，0 禁用）",
+        "script": "查询脚本",
+        "test": "测试脚本",
+        "test_failed": "测试失败",
+        "loading": "查询中...",
+        "query_failed": "查询失败",
+        "invalid": "已失效",
+        "used": "已用",
+        "remaining": "剩余",
+        "refresh": "刷新用量",
+        "save_success": "用量查询配置已保存",
+        "save_failed": "保存失败: {{error}}"
     },
     "providers": {
         "title": "服务商",

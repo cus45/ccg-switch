@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AlertTriangle, Check, CircleSlash, Copy, RefreshCw, User} from 'lucide-react';
+import {AlertTriangle, Check, CircleSlash, Copy, History, RefreshCw, User} from 'lucide-react';
 import type {ChatMessage, ContentBlock, TextBlock, ThinkingBlock, ToolResultBlock} from '../../types/chat';
 import {STOPPED_OUTPUT_ERROR, useChatStore} from '../../stores/useChatStore';
 import {useChatPaneTabKey} from './paneTabContext';
@@ -10,6 +10,7 @@ import {getRenderableContentBlocks, shouldRenderChatMessage,} from '../../utils/
 import ContentBlockRenderer from './ContentBlockRenderer';
 import MarkdownBlock from './MarkdownBlock';
 import MessageMeta from './MessageMeta';
+import RewindConfirmDialog from './RewindConfirmDialog';
 import StreamingPlaceholder from './StreamingPlaceholder';
 
 interface MessageItemProps {
@@ -71,6 +72,8 @@ export default function MessageItem({
     const copyTimerRef = useRef<number | null>(null);
     // 宿主 pane 的 tab（侧聊）；null=主聊天全局投影。重发按钮据此路由到正确会话。
     const paneTabKey = useChatPaneTabKey();
+    const [rewindOpen, setRewindOpen] = useState(false);
+    const [rewindBusy, setRewindBusy] = useState(false);
 
     const isUser = message.role === 'user';
     const isAssistant = message.role === 'assistant';
@@ -184,6 +187,40 @@ export default function MessageItem({
         onAnchorRef(anchorId, node);
     }, [anchorId, onAnchorRef]);
 
+    // 消息级回退：仅 user 消息且带会话 uuid 时可用（provider/回合状态在 store 侧校验）。
+    const rewindLabel = translateWithFallback(t, 'chat.rewind.action', 'Rewind to here');
+    const rewindUnavailableLabel = translateWithFallback(
+        t,
+        'chat.rewind.unavailable',
+        'Cannot rewind: only Claude sessions support this, and the turn must be finished.',
+    );
+    const canRewind = isUser && Boolean(message.raw?.uuid?.trim());
+    const handleRewindConfirm = (restoreFiles: boolean) => {
+        setRewindBusy(true);
+        void useChatStore.getState()
+            .rewindToMessage(paneTabKey, message.id, {restoreFiles})
+            .then((ok) => {
+                setRewindBusy(false);
+                if (ok) {
+                    setRewindOpen(false);
+                } else {
+                    showToast(rewindUnavailableLabel, 'warning');
+                }
+            });
+    };
+
+    const rewindButton = canRewind ? (
+        <button
+            type="button"
+            className="btn btn-ghost btn-xs h-7 min-h-0 px-2 opacity-70 transition-opacity hover:opacity-100 focus:opacity-100"
+            title={rewindLabel}
+            aria-label={rewindLabel}
+            onClick={() => setRewindOpen(true)}
+        >
+            <History size={14} />
+        </button>
+    ) : null;
+
     const copyButton = (
         <button
             type="button"
@@ -262,7 +299,10 @@ export default function MessageItem({
                             <span className="font-medium text-base-content/65">{roleLabel}</span>
                             <span>{time}</span>
                         </div>
-                        {copyButton}
+                        <div className="flex items-center gap-0.5">
+                            {rewindButton}
+                            {copyButton}
+                        </div>
                     </header>
 
                     {messageContent}
@@ -273,6 +313,16 @@ export default function MessageItem({
                         </footer>
                     )}
                 </div>
+                {rewindOpen && (
+                    <RewindConfirmDialog
+                        messagePreview={message.content}
+                        busy={rewindBusy}
+                        onConfirm={handleRewindConfirm}
+                        onCancel={() => {
+                            if (!rewindBusy) setRewindOpen(false);
+                        }}
+                    />
+                )}
             </article>
         );
     }
