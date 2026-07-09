@@ -4,6 +4,7 @@ import {memo, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import hljs from 'highlight.js/lib/core';
 import {markedHighlight} from 'marked-highlight';
+import MermaidViewer from './MermaidViewer';
 
 // 导入常用语言
 import bash from 'highlight.js/lib/languages/bash';
@@ -138,7 +139,10 @@ async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
             const wrapper = document.createElement('div');
             wrapper.className = 'mermaid-diagram';
             wrapper.innerHTML = svg;
-            pre.replaceWith(wrapper);
+            wrapper.setAttribute('data-mermaid-source', source);
+            // 代码块若已被语言标签头包裹，连同外框一起替换
+            const host = pre.closest('.code-block-frame') ?? pre;
+            host.replaceWith(wrapper);
         } catch {
             // 语法错误等：保留原代码块展示源码（mermaid.render 失败会遗留
             // 临时错误节点，清理掉避免污染页面）
@@ -245,6 +249,8 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
     const {copyCodeLabel, copiedCodeLabel} = useMemo(() => getMarkdownCodeCopyLabels(t), [t]);
     // katex 扩展装载完成后 +1，触发重算 html 使公式生效
     const [mathRuntimeVersion, setMathRuntimeVersion] = useState(katexReady ? 1 : 0);
+    // 全屏查看中的 mermaid SVG（点击图表打开）
+    const [mermaidViewerSvg, setMermaidViewerSvg] = useState<string | null>(null);
 
     const needsMath = useMemo(() => containsMathSyntax(content), [content]);
     useEffect(() => {
@@ -302,7 +308,22 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
         };
     }, [html, isStreaming]);
 
-    // 添加复制按钮到代码块
+    // 点击 mermaid 图 → 全屏查看（缩放/平移）。事件委托，重渲染后的 DOM 仍生效。
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return undefined;
+        const handleClick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            const diagram = target?.closest?.('.mermaid-diagram');
+            if (!diagram || !container.contains(diagram)) return;
+            const svg = diagram.innerHTML;
+            if (svg.trim()) setMermaidViewerSvg(svg);
+        };
+        container.addEventListener('click', handleClick);
+        return () => container.removeEventListener('click', handleClick);
+    }, []);
+
+    // 代码块包装：语言标签头栏 + 常驻复制按钮（替代原悬浮按钮）
     useEffect(() => {
         if (!containerRef.current) return;
 
@@ -310,12 +331,24 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
         const codeBlocks = containerRef.current.querySelectorAll('pre > code');
         codeBlocks.forEach((codeBlock) => {
             const pre = codeBlock.parentElement;
-            if (!pre || pre.querySelector('.copy-button')) return;
+            if (!pre || pre.closest('.code-block-frame')) return;
 
-            // 创建复制按钮
+            const langMatch = /language-([\w+#.-]+)/.exec(codeBlock.className);
+            const lang = langMatch?.[1]?.toLowerCase() ?? '';
+
+            const frame = document.createElement('div');
+            frame.className = 'code-block-frame';
+            const header = document.createElement('div');
+            header.className = 'code-block-header';
+            const langLabel = document.createElement('span');
+            langLabel.className = 'code-block-lang';
+            langLabel.textContent = lang || 'text';
+            header.appendChild(langLabel);
+
+            // 复制按钮（挪入头栏，常驻显示）
             const button = document.createElement('button');
             button.className = 'copy-button';
-            button.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+            button.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
             button.title = copyCodeLabel;
             button.setAttribute('aria-label', copyCodeLabel);
 
@@ -324,12 +357,12 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
                 const code = codeBlock.textContent || '';
                 try {
                     await navigator.clipboard.writeText(code);
-                    button.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+                    button.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
                     button.classList.add('copied');
                     button.title = copiedCodeLabel;
                     button.setAttribute('aria-label', copiedCodeLabel);
                     resetTimer = window.setTimeout(() => {
-                        button.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+                        button.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
                         button.classList.remove('copied');
                         button.title = copyCodeLabel;
                         button.setAttribute('aria-label', copyCodeLabel);
@@ -340,9 +373,10 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
             };
 
             button.addEventListener('click', handleCopy);
+            header.appendChild(button);
 
-            pre.style.position = 'relative';
-            pre.appendChild(button);
+            pre.replaceWith(frame);
+            frame.append(header, pre);
             cleanupCallbacks.push(() => {
                 button.removeEventListener('click', handleCopy);
                 if (resetTimer !== null) {
@@ -355,11 +389,19 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
     }, [copyCodeLabel, copiedCodeLabel, html]);
 
     return (
-        <div
-            ref={containerRef}
-            className="markdown-block"
-            dangerouslySetInnerHTML={{ __html: html }}
-        />
+        <>
+            <div
+                ref={containerRef}
+                className="markdown-block"
+                dangerouslySetInnerHTML={{ __html: html }}
+            />
+            {mermaidViewerSvg && (
+                <MermaidViewer
+                    svg={mermaidViewerSvg}
+                    onClose={() => setMermaidViewerSvg(null)}
+                />
+            )}
+        </>
     );
 }
 

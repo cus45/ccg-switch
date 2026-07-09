@@ -13,7 +13,7 @@ import {useTranslation} from 'react-i18next';
 import {invoke} from '@tauri-apps/api/core';
 import {useComposerChatBinding} from './useComposerChatBinding';
 import {useProviderStore} from '../../../stores/useProviderStore';
-import type {ChatAttachment} from '../../../types/chat';
+import type {ChatAttachment, QueuedChatMessage} from '../../../types/chat';
 import {type ChatWorkspaceProjectOption, ContextBar} from './ContextBar';
 import {ButtonArea} from './ButtonArea';
 import {CompletionMenu} from './CompletionMenu';
@@ -217,6 +217,7 @@ export function ChatComposer({
         abort,
         readDraft,
         removeQueuedMessage,
+        canAbort,
     } = useComposerChatBinding(tabKey);
     const {
         providers,
@@ -571,6 +572,13 @@ export function ChatComposer({
             return;
         }
 
+        // Esc：流式进行中直接中止本轮（补全菜单未消费时才生效；侧聊无定向中止）
+        if (e.key === 'Escape' && isStreaming && canAbort) {
+            e.preventDefault();
+            void abort();
+            return;
+        }
+
         if (e.key === 'ArrowUp' && navigateDraftHistory('previous')) {
             e.preventDefault();
             return;
@@ -586,6 +594,26 @@ export function ChatComposer({
             e.preventDefault();
             void handleSend();
         }
+    };
+
+    // 队列条目点击回填：出队 + 文本并入输入框（已有草稿则换行拼接）+ 附件回挂
+    const handleEditQueuedMessage = (item: QueuedChatMessage) => {
+        removeQueuedMessage(item.id);
+        if (item.attachments && item.attachments.length > 0) {
+            const restored = item.attachments;
+            setAttachments((current) => [...current, ...restored]);
+        }
+        const currentText = getText().trim();
+        const nextText = currentText && item.text
+            ? `${currentText}\n${item.text}`
+            : (item.text || currentText);
+        setDraft(nextText);
+        setEditorPlainText(nextText);
+        requestAnimationFrame(() => {
+            setEditorContentText(nextText);
+            focusEditor();
+            autosize();
+        });
     };
 
     const handleAddAttachment = async (files: FileList) => {
@@ -763,7 +791,11 @@ export function ChatComposer({
         <div className="bg-base-200/20 px-2 pb-4 pt-2 sm:px-3">
             <div className="w-full rounded-xl border border-base-300 bg-base-100/95 p-2 shadow-lg shadow-base-300/30 backdrop-blur">
                 {/* 忙时排队的待发消息 */}
-                <MessageQueueBar items={queuedMessages} onRemove={removeQueuedMessage} />
+                <MessageQueueBar
+                    items={queuedMessages}
+                    onRemove={removeQueuedMessage}
+                    onEdit={handleEditQueuedMessage}
+                />
 
                 {/* 顶部上下文栏 */}
                 <ContextBar

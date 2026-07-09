@@ -77,6 +77,9 @@ describe('TodoToolBlock', () => {
     expect(html).toContain('运行测试');
     expect(html).toContain('line-through');
     expect(html).toContain('animate-spin');
+    // 头部进度条按完成度填充
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain('width:33%');
   });
 
   it('收起时头部显示当前进行中的项', () => {

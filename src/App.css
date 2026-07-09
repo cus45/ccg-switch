@@ -158,6 +158,13 @@ a {
   background-color: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.08);
   overflow-x: auto;
+  cursor: zoom-in;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.markdown-block .mermaid-diagram:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
 }
 
 [data-theme="dark"] .markdown-block .mermaid-diagram {
@@ -238,6 +245,58 @@ a {
   border: 1px solid rgba(128, 128, 128, 0.18);
   border-radius: 6px;
   position: relative;
+}
+
+/* 代码块外框：语言标签头栏 + 代码体，整体圆角描边 */
+.markdown-block .code-block-frame {
+  margin: 0.5em 0 1em 0;
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.markdown-block .code-block-frame pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.markdown-block .code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  padding: 0.3em 0.6em 0.3em 0.85em;
+  background-color: rgba(0, 0, 0, 0.035);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  user-select: none;
+}
+
+.markdown-block .code-block-lang {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .markdown-block .code-block-header {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .markdown-block .code-block-lang {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* 头栏内的复制按钮：常驻显示、静态定位（覆盖悬浮版样式） */
+.markdown-block .code-block-header .copy-button {
+  position: static;
+  opacity: 0.65;
+  padding: 0.25em 0.35em;
+}
+
+.markdown-block .code-block-header .copy-button:hover {
+  opacity: 1;
 }
 
 [data-theme="dark"] .markdown-block pre {

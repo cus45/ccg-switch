@@ -261,7 +261,8 @@
             "title": "Queued · sends after this turn ({{count}})",
             "remove": "Remove queued message",
             "attachmentOnly": "(attachments only)",
-            "attachmentCount": "{{count}} attachment(s)"
+            "attachmentCount": "{{count}} attachment(s)",
+            "editHint": "Click to move back into the composer for editing"
         },
         "rewind": {
             "action": "Rewind to this message",
@@ -281,6 +282,12 @@
         "stall": {
             "hint": "No new output for {{seconds}}s. A long task (build/tests) may still be running; you can also stop this turn.",
             "stop": "Stop turn"
+        },
+        "diagram": {
+            "viewerTitle": "Diagram viewer",
+            "zoomIn": "Zoom in",
+            "zoomOut": "Zoom out",
+            "reset": "Reset view"
         },
         "collapsePanel": "Collapse status panel",
         "expandPanel": "Expand status panel",
@@ -321,11 +328,26 @@
             }
         },
         "reasoning": {
-            "low": { "label": "Low", "description": "Quick responses with basic reasoning" },
-            "medium": { "label": "Medium", "description": "Balanced thinking and speed" },
-            "high": { "label": "High", "description": "Deep reasoning for complex tasks (default)" },
-            "xhigh": { "label": "XHigh", "description": "Extra deep reasoning for demanding tasks" },
-            "max": { "label": "Max", "description": "Maximum reasoning depth" }
+            "low": {
+                "label": "Low",
+                "description": "Quick responses with basic reasoning"
+            },
+            "medium": {
+                "label": "Medium",
+                "description": "Balanced thinking and speed"
+            },
+            "high": {
+                "label": "High",
+                "description": "Deep reasoning for complex tasks (default)"
+            },
+            "xhigh": {
+                "label": "XHigh",
+                "description": "Extra deep reasoning for demanding tasks"
+            },
+            "max": {
+                "label": "Max",
+                "description": "Maximum reasoning depth"
+            }
         },
         "models": {
             "opus48": "Opus 4.8 · Latest and most capable",

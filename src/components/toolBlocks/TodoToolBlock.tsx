@@ -60,6 +60,7 @@ const TodoToolBlock = memo(function TodoToolBlock({
   const completedCount = todos.filter((item) => item.status === 'completed').length;
   const inProgress = todos.find((item) => item.status === 'in_progress');
   const progressLabel = t('tools.todoProgress', { completed: completedCount, total: todos.length });
+  const progressPct = Math.round((completedCount / todos.length) * 100);
   const currentLabel = inProgress ? (inProgress.activeForm || inProgress.content) : '';
   const status = getToolDisplayStatus(result, isDenied);
   const headerToggleLabel = t('tools.todoDetailsToggle');
@@ -90,6 +91,20 @@ const TodoToolBlock = memo(function TodoToolBlock({
           <span className="tool-title-text">{t('tools.todo')}</span>
           <span className="tool-title-summary" title={progressLabel} aria-label={progressLabel}>
             {progressLabel}
+          </span>
+          <span
+            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-base-content/10"
+            role="progressbar"
+            aria-valuenow={progressPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span
+              className={`block h-full rounded-full transition-all duration-300 ${
+                progressPct >= 100 ? 'bg-success' : 'bg-primary'
+              }`}
+              style={{ width: `${progressPct}%` }}
+            />
           </span>
           {!expanded && currentLabel && (
             <span className="tool-title-summary" title={currentLabel}>

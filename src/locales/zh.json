@@ -250,7 +250,8 @@
             "title": "排队中 · 本轮结束后自动发送 ({{count}})",
             "remove": "移除排队消息",
             "attachmentOnly": "（仅附件）",
-            "attachmentCount": "{{count}} 个附件"
+            "attachmentCount": "{{count}} 个附件",
+            "editHint": "点击回填到输入框编辑"
         },
         "rewind": {
             "action": "回退到此消息重来",
@@ -270,6 +271,12 @@
         "stall": {
             "hint": "已 {{seconds}} 秒没有新输出。长任务（构建/测试）可能仍在执行；也可以停止本轮。",
             "stop": "停止本轮"
+        },
+        "diagram": {
+            "viewerTitle": "图表查看器",
+            "zoomIn": "放大",
+            "zoomOut": "缩小",
+            "reset": "重置视图"
         },
         "collapsePanel": "收起状态面板",
         "expandPanel": "展开状态面板",
@@ -310,11 +317,26 @@
             }
         },
         "reasoning": {
-            "low": { "label": "低", "description": "快速响应，基础推理" },
-            "medium": { "label": "中", "description": "平衡思考与速度" },
-            "high": { "label": "高", "description": "深度推理，适合复杂任务（默认）" },
-            "xhigh": { "label": "极高", "description": "更深推理，应对高难度任务" },
-            "max": { "label": "最高", "description": "最大推理深度" }
+            "low": {
+                "label": "低",
+                "description": "快速响应，基础推理"
+            },
+            "medium": {
+                "label": "中",
+                "description": "平衡思考与速度"
+            },
+            "high": {
+                "label": "高",
+                "description": "深度推理，适合复杂任务（默认）"
+            },
+            "xhigh": {
+                "label": "极高",
+                "description": "更深推理，应对高难度任务"
+            },
+            "max": {
+                "label": "最高",
+                "description": "最大推理深度"
+            }
         },
         "models": {
             "opus48": "Opus 4.8 · 最新最强",
@@ -609,7 +631,8 @@
         "glob": "Glob"
     },
     "mcp": {
-        "title": "MCP 服务器管理",        "servers": "个服务器",
+        "title": "MCP 服务器管理",
+        "servers": "个服务器",
         "empty": "暂无 MCP 服务器",
         "empty_hint": "点击上方\"添加\"按钮添加第一个 MCP 服务器",
         "global": "全局",
