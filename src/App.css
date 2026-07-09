@@ -492,6 +492,25 @@ a {
 /* Chat message flow */
 .chat-message-row {
   overflow-wrap: anywhere;
+  /* 新消息进场：轻微上浮淡入，历史批量加载因同帧渲染几乎无感 */
+  animation: chatMessageEnter 0.18s ease-out;
+}
+
+@keyframes chatMessageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-message-row {
+    animation: none;
+  }
 }
 
 .assistant-message-flow {
