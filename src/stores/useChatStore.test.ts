@@ -3929,3 +3929,67 @@ describe('useChatStore message queue (queue follow-ups while busy)', () => {
         expect(rest[0]?.text).toBe('queued two');
     });
 });
+
+describe('useChatStore system message handling (compact boundary)', () => {
+    beforeEach(() => {
+        tauriMocks.invoke.mockReset();
+        tauriMocks.listen.mockClear();
+        notificationMocks.notifyChatTurnStopped.mockClear();
+        notificationMocks.prepareChatTurnStoppedNotificationPermission.mockClear();
+        vi.stubGlobal('localStorage', localStorageMock);
+        localStorageEntries.clear();
+        clearChatSessionHistoryCache();
+        resetStore();
+    });
+
+    async function initWithListeners() {
+        const listeners: Record<string, (event: { payload: unknown }) => void> = {};
+        tauriMocks.listen.mockImplementation(async (eventName: string, callback: (event: { payload: unknown }) => void) => {
+            listeners[eventName] = callback;
+            return vi.fn();
+        });
+        tauriMocks.invoke.mockResolvedValue(null);
+        useChatStore.setState({initialized: false});
+        await useChatStore.getState().init();
+        return listeners;
+    }
+
+    it('renders compact_boundary as a system divider message and ignores other system subtypes', async () => {
+        const listeners = await initWithListeners();
+        useChatStore.setState({
+            messages: [],
+            activeTabKey: 'main-tab',
+            currentCwd: 'C:/workspace/main',
+            openTabs: [],
+            dockChatTabKey: null,
+        });
+        const sideKey = useChatStore.getState().openSideChat();
+        const sideTab = () => useChatStore.getState().openTabs.find((tab) => tab.key === sideKey);
+
+        tauriMocks.invoke.mockResolvedValueOnce('req-compact-1');
+        await useChatStore.getState().sendInTab(sideKey, 'long conversation');
+        const baseCount = sideTab()?.messages.length ?? 0;
+
+        // init 等其它 system 子类型不进 transcript
+        listeners['chat://message']?.({payload: {
+            requestId: 'req-compact-1',
+            json: JSON.stringify({type: 'system', subtype: 'init', session_id: 'session-x'}),
+        }});
+        expect(sideTab()?.messages.length).toBe(baseCount);
+
+        listeners['chat://message']?.({payload: {
+            requestId: 'req-compact-1',
+            json: JSON.stringify({
+                type: 'system',
+                subtype: 'compact_boundary',
+                compact_metadata: {trigger: 'auto', pre_tokens: 156000},
+            }),
+        }});
+
+        const messages = sideTab()?.messages ?? [];
+        expect(messages.length).toBe(baseCount + 1);
+        const divider = messages[messages.length - 1];
+        expect(divider.role).toBe('system');
+        expect(divider.compact).toEqual({trigger: 'auto', preTokens: 156000});
+    });
+});

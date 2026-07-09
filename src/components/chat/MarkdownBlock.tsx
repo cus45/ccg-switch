@@ -1,6 +1,6 @@
 import {marked} from 'marked';
 import DOMPurify from 'dompurify';
-import {memo, useEffect, useMemo, useRef} from 'react';
+import {memo, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import hljs from 'highlight.js/lib/core';
 import {markedHighlight} from 'marked-highlight';
@@ -75,6 +75,77 @@ marked.setOptions({
     gfm: true, // GitHub Flavored Markdown
     breaks: true, // 换行符转换为 <br>
 });
+
+// ============================================================
+// KaTeX 数学公式（懒加载：首次检测到公式才拉取扩展与样式）
+// ============================================================
+
+/** 块级 $$...$$ 或成对内联 $...$（内容不以空白开头/结尾，排除货币写法误伤） */
+const MATH_PATTERN = /\$\$[\s\S]+?\$\$|\$(?!\s)[^$\n]*?[^\s$]\$/;
+
+let katexReady = false;
+let katexLoading: Promise<void> | null = null;
+
+function ensureKatexLoaded(): Promise<void> {
+    if (!katexLoading) {
+        katexLoading = Promise.all([
+            import('marked-katex-extension'),
+            import('katex/dist/katex.min.css'),
+        ]).then(([extension]) => {
+            marked.use(extension.default({throwOnError: false}));
+            katexReady = true;
+        }).catch((e) => {
+            console.error('[MarkdownBlock] Failed to load KaTeX:', e);
+            katexLoading = null;
+        });
+    }
+    return katexLoading;
+}
+
+export function containsMathSyntax(content: string): boolean {
+    return content.includes('$') && MATH_PATTERN.test(content);
+}
+
+// ============================================================
+// Mermaid 图表（懒加载：渲染完成的 ```mermaid 代码块为 SVG）
+// ============================================================
+
+let mermaidSeq = 0;
+
+async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
+    const nodes = Array.from(container.querySelectorAll('pre > code.language-mermaid'));
+    if (nodes.length === 0) return;
+
+    const mermaid = (await import('mermaid')).default;
+    const isDark = typeof document !== 'undefined'
+        && document.documentElement.getAttribute('data-theme') === 'dark';
+    mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: isDark ? 'dark' : 'default',
+    });
+
+    for (const node of nodes) {
+        const pre = node.parentElement;
+        // 容器可能已被后续渲染替换/卸载
+        if (!pre || !pre.isConnected) continue;
+        const source = node.textContent ?? '';
+        if (!source.trim()) continue;
+        mermaidSeq += 1;
+        try {
+            const {svg} = await mermaid.render(`ccg-mermaid-${mermaidSeq}`, source);
+            if (!pre.isConnected) continue;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-diagram';
+            wrapper.innerHTML = svg;
+            pre.replaceWith(wrapper);
+        } catch {
+            // 语法错误等：保留原代码块展示源码（mermaid.render 失败会遗留
+            // 临时错误节点，清理掉避免污染页面）
+            document.getElementById(`dccg-mermaid-${mermaidSeq}`)?.remove();
+        }
+    }
+}
 
 interface MarkdownBlockProps {
     content: string;
@@ -172,6 +243,20 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
     const { t } = useTranslation();
     const containerRef = useRef<HTMLDivElement>(null);
     const {copyCodeLabel, copiedCodeLabel} = useMemo(() => getMarkdownCodeCopyLabels(t), [t]);
+    // katex 扩展装载完成后 +1，触发重算 html 使公式生效
+    const [mathRuntimeVersion, setMathRuntimeVersion] = useState(katexReady ? 1 : 0);
+
+    const needsMath = useMemo(() => containsMathSyntax(content), [content]);
+    useEffect(() => {
+        if (!needsMath || katexReady) return;
+        let cancelled = false;
+        void ensureKatexLoaded().then(() => {
+            if (!cancelled && katexReady) setMathRuntimeVersion((v) => v + 1);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [needsMath]);
 
     // 渲染 Markdown
     const html = useMemo(() => {
@@ -192,7 +277,30 @@ function MarkdownBlock({ content, isStreaming = false }: MarkdownBlockProps) {
             console.error('[MarkdownBlock] Parse error:', e);
             return escapeHtml(content);
         }
-    }, [content, isStreaming]);
+        // mathRuntimeVersion: katex 装载完成后需重跑 marked.parse
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [content, isStreaming, mathRuntimeVersion]);
+
+    // Mermaid 图表渲染：流式期间跳过（图源不完整），完成后把代码块替换为 SVG
+    useEffect(() => {
+        if (isStreaming) return undefined;
+        const container = containerRef.current;
+        if (!container || !html.includes('language-mermaid')) return undefined;
+
+        let cancelled = false;
+        // 延迟一拍：连续快速更新（如历史批量载入）时合并渲染
+        const timer = window.setTimeout(() => {
+            if (cancelled) return;
+            void renderMermaidBlocks(container).catch((e) => {
+                console.error('[MarkdownBlock] Mermaid render failed:', e);
+            });
+        }, 80);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [html, isStreaming]);
 
     // 添加复制按钮到代码块
     useEffect(() => {

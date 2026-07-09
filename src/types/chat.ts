@@ -20,6 +20,16 @@ export interface ChatMessage {
     durationMs?: number;
     /** 本轮 token 用量（来自 [USAGE] 标签，仅 assistant） */
     usage?: TokenUsage;
+    /** 上下文压缩分隔标记（role==='system' 时有效，渲染为转录分隔条） */
+    compact?: CompactBoundaryInfo;
+}
+
+/** 上下文压缩（compact boundary）信息 */
+export interface CompactBoundaryInfo {
+    /** 'auto'（达到阈值自动压缩）| 'manual'（/compact 手动触发） */
+    trigger: string;
+    /** 压缩前的上下文 token 数 */
+    preTokens?: number;
 }
 
 /** 用户输入区附件。图片附件使用 base64 数据传给 bridge，必要时由 bridge 落盘。 */
@@ -51,7 +61,7 @@ export interface TokenUsage {
 
 /** MESSAGE 标签的完整结构 */
 export interface MessageRaw {
-    type: 'user' | 'assistant';
+    type: 'user' | 'assistant' | 'system';
     message: {
         content: ContentBlock[];
     };
@@ -59,6 +69,13 @@ export interface MessageRaw {
     timestamp?: string;
     /** 非空表示这是子代理(sidechain)消息,指向父 Task 工具块的 tool_use id。 */
     parent_tool_use_id?: string | null;
+    /** system 消息子类型（init / compact_boundary / status …） */
+    subtype?: string;
+    /** subtype==='compact_boundary' 时的压缩元数据 */
+    compact_metadata?: {
+        trigger?: string;
+        pre_tokens?: number;
+    };
 }
 
 /** 内容块联合类型 */

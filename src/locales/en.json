@@ -274,6 +274,14 @@
             "confirm": "Rewind",
             "unavailable": "Cannot rewind: only Claude sessions support this, and the current turn must be finished."
         },
+        "compact": {
+            "auto": "Context compacted automatically",
+            "manual": "Context compacted (manual)"
+        },
+        "stall": {
+            "hint": "No new output for {{seconds}}s. A long task (build/tests) may still be running; you can also stop this turn.",
+            "stop": "Stop turn"
+        },
         "collapsePanel": "Collapse status panel",
         "expandPanel": "Expand status panel",
         "providerLabel": "AI provider",

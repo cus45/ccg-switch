@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AlertTriangle, Check, CircleSlash, Copy, History, RefreshCw, User} from 'lucide-react';
+import {AlertTriangle, Check, CircleSlash, Copy, FoldVertical, History, RefreshCw, User} from 'lucide-react';
 import type {ChatMessage, ContentBlock, TextBlock, ThinkingBlock, ToolResultBlock} from '../../types/chat';
 import {STOPPED_OUTPUT_ERROR, useChatStore} from '../../stores/useChatStore';
 import {useChatPaneTabKey} from './paneTabContext';
@@ -98,6 +98,31 @@ export default function MessageItem({
 
     if (!shouldRenderChatMessage(message)) {
         return null;
+    }
+
+    // 上下文压缩分隔条：细线 + 居中徽标，标记此处之前的对话已被压缩归纳。
+    if (message.role === 'system' && message.compact) {
+        const compactLabel = message.compact.trigger === 'manual'
+            ? translateWithFallback(t, 'chat.compact.manual', 'Context compacted (manual)')
+            : translateWithFallback(t, 'chat.compact.auto', 'Context compacted automatically');
+        const preTokensLabel = typeof message.compact.preTokens === 'number' && message.compact.preTokens > 0
+            ? ` · ${Math.round(message.compact.preTokens / 1000)}K tokens`
+            : '';
+        return (
+            <div
+                className="chat-message-row mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-2"
+                role="separator"
+                aria-label={compactLabel}
+            >
+                <span className="h-px flex-1 bg-base-content/10" />
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-base-300/70 bg-base-200/60 px-2.5 py-0.5 text-[11px] text-base-content/55">
+                    <FoldVertical size={11} aria-hidden="true" />
+                    {compactLabel}
+                    {preTokensLabel}
+                </span>
+                <span className="h-px flex-1 bg-base-content/10" />
+            </div>
+        );
     }
 
     const time = new Date(message.createdAt).toLocaleTimeString([], {
@@ -256,6 +281,7 @@ export default function MessageItem({
                     expandThinkingBlockIndex={expandedThinkingBlockIndex}
                     compact={isAssistant}
                     imageDisplay={isUser ? 'user-thumbnail' : undefined}
+                    streaming={Boolean(message.streaming)}
                 />
             ) : message.content ? (
                 <MarkdownBlock content={message.content} isStreaming={message.streaming} />

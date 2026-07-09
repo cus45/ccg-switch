@@ -148,6 +148,35 @@ a {
   color: inherit;
 }
 
+/* Mermaid 图表容器：居中、可横向滚动，浅底保证深色主题下节点文字可读 */
+.markdown-block .mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+}
+
+[data-theme="dark"] .markdown-block .mermaid-diagram {
+  background-color: #1c232b;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.markdown-block .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* KaTeX 块级公式：横向滚动避免长公式撑破气泡 */
+.markdown-block .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
 .markdown-block h1,
 .markdown-block h2,
 .markdown-block h3,

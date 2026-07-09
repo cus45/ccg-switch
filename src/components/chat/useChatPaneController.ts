@@ -70,7 +70,7 @@ export interface ChatPaneAnchorItem {
 
 type ChatPaneView = Pick<
     ChatTabView,
-    'messages' | 'provider' | 'currentCwd' | 'activeSession' | 'lastSessionLoadMetrics' | 'error'
+    'messages' | 'provider' | 'currentCwd' | 'activeSession' | 'lastSessionLoadMetrics' | 'error' | 'activeRequestId'
 >;
 
 export interface ChatPaneControllerOptions {
@@ -97,6 +97,8 @@ export interface ChatPaneController {
     error: string | null;
     hasMessages: boolean;
     isStreaming: boolean;
+    /** 该 tab 进行中的 requestId（卡死提示轮询活动时间用） */
+    activeRequestId: string | null;
     // 转录搜索
     searchQuery: string;
     searchInputRef: RefObject<HTMLInputElement | null>;
@@ -152,6 +154,7 @@ export function useChatPaneController({
         activeSession: globalStore.activeSession,
         lastSessionLoadMetrics: globalStore.lastSessionLoadMetrics,
         error: globalStore.error,
+        activeRequestId: globalStore.activeRequestId,
     };
     const messages = view.messages;
     const lastSessionLoadMetrics = view.lastSessionLoadMetrics;
@@ -554,6 +557,7 @@ export function useChatPaneController({
         error: view.error,
         hasMessages,
         isStreaming,
+        activeRequestId: view.activeRequestId,
         searchQuery,
         searchInputRef,
         handleSearchChange,

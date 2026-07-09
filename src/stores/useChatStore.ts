@@ -279,12 +279,29 @@ function notifyStoppedRequestOnce(
 function retireRequestOwnership(requestId: string | null | undefined): void {
     if (!requestId) return;
     requestTabKeys.delete(requestId);
+    requestActivityAt.delete(requestId);
     retiredRequestIds.add(requestId);
     while (retiredRequestIds.size > RETIRED_REQUEST_OWNERSHIP_LIMIT) {
         const oldest = retiredRequestIds.values().next().value;
         if (!oldest) break;
         retiredRequestIds.delete(oldest);
     }
+}
+
+/**
+ * 每个进行中请求最近一次收到 daemon 输出的时间（ms）。
+ * 供卡死提示（StreamStallHint）轮询，不进 zustand 避免高频 set。
+ */
+const requestActivityAt = new Map<string, number>();
+
+function noteRequestActivity(requestId: string | null | undefined): void {
+    if (!requestId) return;
+    requestActivityAt.set(requestId, Date.now());
+}
+
+export function getRequestActivityAt(requestId: string | null | undefined): number | null {
+    if (!requestId) return null;
+    return requestActivityAt.get(requestId) ?? null;
 }
 
 function retirePendingSendsForTab(tabKey: string | null | undefined): void {
@@ -1374,6 +1391,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const stateBeforeStream = get();
             if (!shouldAcceptRequestEvent(stateBeforeStream, requestId)) return;
             bindPendingRequestIfNeeded(set, stateBeforeStream, requestId);
+            noteRequestActivity(requestId);
 
             // 解析 daemon 的标签化输出。daemon stdout 每行都带标签前缀，
             // 只有 [CONTENT_DELTA] 是真正要显示的回复文本，其余（[DEBUG]、
@@ -1571,6 +1589,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 const stateBeforeMessage = get();
                 if (!shouldAcceptRequestEvent(stateBeforeMessage, requestId)) return;
                 bindPendingRequestIfNeeded(set, stateBeforeMessage, requestId);
+                noteRequestActivity(requestId);
                 const raw = JSON.parse(event.payload.json) as MessageRaw;
 
                 // 子代理消息(带 parent_tool_use_id)不进主 transcript，
@@ -1581,6 +1600,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
                         ...tab,
                         subagentRuns: mergeSubagentRun(tab.subagentRuns, parentToolUseId, raw),
                     })));
+                    return;
+                }
+
+                // system 消息不进常规合并：compact_boundary 渲染为压缩分隔条，
+                // 其余子类型（init/status 等）不进 transcript。
+                if (raw.type === 'system') {
+                    if (raw.subtype === 'compact_boundary') {
+                        const compactMessage: ChatMessage = {
+                            id: newId(),
+                            role: 'system',
+                            content: '',
+                            compact: {
+                                trigger: raw.compact_metadata?.trigger ?? 'auto',
+                                preTokens: raw.compact_metadata?.pre_tokens,
+                            },
+                            createdAt: Date.now(),
+                        };
+                        set((state) => updateRequestTabState(state, requestId, (tab) => ({
+                            ...tab,
+                            messages: [...tab.messages, compactMessage],
+                        })));
+                    }
                     return;
                 }
 
@@ -1607,6 +1648,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 const { requestId, parentToolUseId } = event.payload;
                 const trimmedParent = parentToolUseId?.trim();
                 if (!trimmedParent) return;
+                noteRequestActivity(requestId);
                 const stateBeforeMessage = get();
                 if (!shouldAcceptRequestEvent(stateBeforeMessage, requestId)) return;
                 bindPendingRequestIfNeeded(set, stateBeforeMessage, requestId);
@@ -1954,6 +1996,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 return true;
             }
             requestTabKeys.set(requestId, tabKey);
+            noteRequestActivity(requestId);
             set((state) => updateRequestTabState(state, requestId, (tab) => ({
                 ...tab,
                 activeRequestId: requestId,
@@ -2094,6 +2137,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 return true;
             }
             requestTabKeys.set(requestId, tabKey);
+            noteRequestActivity(requestId);
             set((state) => updateRequestTabState(state, requestId, (current) => ({
                 ...current,
                 activeRequestId: requestId,

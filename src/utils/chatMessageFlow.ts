@@ -233,7 +233,8 @@ export function getRenderableContentBlocks(raw?: MessageRaw | null): ContentBloc
 }
 
 export function shouldRenderChatMessage(message: ChatMessage): boolean {
-    if (message.role === 'system') return false;
+    // system 消息默认不渲染；compact 分隔条（上下文压缩标记）例外。
+    if (message.role === 'system') return Boolean(message.compact);
     if (isProtocolContextMessage(message)) return false;
     if (message.role === 'user' && hasToolResult(message.raw)) return false;
     if (message.streaming || message.error) return true;

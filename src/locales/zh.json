@@ -263,6 +263,14 @@
             "confirm": "回退",
             "unavailable": "无法回退：仅 Claude 会话支持，且需等当前回合结束。"
         },
+        "compact": {
+            "auto": "上下文已自动压缩",
+            "manual": "上下文已压缩（手动）"
+        },
+        "stall": {
+            "hint": "已 {{seconds}} 秒没有新输出。长任务（构建/测试）可能仍在执行；也可以停止本轮。",
+            "stop": "停止本轮"
+        },
         "collapsePanel": "收起状态面板",
         "expandPanel": "展开状态面板",
         "providerLabel": "AI 提供方",

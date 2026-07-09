@@ -12,6 +12,7 @@ import ConversationSearch from './ConversationSearch';
 import ScrollControl from './ScrollControl';
 import ChatInputStatusTabs from './ChatInputStatusTabs';
 import ChatSessionTabs from './ChatSessionTabs';
+import StreamStallHint from './StreamStallHint';
 import {ChatComposer} from './composer/ChatComposer';
 import type {ChatWorkspaceProjectOption} from './composer/ContextBar';
 import type {ChatWorkspaceStatus} from '../../utils/chatWorkspaceStatus';
@@ -146,6 +147,11 @@ export function ChatPane({
             />
 
             {/* 发送控制台：约束在会话列内，避免横跨会话栏/状态栏 */}
+            <StreamStallHint
+                requestId={controller.activeRequestId}
+                streaming={controller.isStreaming}
+                canAbort={isMain}
+            />
             <ChatInputStatusTabs
                 statusSummary={controller.inputStatusSummary}
                 isStreaming={controller.isStreaming}

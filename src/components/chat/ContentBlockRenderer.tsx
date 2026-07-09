@@ -36,6 +36,8 @@ interface ContentBlockRendererProps {
     expandThinkingBlockIndex?: number;
     compact?: boolean;
     imageDisplay?: 'default' | 'compact' | 'user-thumbnail';
+    /** 所属消息是否仍在流式输出（mermaid 等重渲染在流式期间跳过） */
+    streaming?: boolean;
 }
 
 export interface ImageRenderData {
@@ -236,6 +238,7 @@ export default function ContentBlockRenderer({
     expandThinkingBlockIndex,
     compact = false,
     imageDisplay,
+    streaming = false,
 }: ContentBlockRendererProps) {
     const { t } = useTranslation();
     const [lightboxImage, setLightboxImage] = useState<ImageRenderData | null>(null);
@@ -391,6 +394,7 @@ export default function ContentBlockRenderer({
                                 <MarkdownBlock
                                     key={grouped.originalIndex}
                                     content={block.text}
+                                    isStreaming={streaming}
                                 />
                             );
 
