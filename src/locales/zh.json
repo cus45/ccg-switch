@@ -268,6 +268,12 @@
             "auto": "上下文已自动压缩",
             "manual": "上下文已压缩（手动）"
         },
+        "compactSummary": {
+            "title": "对话压缩摘要",
+            "expand": "展开摘要",
+            "collapse": "收起摘要",
+            "charCount": "{{count}} 字符"
+        },
         "stall": {
             "hint": "已 {{seconds}} 秒没有新输出。长任务（构建/测试）可能仍在执行；也可以停止本轮。",
             "stop": "停止本轮"

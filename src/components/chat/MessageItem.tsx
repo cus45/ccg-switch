@@ -6,7 +6,8 @@ import {STOPPED_OUTPUT_ERROR, useChatStore} from '../../stores/useChatStore';
 import {useChatPaneTabKey} from './paneTabContext';
 import {showToast} from '../common/ToastContainer';
 import {cn} from '../../utils/cn';
-import {getRenderableContentBlocks, shouldRenderChatMessage,} from '../../utils/chatMessageFlow';
+import {getRenderableContentBlocks, isCompactSummaryMessage, shouldRenderChatMessage,} from '../../utils/chatMessageFlow';
+import CompactSummaryBlock from './CompactSummaryBlock';
 import ContentBlockRenderer from './ContentBlockRenderer';
 import MarkdownBlock from './MarkdownBlock';
 import MessageMeta from './MessageMeta';
@@ -299,6 +300,22 @@ export default function MessageItem({
             )}
         </div>
     );
+
+    // 压缩续接摘要：系统生成的交接材料而非用户发言，默认折叠成摘要卡。
+    if (isUser && isCompactSummaryMessage(message)) {
+        return (
+            <article
+                ref={anchorId ? handleAnchorRef : undefined}
+                data-message-anchor-id={anchorId}
+                className={cn(
+                    'chat-message-row mx-auto w-full max-w-4xl px-3 py-2',
+                    isSearchMatch && 'rounded-lg bg-primary/5 ring-1 ring-primary/15',
+                )}
+            >
+                <CompactSummaryBlock content={message.content} />
+            </article>
+        );
+    }
 
     if (isUser) {
         return (

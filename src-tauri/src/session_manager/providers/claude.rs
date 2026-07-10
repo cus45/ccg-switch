@@ -423,11 +423,16 @@ fn parse_claude_history_line(line: &str) -> Option<UnifiedSessionMessage> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    // 压缩摘要消息（isCompactSummary）内容是纯字符串，无结构化块；
+    // 仍需携带 raw 让前端识别标志并折叠展示。
+    let is_compact_summary =
+        json.get("isCompactSummary").and_then(|v| v.as_bool()) == Some(true);
+
     Some(UnifiedSessionMessage {
         role: msg_type.to_string(),
         content,
         ts,
-        raw: if has_structured_content {
+        raw: if has_structured_content || is_compact_summary {
             Some(json)
         } else {
             None

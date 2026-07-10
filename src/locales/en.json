@@ -279,6 +279,12 @@
             "auto": "Context compacted automatically",
             "manual": "Context compacted (manual)"
         },
+        "compactSummary": {
+            "title": "Compacted context summary",
+            "expand": "Show summary",
+            "collapse": "Hide summary",
+            "charCount": "{{count}} chars"
+        },
         "stall": {
             "hint": "No new output for {{seconds}}s. A long task (build/tests) may still be running; you can also stop this turn.",
             "stop": "Stop turn"

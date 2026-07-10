@@ -76,6 +76,8 @@ export interface MessageRaw {
         trigger?: string;
         pre_tokens?: number;
     };
+    /** 上下文压缩后自动注入的续接摘要消息（Claude Code 生成） */
+    isCompactSummary?: boolean;
 }
 
 /** 内容块联合类型 */

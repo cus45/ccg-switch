@@ -3,6 +3,7 @@ import type {ChatMessage, MessageRaw} from '../types/chat';
 import {
     extractCompactBoundaryInfo,
     findToolResult,
+    isCompactSummaryMessage,
     getRenderableContentBlocks,
     mergeRawChatMessage,
     shouldRenderChatMessage,
@@ -605,5 +606,50 @@ describe('extractCompactBoundaryInfo', () => {
             type: 'system',
             subtype: 'compact_boundary',
         })).toEqual({trigger: 'auto', preTokens: undefined});
+    });
+});
+
+describe('isCompactSummaryMessage', () => {
+    const base = {id: 'm1', createdAt: 1} as const;
+
+    it('detects the raw isCompactSummary flag (history path)', () => {
+        const message: ChatMessage = {
+            ...base,
+            role: 'user',
+            content: '任意内容',
+            raw: {type: 'user', message: {content: []}, isCompactSummary: true},
+        };
+        expect(isCompactSummaryMessage(message)).toBe(true);
+    });
+
+    it('falls back to the fixed continuation prefix (live path)', () => {
+        const message: ChatMessage = {
+            ...base,
+            role: 'user',
+            content: 'This session is being continued from a previous conversation that ran out of context. ...',
+        };
+        expect(isCompactSummaryMessage(message)).toBe(true);
+    });
+
+    it('detects the prefix inside text blocks', () => {
+        const message: ChatMessage = {
+            ...base,
+            role: 'user',
+            content: '',
+            raw: {
+                type: 'user',
+                message: {content: [{type: 'text', text: 'This session is being continued from a previous conversation. summary'}]},
+            },
+        };
+        expect(isCompactSummaryMessage(message)).toBe(true);
+    });
+
+    it('ignores normal user and assistant messages', () => {
+        expect(isCompactSummaryMessage({...base, role: 'user', content: '正常提问'})).toBe(false);
+        expect(isCompactSummaryMessage({
+            ...base,
+            role: 'assistant',
+            content: 'This session is being continued from a previous conversation',
+        })).toBe(false);
     });
 });

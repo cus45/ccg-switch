@@ -255,6 +255,23 @@ export function extractCompactBoundaryInfo(raw: unknown): CompactBoundaryInfo | 
     return {trigger, preTokens};
 }
 
+/** Claude Code 压缩续接摘要的固定开头（该文案由 CC 生成，恒为英文） */
+const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
+
+/**
+ * 是否为上下文压缩后自动注入的续接摘要消息。
+ * 优先看 raw 的 isCompactSummary 标志（会话文件有、经 Rust 透传），
+ * 实时流缺标志时回退固定文案前缀识别。
+ */
+export function isCompactSummaryMessage(message: ChatMessage): boolean {
+    if (message.role !== 'user') return false;
+    if (message.raw?.isCompactSummary === true) return true;
+    if (message.content.trimStart().startsWith(COMPACT_SUMMARY_PREFIX)) return true;
+    return getContentBlocksFromRaw(message.raw).some((block) => (
+        block.type === 'text' && block.text.trimStart().startsWith(COMPACT_SUMMARY_PREFIX)
+    ));
+}
+
 export function shouldRenderChatMessage(message: ChatMessage): boolean {
     // system 消息默认不渲染；compact 分隔条（上下文压缩标记）例外。
     if (message.role === 'system') return Boolean(message.compact);
