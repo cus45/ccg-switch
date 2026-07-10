@@ -1,4 +1,4 @@
-import type {ChatMessage, ContentBlock, MessageRaw, TextBlock, ToolResultBlock,} from '../types/chat';
+import type {ChatMessage, CompactBoundaryInfo, ContentBlock, MessageRaw, TextBlock, ToolResultBlock,} from '../types/chat';
 import {isImageContentBlock, isImagePlaceholderText, isLikelyImageBase64Text} from './chatImageBlocks';
 
 interface MergeRawChatMessageOptions {
@@ -230,6 +230,29 @@ function isRenderableContentBlock(block: ContentBlock): boolean {
 
 export function getRenderableContentBlocks(raw?: MessageRaw | null): ContentBlock[] {
     return mergeAdjacentTextContentBlocks(getDisplayContentBlocksFromRaw(raw).filter(isRenderableContentBlock));
+}
+
+/**
+ * 从 system/compact_boundary 原始 JSON 提取压缩信息。
+ * 兼容两种键风格：SDK 实时流为 snake_case（compact_metadata/pre_tokens），
+ * 会话文件为 camelCase（compactMetadata/preTokens）。非压缩边界返回 null。
+ */
+export function extractCompactBoundaryInfo(raw: unknown): CompactBoundaryInfo | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const record = raw as {
+        type?: unknown;
+        subtype?: unknown;
+        compact_metadata?: {trigger?: unknown; pre_tokens?: unknown};
+        compactMetadata?: {trigger?: unknown; preTokens?: unknown};
+    };
+    if (record.type !== 'system' || record.subtype !== 'compact_boundary') return null;
+    const meta = record.compact_metadata ?? record.compactMetadata;
+    const trigger = typeof meta?.trigger === 'string' && meta.trigger ? meta.trigger : 'auto';
+    const rawPreTokens = record.compact_metadata?.pre_tokens ?? record.compactMetadata?.preTokens;
+    const preTokens = typeof rawPreTokens === 'number' && Number.isFinite(rawPreTokens)
+        ? rawPreTokens
+        : undefined;
+    return {trigger, preTokens};
 }
 
 export function shouldRenderChatMessage(message: ChatMessage): boolean {

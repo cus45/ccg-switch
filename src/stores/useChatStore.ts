@@ -29,7 +29,7 @@ import {
 import {AskUserQuestionRequest, PlanApprovalRequest, ToolPermissionRequest,} from '../types/permission';
 import type {ChatProviderId, PermissionMode, ReasoningEffort,} from '../components/chat/composer/constants';
 import {apply1MContextSuffix, reasoningLevelsFor, strip1MContextSuffix,} from '../components/chat/composer/constants';
-import {getContentBlocksFromRaw, isProtocolContextText, mergeRawChatMessage, TOOL_RESULT_CONTENT} from '../utils/chatMessageFlow';
+import {extractCompactBoundaryInfo, getContentBlocksFromRaw, isProtocolContextText, mergeRawChatMessage, TOOL_RESULT_CONTENT} from '../utils/chatMessageFlow';
 import {
     type ChatTurnStopOutcome,
     notifyChatTurnStopped,
@@ -1080,6 +1080,18 @@ function mapHistoryMessage(
         ? parsedTime
         : session.createdAt + index;
 
+    // 历史里的上下文压缩边界 → 压缩分隔条（不携带 raw，无内容块可渲染）
+    const compact = extractCompactBoundaryInfo(message.raw);
+    if (compact) {
+        return {
+            id: `history-${session.providerId}-${session.sessionId}-${index}`,
+            role: 'system',
+            content: '',
+            compact,
+            createdAt,
+        };
+    }
+
     const role = isProtocolContextText(message.content)
         ? 'system'
         : normalizeHistoryRole(message.role);
@@ -1606,15 +1618,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 // system 消息不进常规合并：compact_boundary 渲染为压缩分隔条，
                 // 其余子类型（init/status 等）不进 transcript。
                 if (raw.type === 'system') {
-                    if (raw.subtype === 'compact_boundary') {
+                    const compact = extractCompactBoundaryInfo(raw);
+                    if (compact) {
                         const compactMessage: ChatMessage = {
                             id: newId(),
                             role: 'system',
                             content: '',
-                            compact: {
-                                trigger: raw.compact_metadata?.trigger ?? 'auto',
-                                preTokens: raw.compact_metadata?.pre_tokens,
-                            },
+                            compact,
                             createdAt: Date.now(),
                         };
                         set((state) => updateRequestTabState(state, requestId, (tab) => ({

@@ -36,6 +36,7 @@ import {
     getComposerHeightFromDrag,
 } from '../../../utils/chatUiBehavior';
 import type {ChatWorkspaceStatus} from '../../../utils/chatWorkspaceStatus';
+import {ComposerHistory} from '../../../utils/composerHistory';
 import {getCaretOffset, getPlainText, removeFileTag, useContentEditable} from './useContentEditable';
 import './FileTag.css';
 
@@ -239,6 +240,11 @@ export function ChatComposer({
 
     const draftHistoryRef = useRef<string[]>([]);
     const historyCursorRef = useRef<number | null>(null);
+    // 增量撤销/重做（Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y），800ms 内连续输入合并为一步
+    const undoHistoryRef = useRef<ComposerHistory | null>(null);
+    if (!undoHistoryRef.current) {
+        undoHistoryRef.current = new ComposerHistory(draft);
+    }
     const resizeCleanupRef = useRef<(() => void) | null>(null);
     const manualResizeRef = useRef(false);
     const sendInFlightRef = useRef(false);
@@ -352,6 +358,7 @@ export function ChatComposer({
         if (persistDraft) {
             lastSyncedDraftRef.current = text;
             setDraft(text);
+            undoHistoryRef.current?.record(text);
         }
         return text;
     }, [setDraft]);
@@ -561,6 +568,12 @@ export function ChatComposer({
         }
     }, [editorRef, completions, insertTag, syncDraftFromEditor, setEditorContentText, setDraft, focusEditor, autosize]);
 
+    // 切换绑定 tab 时重置撤销历史（避免跨会话撤销）
+    useEffect(() => {
+        undoHistoryRef.current?.reset(readDraft());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tabKey]);
+
     const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
         // 补全菜单优先消费方向键 / Esc / Enter
         const consumed = completions.handleKeyDown(e);
@@ -568,6 +581,30 @@ export function ChatComposer({
             // Enter / Tab：确认补全
             if ((e.key === 'Enter' || e.key === 'Tab') && completions.isOpen) {
                 applyCompletionSelection(completions.activeIndex);
+            }
+            return;
+        }
+
+        // Ctrl/Cmd+Z 撤销、Ctrl/Cmd+Shift+Z / Ctrl+Y 重做（覆盖原生：
+        // 程序性写入后原生 undo 栈不可靠）
+        const modifier = e.ctrlKey || e.metaKey;
+        const keyLower = e.key.toLowerCase();
+        if (modifier && !e.altKey && (keyLower === 'z' || keyLower === 'y')) {
+            const isRedo = (keyLower === 'z' && e.shiftKey) || keyLower === 'y';
+            e.preventDefault();
+            const history = undoHistoryRef.current;
+            if (!history) return;
+            const current = getText();
+            const target = isRedo ? history.redo(current) : history.undo(current);
+            if (target !== null) {
+                setDraft(target);
+                setEditorPlainText(target);
+                lastSyncedDraftRef.current = target;
+                setEditorContentText(target);
+                requestAnimationFrame(() => {
+                    focusEditor();
+                    autosize();
+                });
             }
             return;
         }
@@ -789,7 +826,7 @@ export function ChatComposer({
 
     return (
         <div className="bg-base-200/20 px-2 pb-4 pt-2 sm:px-3">
-            <div className="w-full rounded-xl border border-base-300 bg-base-100/95 p-2 shadow-lg shadow-base-300/30 backdrop-blur">
+            <div className="w-full rounded-xl border border-base-300 bg-base-100/95 p-2 shadow-lg shadow-base-300/30 backdrop-blur transition-[border-color,box-shadow] duration-150 focus-within:border-primary/40 focus-within:shadow-primary/10">
                 {/* 忙时排队的待发消息 */}
                 <MessageQueueBar
                     items={queuedMessages}

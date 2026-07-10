@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {ChatMessage, MessageRaw} from '../types/chat';
 import {
+    extractCompactBoundaryInfo,
     findToolResult,
     getRenderableContentBlocks,
     mergeRawChatMessage,
@@ -576,5 +577,33 @@ describe('chat message flow', () => {
         expect(shouldRenderChatMessage(turnAbortedMessage)).toBe(false);
         expect(shouldRenderChatMessage(userActionMessage)).toBe(false);
         expect(shouldRenderChatMessage(agentsInstructionsMessage)).toBe(false);
+    });
+});
+
+describe('extractCompactBoundaryInfo', () => {
+    it('parses SDK stream shape (snake_case)', () => {
+        expect(extractCompactBoundaryInfo({
+            type: 'system',
+            subtype: 'compact_boundary',
+            compact_metadata: {trigger: 'manual', pre_tokens: 120000},
+        })).toEqual({trigger: 'manual', preTokens: 120000});
+    });
+
+    it('parses session file shape (camelCase)', () => {
+        expect(extractCompactBoundaryInfo({
+            type: 'system',
+            subtype: 'compact_boundary',
+            compactMetadata: {trigger: 'auto', preTokens: 275007, postTokens: 8320},
+        })).toEqual({trigger: 'auto', preTokens: 275007});
+    });
+
+    it('returns null for non-compact raws and defaults missing metadata to auto', () => {
+        expect(extractCompactBoundaryInfo(null)).toBeNull();
+        expect(extractCompactBoundaryInfo({type: 'system', subtype: 'init'})).toBeNull();
+        expect(extractCompactBoundaryInfo({type: 'user', subtype: 'compact_boundary'})).toBeNull();
+        expect(extractCompactBoundaryInfo({
+            type: 'system',
+            subtype: 'compact_boundary',
+        })).toEqual({trigger: 'auto', preTokens: undefined});
     });
 });

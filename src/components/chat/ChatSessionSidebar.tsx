@@ -675,13 +675,21 @@ export default function ChatSessionSidebar({
                 onClick={() => handleSessionSelect(session)}
                 onContextMenu={(event) => handleSessionContextMenu(event, session)}
                 data-chat-session-key={sessionKey}
-                className={`${compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} w-full rounded-md border text-left transition-colors ${
+                className={`${compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} relative w-full rounded-md border text-left transition-colors ${
                     selected
                         ? 'border-primary/25 bg-primary/10 text-base-content shadow-[inset_0_0_0_1px_rgba(59,130,246,0.05)]'
-                        : 'border-transparent hover:bg-base-200/80'
+                        : isWorking
+                            ? 'border-transparent bg-primary/5 hover:border-base-300/60 hover:bg-base-200/80'
+                            : 'border-transparent hover:border-base-300/60 hover:bg-base-200/80'
                 }`}
                 title={isPending ? loadingLabel : isWorking ? `${sessionTitle(session)} · ${workingLabel}` : session.sessionId}
             >
+                {selected && (
+                    <span
+                        className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary/80"
+                        aria-hidden="true"
+                    />
+                )}
                 <div className={compact ? 'flex items-center gap-1.5' : 'flex items-center gap-2'}>
                     {isPending ? (
                         <RefreshCw size={compact ? 13 : 14} className="animate-spin text-primary"/>
@@ -696,7 +704,7 @@ export default function ChatSessionSidebar({
                     )}
                     {session.unread && (
                         <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary"
                             aria-label={sessionMarkUnreadLabel}
                             title={sessionMarkUnreadLabel}
                         />

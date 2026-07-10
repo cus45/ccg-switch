@@ -375,6 +375,32 @@ fn parse_claude_history_line(line: &str) -> Option<UnifiedSessionMessage> {
         .get("type")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
+
+    // 上下文压缩边界：透传给前端渲染为压缩分隔条（raw 携带 compactMetadata）。
+    if msg_type == "system" {
+        let subtype = json
+            .get("subtype")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if subtype != "compact_boundary" {
+            return None;
+        }
+        let ts = json
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        return Some(UnifiedSessionMessage {
+            role: "system".to_string(),
+            content: json
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Conversation compacted")
+                .to_string(),
+            ts,
+            raw: Some(json),
+        });
+    }
+
     if msg_type != "user" && msg_type != "assistant" {
         return None;
     }
@@ -675,6 +701,32 @@ mod tests {
         let path = std::env::temp_dir().join(format!("ccg-switch-claude-dir-{suffix}"));
         fs::create_dir_all(&path).expect("create temp dir");
         path
+    }
+
+    #[test]
+    fn load_claude_messages_passes_compact_boundary_and_skips_other_system_lines() {
+        let path = write_temp_session(
+            r#"{"type":"user","timestamp":"2026-06-17T08:00:00.000Z","message":{"content":[{"type":"text","text":"question"}]}}"#
+                .to_owned()
+                + "\n"
+                + r#"{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","isMeta":false,"timestamp":"2026-06-17T08:01:00.000Z","compactMetadata":{"trigger":"auto","preTokens":275007,"postTokens":8320}}"#
+                + "\n"
+                + r#"{"type":"system","subtype":"init","timestamp":"2026-06-17T08:01:01.000Z","session_id":"s-1"}"#
+                + "\n"
+                + r#"{"type":"assistant","timestamp":"2026-06-17T08:02:00.000Z","message":{"content":[{"type":"text","text":"answer"}]}}"#,
+        );
+
+        let messages = load_claude_messages(&path.to_string_lossy()).expect("load messages");
+        fs::remove_file(path).ok();
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].role, "system");
+        assert_eq!(messages[1].content, "Conversation compacted");
+        let raw = messages[1].raw.as_ref().unwrap();
+        assert_eq!(raw["subtype"], "compact_boundary");
+        assert_eq!(raw["compactMetadata"]["preTokens"], 275007);
+        // init 等其它 system 子类型不透传
+        assert_eq!(messages[2].role, "assistant");
     }
 
     #[test]
