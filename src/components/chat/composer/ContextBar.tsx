@@ -312,7 +312,7 @@ export function ContextBar({
                         ref={workspaceTriggerRef}
                         type="button"
                         data-chat-workspace-menu-trigger
-                        className="chat-composer-workspace-switcher flex h-6 min-w-0 max-w-[10rem] items-center gap-1 rounded-md bg-base-200 px-1.5 text-xs font-medium text-base-content/75 hover:bg-base-300/70 sm:max-w-[14rem] md:max-w-[18rem]"
+                        className="chat-composer-workspace-switcher flex h-6 min-w-0 max-w-[10rem] items-center gap-1 rounded-md border border-base-300 bg-base-100 px-1.5 text-xs font-medium text-base-content/75 transition-colors hover:border-base-content/25 hover:bg-base-200/50 sm:max-w-[14rem] md:max-w-[18rem]"
                         title={workspaceTitle}
                         aria-label={switchWorkspaceFolderLabel}
                         aria-haspopup="menu"
@@ -386,7 +386,7 @@ export function ContextBar({
                             ref={gitTriggerRef}
                             type="button"
                             data-chat-git-branch-trigger
-                            className="chat-composer-git-branch chat-composer-git-branch-button flex h-6 min-w-0 max-w-[11rem] items-center gap-1 rounded-md bg-base-200 px-1.5 text-xs font-medium text-base-content/75 hover:bg-base-300/70 sm:max-w-[16rem] md:max-w-[20rem]"
+                            className="chat-composer-git-branch chat-composer-git-branch-button flex h-6 min-w-0 max-w-[11rem] items-center gap-1 rounded-md border border-base-300 bg-base-100 px-1.5 text-xs font-medium text-base-content/75 transition-colors hover:border-base-content/25 hover:bg-base-200/50 sm:max-w-[16rem] md:max-w-[20rem]"
                             title={gitBranchTitle}
                             aria-label={`${gitBranchLabel} ${gitBranch}`}
                             aria-haspopup="menu"

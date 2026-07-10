@@ -90,14 +90,14 @@ export function SelectorDropdown<T extends string>({
                     if (disabled) return;
                     setOpen((v) => !v);
                 }}
-                className={`flex h-6 shrink-0 items-center rounded-md text-xs font-medium transition-colors
+                className={`flex h-6 shrink-0 items-center rounded-md border text-xs font-medium transition-colors
                     ${compact ? 'w-6 justify-center px-0' : 'gap-1 px-1.5'}
                     ${
                         disabled
-                            ? 'cursor-not-allowed bg-base-200 text-base-content/35'
+                            ? 'cursor-not-allowed border-base-200 bg-base-100 text-base-content/35'
                             : highlight
-                            ? 'bg-warning/15 text-warning hover:bg-warning/25'
-                            : 'bg-base-200 text-base-content/80 hover:bg-base-300'
+                            ? 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/20'
+                            : 'border-base-300 bg-base-100 text-base-content/80 hover:border-base-content/25 hover:bg-base-200/50'
                 }`}
             >
                 {buttonIcon && (

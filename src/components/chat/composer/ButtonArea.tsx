@@ -259,7 +259,7 @@ export function ButtonArea({
                         className={`chat-long-context-toggle flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium transition-colors ${
                             displayLongContextEnabled
                                 ? 'border-primary/35 bg-primary/10 text-primary'
-                                : 'border-base-300 bg-base-200 text-base-content/55'
+                                : 'border-base-300 bg-base-100 text-base-content/55 hover:border-base-content/25 hover:bg-base-200/50'
                         } disabled:cursor-not-allowed disabled:opacity-45`}
                         title={longContextTitle}
                         aria-label={longContextLabel}
@@ -275,7 +275,7 @@ export function ButtonArea({
                 {showModelRefresh && (
                     <button
                         type="button"
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-base-200 text-base-content/60 transition-colors hover:bg-base-300 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-base-300 bg-base-100 text-base-content/60 transition-colors hover:border-base-content/25 hover:bg-base-200/50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
                         title={modelRefreshTitle}
                         aria-label={modelRefreshAriaLabel}
                         disabled={controlsDisabled || modelsRefreshing}
