@@ -25,5 +25,6 @@ pub mod token_service;
 pub mod tool_version_service;
 pub mod universal_provider_service;
 pub mod updater_service;
+pub mod usage_query_service;
 pub mod usage_service;
 pub mod webdav_service;

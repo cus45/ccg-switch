@@ -1,11 +1,17 @@
-import {useCallback, useEffect, useState} from 'react';
-import type {ReactNode} from 'react';
+import type {KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {PanelRightClose, PanelRightOpen} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import {useShallow} from 'zustand/react/shallow';
 import {useChatStore} from '../../../stores/useChatStore';
 import type {ChatStatusEditSummary} from '../../../utils/chatStatusSummary';
-import {loadRightDockState, saveRightDockState} from '../../../utils/rightDockState';
+import {
+    clampRightDockWidth,
+    loadRightDockState,
+    MIN_RIGHT_DOCK_WIDTH,
+    type RightDockState,
+    saveRightDockState,
+} from '../../../utils/rightDockState';
 import {
     activateDockDocument,
     closeDockDocument,
@@ -72,6 +78,8 @@ export default function DockShell({
     }, [t]);
 
     const [collapsed, setCollapsed] = useState<boolean>(() => loadRightDockState().collapsed);
+    // 用户手动调整过的 dock 宽度（px）；null 表示未调整，走默认自适应宽度。
+    const [dockWidth, setDockWidth] = useState<number | null>(() => loadRightDockState().width ?? null);
     const [docState, setDocState] = useState<DockDocumentsState>(loadDockDocumentsState);
     const [reviewTargetPath, setReviewTargetPath] = useState<string | null>(null);
     const [gitChanged, setGitChanged] = useState<GitChangedFiles>(EMPTY_GIT_CHANGED_FILES);
@@ -107,8 +115,14 @@ export default function DockShell({
 
     useEffect(() => {
         // 与旧 RightDock 共用收起状态；activePanel 字段保留给回滚路径。
-        saveRightDockState({...loadRightDockState(), collapsed});
-    }, [collapsed]);
+        const next: RightDockState = {...loadRightDockState(), collapsed};
+        if (dockWidth != null) {
+            next.width = dockWidth;
+        } else {
+            delete next.width;
+        }
+        saveRightDockState(next);
+    }, [collapsed, dockWidth]);
 
     useEffect(() => {
         saveDockDocumentsState(docState);
@@ -186,6 +200,51 @@ export default function DockShell({
 
     const expandLabel = tf('chat.dock.expand', 'Expand tool dock');
     const collapseLabel = tf('chat.dock.collapse', 'Collapse tool dock');
+    const resizeLabel = tf('chat.dock.resize', 'Drag to resize the tool dock; double-click to reset');
+
+    // 拖拽调宽：pointer capture 跟踪左缘把手；宽度即时生效并持久化。
+    // 布局防溢出不靠 JS 测量：dock 允许 flex 收缩（min-width 兜底），主聊天区
+    // `.chat-review-layout` 在 xl+ 有 min-width 保底——存的宽度再大，flex 也会
+    // 先收缩 dock 保证整行不溢出，dock 右侧内容不会被推出窗口。
+    const asideRef = useRef<HTMLElement | null>(null);
+    const resizeDragRef = useRef<{pointerId: number; startX: number; startWidth: number} | null>(null);
+
+    const handleResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        event.preventDefault();
+        const startWidth = asideRef.current?.getBoundingClientRect().width ?? dockWidth ?? 360;
+        resizeDragRef.current = {pointerId: event.pointerId, startX: event.clientX, startWidth};
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+
+    const handleResizePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = resizeDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const proposed = drag.startWidth + (drag.startX - event.clientX);
+        setDockWidth(clampRightDockWidth(proposed));
+    };
+
+    const handleResizePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (resizeDragRef.current?.pointerId !== event.pointerId) return;
+        resizeDragRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        // 松开时把持久化宽度对齐到实际渲染宽度：拖超出可用空间时 CSS 把视觉
+        // 宽度截在上限，存实际值避免下次在更大窗口里突然弹宽。
+        const rendered = asideRef.current?.getBoundingClientRect().width;
+        if (typeof rendered === 'number' && rendered > 0) {
+            setDockWidth(clampRightDockWidth(rendered));
+        }
+    };
+
+    const handleResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const current = dockWidth ?? asideRef.current?.getBoundingClientRect().width ?? 360;
+        const delta = event.key === 'ArrowLeft' ? 32 : -32;
+        setDockWidth(clampRightDockWidth(current + delta));
+    };
 
     if (collapsed) {
         // 收起态保留一个固定窄条停靠右缘：展开按钮与展开态 header 的收起按钮
@@ -209,12 +268,33 @@ export default function DockShell({
     }
 
     const hasDocuments = docState.documents.length > 0;
+    const defaultWidthClass = hasDocuments ? 'w-[min(46vw,820px)]' : 'w-[360px]';
 
     return (
         <aside
-            className={`flex h-full ${hasDocuments ? 'w-[min(46vw,820px)]' : 'w-[360px]'} shrink-0 flex-col border-l border-base-200/60 bg-white dark:bg-base-100`}
+            ref={asideRef}
+            className={`relative flex h-full ${dockWidth == null ? defaultWidthClass : ''} flex-col border-l border-base-200/60 bg-white dark:bg-base-100`}
+            style={{
+                minWidth: MIN_RIGHT_DOCK_WIDTH,
+                ...(dockWidth != null ? {width: clampRightDockWidth(dockWidth)} : {}),
+            }}
             data-chat-right-dock="true"
         >
+            <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={resizeLabel}
+                title={resizeLabel}
+                tabIndex={0}
+                className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-col-resize touch-none transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none active:bg-primary/50"
+                data-dock-resize-handle="true"
+                onPointerDown={handleResizePointerDown}
+                onPointerMove={handleResizePointerMove}
+                onPointerUp={handleResizePointerEnd}
+                onPointerCancel={handleResizePointerEnd}
+                onDoubleClick={() => setDockWidth(null)}
+                onKeyDown={handleResizeKeyDown}
+            />
             <div className="flex items-center justify-between gap-2 border-b border-base-200/60 px-2 py-1.5">
                 <DockTabBar
                     documents={docState.documents}

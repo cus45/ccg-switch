@@ -2,6 +2,7 @@ use crate::models::app_type::AppType;
 use crate::models::provider::Provider;
 use crate::services::provider_service;
 use crate::services::stream_check_service;
+use crate::services::usage_query_service::{self, UsageResult, UsageScriptConfig};
 use crate::store::AppState;
 use tauri::State;
 
@@ -78,4 +79,37 @@ pub async fn check_provider_health(
     stream_check_service::check_provider_health(provider_id, &state.db)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 查询供应商用量/余额（使用已保存在 meta["usageScript"] 中的脚本配置）
+#[tauri::command]
+pub async fn query_provider_usage(
+    provider_id: String,
+    state: State<'_, AppState>,
+) -> Result<UsageResult, String> {
+    let provider = provider_service::get_provider_from_db(&state.db, &provider_id)?;
+    let config_str = provider
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("usageScript"))
+        .ok_or_else(|| "未配置用量查询脚本".to_string())?;
+    let config: UsageScriptConfig =
+        serde_json::from_str(config_str).map_err(|e| format!("用量脚本配置解析失败: {e}"))?;
+    if !config.enabled {
+        return Err("用量查询未启用".to_string());
+    }
+    Ok(usage_query_service::execute_and_format(&config, &provider.api_key, provider.url.as_deref())
+        .await)
+}
+
+/// 测试用量查询脚本（使用临时传入的脚本内容，不落库）
+#[tauri::command]
+pub async fn test_usage_script(
+    provider_id: String,
+    config: UsageScriptConfig,
+    state: State<'_, AppState>,
+) -> Result<UsageResult, String> {
+    let provider = provider_service::get_provider_from_db(&state.db, &provider_id)?;
+    Ok(usage_query_service::execute_and_format(&config, &provider.api_key, provider.url.as_deref())
+        .await)
 }

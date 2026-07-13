@@ -1,12 +1,25 @@
-import { Zap, Edit2, Trash2, Eye, EyeOff, GripVertical, ExternalLink, Copy, Loader2, HeartPulse } from 'lucide-react';
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
-import { Provider } from '../../types/provider';
-import { APP_LABELS } from '../../types/app';
+import {
+    Copy,
+    Edit2,
+    ExternalLink,
+    Eye,
+    EyeOff,
+    GripVertical,
+    HeartPulse,
+    Loader2,
+    Trash2,
+    Wallet,
+    Zap
+} from 'lucide-react';
+import {useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import {invoke} from '@tauri-apps/api/core';
+import {Provider} from '../../types/provider';
+import {APP_LABELS} from '../../types/app';
 import ProviderIcon from './ProviderIcon';
 import HealthStatusBadge from './HealthStatusBadge';
-import type { HealthStatus } from '../../hooks/useHealthCheck';
+import UsageFooter from './UsageFooter';
+import type {HealthStatus} from '../../hooks/useHealthCheck';
 
 interface ProviderCardProps {
     provider: Provider;
@@ -20,6 +33,7 @@ interface ProviderCardProps {
     onPointerOver: () => void;
     healthStatus?: HealthStatus;
     onHealthCheck?: (id: string) => void;
+    onUsageConfig?: (provider: Provider) => void;
 }
 
 function maskApiKey(key: string) {
@@ -39,6 +53,7 @@ export default function ProviderCard({
     onPointerOver,
     healthStatus,
     onHealthCheck,
+    onUsageConfig,
 }: ProviderCardProps) {
     const { t } = useTranslation();
     const [showKey, setShowKey] = useState(false);
@@ -146,6 +161,9 @@ export default function ProviderCard({
                     }
                 </div>
 
+                {/* 用量/余额 */}
+                <UsageFooter provider={provider} />
+
                 {/* 描述 */}
                 {provider.description && (
                     <p className="text-xs text-base-content/50 mb-2 line-clamp-2">{provider.description}</p>
@@ -198,6 +216,13 @@ export default function ProviderCard({
                         {healthStatus?.state === 'checking'
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             : <HeartPulse className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                        onClick={() => onUsageConfig?.(provider)}
+                        className="btn btn-ghost btn-xs gap-1"
+                        title={t('usage_script.title')}
+                    >
+                        <Wallet className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => onDelete(provider.id, provider.name)}

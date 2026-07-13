@@ -79,7 +79,15 @@
       "Bash(codegraph --help)",
       "Bash(codegraph init *)",
       "Bash(codegraph status *)",
-      "Bash(codegraph files *)"
+      "Bash(codegraph files *)",
+      "Bash(codegraph explore *)",
+      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-check.bat\")",
+      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-test.bat\")",
+      "Bash(awk '{print $NF, $5}')",
+      "Read(//c/guodevelop/demo/cc-switch/**)",
+      "Read(//c/guodevelop/demo/cc-switch/src-tauri/src/**)",
+      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-test2.bat\")",
+      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-t.bat\")"
     ]
   }
 }

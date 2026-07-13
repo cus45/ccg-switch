@@ -1537,6 +1537,14 @@
   background-color: #ffffff;
 }
 
+/* dock 可调宽后主聊天区的保底宽度：溢出时 flex 先收缩 dock（到其自身下限），
+   主区不会被挤没，dock 也永远不会被推出窗口右缘。仅 xl+（dock 可见）生效。 */
+@media (min-width: 1280px) {
+  .chat-review-layout {
+    min-width: 420px;
+  }
+}
+
 [data-theme="dark"] .chat-review-layout {
   background-color: var(--fallback-b1, oklch(var(--b1) / 1));
 }

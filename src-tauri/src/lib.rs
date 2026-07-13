@@ -822,6 +822,8 @@ pub fn run() {
             provider_commands::preview_provider_sync,
             provider_commands::get_claude_settings_state,
             provider_commands::check_provider_health,
+            provider_commands::query_provider_usage,
+            provider_commands::test_usage_script,
             // Proxy 命令
             proxy_commands::get_proxy_config,
             proxy_commands::save_proxy_config,

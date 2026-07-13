@@ -26,7 +26,7 @@ import {
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {useProviderStore} from '../stores/useProviderStore';
-import {Provider} from '../types/provider';
+import {Provider, UsageScriptConfig} from '../types/provider';
 import {APP_LABELS, AppType, VISIBLE_APP_TYPES} from '../types/app';
 import ModalDialog from '../components/common/ModalDialog';
 import {showToast} from '../components/common/ToastContainer';
@@ -34,6 +34,7 @@ import {exportProvidersConfigToFile, importProvidersConfigFromFile} from '../ser
 import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
+import UsageScriptModal from '../components/providers/UsageScriptModal';
 import {useHealthCheck} from '../hooks/useHealthCheck';
 import HealthStatusBadge from '../components/providers/HealthStatusBadge';
 
@@ -81,7 +82,7 @@ function maskApiKey(key: string) {
 
 function ProvidersPage() {
     const { t } = useTranslation();
-    const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider, addProvider } = useProviderStore();
+    const { providers, hasLoaded, loading, loadAllProviders, switchProvider, deleteProvider, moveProvider, addProvider, updateProvider } = useProviderStore();
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterApp, setFilterApp] = useState<AppType | 'all'>('all');
@@ -92,6 +93,7 @@ function ProvidersPage() {
     const [exportLoading, setExportLoading] = useState(false);
     const [importLoading, setImportLoading] = useState(false);
     const [filterTag, setFilterTag] = useState<string | null>(null);
+    const [usageConfigProvider, setUsageConfigProvider] = useState<Provider | null>(null);
 
     const { statuses, checkSingle, checkBatch, isAnyChecking } = useHealthCheck();
 
@@ -202,6 +204,17 @@ function ProvidersPage() {
             showToast(`${t('providers.importFailed')}: ${String(error)}`, 'error');
         } finally {
             setImportLoading(false);
+        }
+    };
+
+    const handleSaveUsageScript = async (provider: Provider, config: UsageScriptConfig) => {
+        try {
+            const meta = { ...(provider.meta || {}), usageScript: JSON.stringify(config) };
+            await updateProvider(provider.id, { meta });
+            showToast(t('usage_script.save_success'), 'success');
+        } catch (error) {
+            showToast(t('usage_script.save_failed', { error: String(error) }), 'error');
+            throw error;
         }
     };
 
@@ -542,6 +555,7 @@ function ProvidersPage() {
                                 onPointerOver={handlePointerOver(provider.id)}
                                 healthStatus={statuses[provider.id]}
                                 onHealthCheck={checkSingle}
+                                onUsageConfig={setUsageConfigProvider}
                             />
                         ))}
                     </div>
@@ -691,6 +705,14 @@ function ProvidersPage() {
                 editingProvider={editingProvider}
                 onClose={() => { setIsFormOpen(false); setEditingProvider(null); }}
                 defaultAppType={filterApp === 'all' ? 'claude' : filterApp}
+            />
+
+            {/* 用量查询配置弹窗 */}
+            <UsageScriptModal
+                isOpen={usageConfigProvider !== null}
+                provider={usageConfigProvider}
+                onClose={() => setUsageConfigProvider(null)}
+                onSave={handleSaveUsageScript}
             />
 
             {/* 删除确认 */}
