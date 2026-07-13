@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-        {
+          {
+    version: '1.6.7',
+    date: '2026-07-13',
+    type: 'minor',
+    changes: [
+      { type: 'feature', text: 'feat(chat): 添加右侧dock可调节宽度功能和用量查询功能' }
+    ]
+  },
+{
     version: '1.6.6',
     date: '2026-07-07',
     type: 'minor',
