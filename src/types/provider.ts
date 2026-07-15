@@ -16,6 +16,10 @@ export interface ProviderProxyConfig {
     proxyUsername?: string;
     /** 代理密码（可选） */
     proxyPassword?: string;
+    /** HTTP 代理完整 URL（新格式） */
+    httpProxy?: string;
+    /** HTTPS 代理完整 URL（新格式） */
+    httpsProxy?: string;
 }
 
 export interface Provider {

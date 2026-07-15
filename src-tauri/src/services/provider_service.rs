@@ -658,6 +658,36 @@ fn preview_claude_settings(
         }
     }
 
+    // 同步代理配置到 env（预览）
+    if let Some(ref proxy_cfg) = provider.proxy_config {
+        if proxy_cfg.enabled {
+            if let Some(ref http_proxy) = proxy_cfg.http_proxy {
+                if !http_proxy.trim().is_empty() {
+                    env.insert("HTTP_PROXY".to_string(), serde_json::Value::String(http_proxy.clone()));
+                } else {
+                    env.remove("HTTP_PROXY");
+                }
+            } else {
+                env.remove("HTTP_PROXY");
+            }
+            if let Some(ref https_proxy) = proxy_cfg.https_proxy {
+                if !https_proxy.trim().is_empty() {
+                    env.insert("HTTPS_PROXY".to_string(), serde_json::Value::String(https_proxy.clone()));
+                } else {
+                    env.remove("HTTPS_PROXY");
+                }
+            } else {
+                env.remove("HTTPS_PROXY");
+            }
+        } else {
+            env.remove("HTTP_PROXY");
+            env.remove("HTTPS_PROXY");
+        }
+    } else {
+        env.remove("HTTP_PROXY");
+        env.remove("HTTPS_PROXY");
+    }
+
     // 映射特殊字段到 env
     remap_settings_to_env(&mut settings);
 
@@ -875,6 +905,41 @@ fn sync_to_claude_settings(provider: &Provider) -> Result<(), io::Error> {
         for (key, value) in params {
             env.insert(key.clone(), value.clone());
         }
+    }
+
+    // 同步代理配置到 env
+    if let Some(ref proxy_cfg) = provider.proxy_config {
+        if proxy_cfg.enabled {
+            // HTTP_PROXY 处理
+            if let Some(ref http_proxy) = proxy_cfg.http_proxy {
+                if !http_proxy.trim().is_empty() {
+                    env.insert("HTTP_PROXY".to_string(), serde_json::Value::String(http_proxy.clone()));
+                } else {
+                    env.remove("HTTP_PROXY");
+                }
+            } else {
+                env.remove("HTTP_PROXY");
+            }
+
+            // HTTPS_PROXY 处理
+            if let Some(ref https_proxy) = proxy_cfg.https_proxy {
+                if !https_proxy.trim().is_empty() {
+                    env.insert("HTTPS_PROXY".to_string(), serde_json::Value::String(https_proxy.clone()));
+                } else {
+                    env.remove("HTTPS_PROXY");
+                }
+            } else {
+                env.remove("HTTPS_PROXY");
+            }
+        } else {
+            // 代理未启用，移除环境变量
+            env.remove("HTTP_PROXY");
+            env.remove("HTTPS_PROXY");
+        }
+    } else {
+        // 无代理配置，移除环境变量
+        env.remove("HTTP_PROXY");
+        env.remove("HTTPS_PROXY");
     }
 
     // 映射特殊字段到 env

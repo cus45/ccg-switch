@@ -25,6 +25,12 @@ pub struct ProviderProxyConfig {
     /// 代理密码（可选）
     #[serde(rename = "proxyPassword", skip_serializing_if = "Option::is_none")]
     pub proxy_password: Option<String>,
+    /// HTTP 代理完整 URL（新格式）
+    #[serde(rename = "httpProxy", skip_serializing_if = "Option::is_none", default)]
+    pub http_proxy: Option<String>,
+    /// HTTPS 代理完整 URL（新格式）
+    #[serde(rename = "httpsProxy", skip_serializing_if = "Option::is_none", default)]
+    pub https_proxy: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

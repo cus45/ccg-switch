@@ -315,10 +315,11 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             defaultHaikuModel: defaultHaikuModel.trim() || undefined,
             defaultReasoningModel: defaultReasoningModel.trim() || undefined,
             settingsConfig: Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
+            proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
             isActive: false,
             createdAt: editingProvider?.createdAt || new Date().toISOString(),
         };
-    }, [editingProvider, name, appType, apiKey, url, defaultSonnetModel, defaultOpusModel, defaultHaikuModel, defaultReasoningModel, internalSettings]);
+    }, [editingProvider, name, appType, apiKey, url, defaultSonnetModel, defaultOpusModel, defaultHaikuModel, defaultReasoningModel, internalSettings, proxyConfig]);
 
     // 防抖调用后端：获取预览结果，首次结果作为 baseline
     useEffect(() => {

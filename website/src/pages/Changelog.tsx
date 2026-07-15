@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-          {
+            {
+    version: '1.6.8',
+    date: '2026-07-15',
+    type: 'patch',
+    changes: [
+      { type: 'fix', text: 'Provider 代理配置同步到 Claude settings.json' }
+    ]
+  },
+{
     version: '1.6.7',
     date: '2026-07-13',
     type: 'minor',
