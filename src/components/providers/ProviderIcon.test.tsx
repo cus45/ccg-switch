@@ -14,8 +14,11 @@ describe('ProviderIcon', () => {
         expect(claudeHtml).not.toContain('>C</div>');
 
         expect(codexHtml).toContain('data-provider-brand-icon="codex"');
-        expect(codexHtml).toContain('data-chat-provider-icon-glyph="codex-openai"');
+        expect(codexHtml).toContain('data-chat-provider-icon-glyph="chatgpt-openai"');
         expect(codexHtml).toContain('<svg');
+        expect(codexHtml).toContain('bg-white');
+        expect(codexHtml).toContain('fill="currentColor"');
+        expect(codexHtml).not.toContain('stroke="currentColor"');
         expect(codexHtml).not.toContain('>C</div>');
 
         expect(geminiHtml).toContain('data-provider-brand-icon="gemini"');

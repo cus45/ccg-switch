@@ -138,27 +138,42 @@ export default function ProviderCard({
                 )}
 
                 {/* 模型配置 */}
-                <div className="mb-2 grid grid-cols-[3.5rem_1fr] gap-y-0.5">
-                    <span className="text-xs text-base-content/40">Sonnet</span>
-                    {provider.defaultSonnetModel
-                        ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultSonnetModel}>{provider.defaultSonnetModel}</code>
-                        : <span className="text-xs text-base-content/25 italic">默认</span>
-                    }
-                    <span className="text-xs text-base-content/40">Opus</span>
-                    {provider.defaultOpusModel
-                        ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultOpusModel}>{provider.defaultOpusModel}</code>
-                        : <span className="text-xs text-base-content/25 italic">默认</span>
-                    }
-                    <span className="text-xs text-base-content/40">Haiku</span>
-                    {provider.defaultHaikuModel
-                        ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultHaikuModel}>{provider.defaultHaikuModel}</code>
-                        : <span className="text-xs text-base-content/25 italic">默认</span>
-                    }
-                    <span className="text-xs text-base-content/40">Thinking</span>
-                    {provider.defaultReasoningModel
-                        ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultReasoningModel}>{provider.defaultReasoningModel}</code>
-                        : <span className="text-xs text-base-content/25 italic">默认</span>
-                    }
+                <div
+                    className="mb-2 grid grid-cols-[3.5rem_1fr] gap-y-0.5"
+                    data-provider-model-config={provider.appType}
+                >
+                    {provider.appType === 'codex' ? (
+                        <>
+                            <span className="text-xs text-base-content/40">{t('providers.modelLabel', 'Model')}</span>
+                            {provider.defaultSonnetModel
+                                ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultSonnetModel}>{provider.defaultSonnetModel}</code>
+                                : <span className="text-xs text-base-content/25 italic">{t('providers.defaultModel', '默认')}</span>
+                            }
+                        </>
+                    ) : (
+                        <>
+                            <span className="text-xs text-base-content/40">Sonnet</span>
+                            {provider.defaultSonnetModel
+                                ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultSonnetModel}>{provider.defaultSonnetModel}</code>
+                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                            }
+                            <span className="text-xs text-base-content/40">Opus</span>
+                            {provider.defaultOpusModel
+                                ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultOpusModel}>{provider.defaultOpusModel}</code>
+                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                            }
+                            <span className="text-xs text-base-content/40">Haiku</span>
+                            {provider.defaultHaikuModel
+                                ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultHaikuModel}>{provider.defaultHaikuModel}</code>
+                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                            }
+                            <span className="text-xs text-base-content/40">Thinking</span>
+                            {provider.defaultReasoningModel
+                                ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultReasoningModel}>{provider.defaultReasoningModel}</code>
+                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                            }
+                        </>
+                    )}
                 </div>
 
                 {/* 用量/余额 */}

@@ -58,6 +58,9 @@ vi.mock('react-i18next', () => ({
                 'providers.card_view': 'Card view',
                 'providers.active_badge': 'Active',
                 'providers.health_check_single': 'Check health',
+                'providers.codexModel': 'Codex Model',
+                'providers.modelLabel': 'Model',
+                'providers.defaultModel': 'Default',
                 'common.refresh': 'Refresh',
             };
             const translated = translations[key] ?? key;
@@ -126,6 +129,32 @@ describe('ProvidersPage', () => {
         expect(html).not.toContain('bg-orange-400');
         expect(html).not.toContain('bg-emerald-400');
         expect(html).not.toContain('bg-blue-400');
+    });
+
+    it('shows Codex cards with a single Codex model row', () => {
+        const claudeProvider = createProvider('claude-1', 'claude');
+        claudeProvider.defaultSonnetModel = 'claude-sonnet-4-6';
+        claudeProvider.defaultOpusModel = 'claude-opus-4-8';
+        const codexProvider = createProvider('codex-1', 'codex');
+        codexProvider.defaultSonnetModel = 'gpt-5.2-codex';
+        codexProvider.defaultOpusModel = 'stale-claude-opus';
+        providerState.providers = [claudeProvider, codexProvider];
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = renderToStaticMarkup(<ProvidersPage />);
+        const claudeModels = wrapper.querySelector('[data-provider-model-config="claude"]');
+        const codexModels = wrapper.querySelector('[data-provider-model-config="codex"]');
+
+        expect(claudeModels?.textContent).toContain('Sonnet');
+        expect(claudeModels?.textContent).toContain('Opus');
+        expect(codexModels?.textContent).toContain('Model');
+        expect(codexModels?.textContent).not.toContain('Codex Model');
+        expect(codexModels?.textContent).toContain('gpt-5.2-codex');
+        expect(codexModels?.textContent).not.toContain('Sonnet');
+        expect(codexModels?.textContent).not.toContain('Opus');
+        expect(codexModels?.textContent).not.toContain('Haiku');
+        expect(codexModels?.textContent).not.toContain('Thinking');
+        expect(codexModels?.textContent).not.toContain('stale-claude-opus');
     });
 
     it('uses provider brand icons in table app cells', async () => {

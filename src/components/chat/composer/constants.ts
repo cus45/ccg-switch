@@ -59,6 +59,10 @@ export const CODEX_MODELS: ModelInfo[] = [
     { id: 'gpt-5.2-codex', label: 'GPT-5.2-Codex', descKey: 'gpt52codex' },
     { id: 'gpt-5.1-codex-max', label: 'GPT-5.1-Codex-Max', descKey: 'gpt51codexMax' },
     { id: 'gpt-5.2', label: 'GPT-5.2', descKey: 'gpt52' },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4-Mini' },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6-Terra' },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6-Luna' },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' },
 ];
 
 export const REASONING_LEVELS: ReasoningInfo[] = [

@@ -9,6 +9,7 @@ import { Provider, ProviderProxyConfig } from '../../types/provider';
 import { AppType, VISIBLE_APP_TYPES, APP_LABELS } from '../../types/app';
 import ProviderProxyConfigInput from './ProviderProxyConfig';
 import { cn } from '../../utils/cn';
+import { getFallbackChatModels } from '../../utils/chatModels';
 
 // ── 基础 UI 组件 ──────────────────────────────────────────────
 
@@ -83,6 +84,14 @@ const CLAUDE_BOOLEAN_TOGGLES: Array<{ key: Exclude<keyof InternalSettings, 'maxO
 
 const CLAUDE_SETTING_CONTROL_CLASS = "flex min-h-[36px] items-center rounded-md border border-transparent px-2";
 
+const CLAUDE_DEFAULT_URL = 'https://api.anthropic.com';
+const CODEX_DEFAULT_URL = 'https://api.openai.com/v1';
+const CODEX_MODEL_OPTIONS = getFallbackChatModels('codex').map((model) => model.id);
+
+function defaultUrlForApp(appType: AppType): string {
+    return appType === 'codex' ? CODEX_DEFAULT_URL : CLAUDE_DEFAULT_URL;
+}
+
 // ── 预设配置 ──────────────────────────────────────────────
 
 const PRESETS = [
@@ -101,7 +110,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const [name, setName] = useState(editingProvider?.name || '');
     const [appType, setAppType] = useState<AppType>(editingProvider?.appType || defaultAppType);
     const [apiKey, setApiKey] = useState(editingProvider?.apiKey || '');
-    const [url, setUrl] = useState(editingProvider?.url || 'https://api.anthropic.com');
+    const [url, setUrl] = useState(editingProvider?.url || defaultUrlForApp(editingProvider?.appType || defaultAppType));
 
     // 模型配置
     const [defaultSonnetModel, setDefaultSonnetModel] = useState(editingProvider?.defaultSonnetModel || '');
@@ -140,7 +149,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             setName(editingProvider?.name || '');
             setAppType(editingProvider?.appType || defaultAppType);
             setApiKey(editingProvider?.apiKey || '');
-            setUrl(editingProvider?.url || 'https://api.anthropic.com');
+            setUrl(editingProvider?.url || defaultUrlForApp(editingProvider?.appType || defaultAppType));
             setDefaultSonnetModel(editingProvider?.defaultSonnetModel || '');
             setDefaultOpusModel(editingProvider?.defaultOpusModel || '');
             setDefaultHaikuModel(editingProvider?.defaultHaikuModel || '');
@@ -189,12 +198,47 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         setAppType(preset.appType);
     };
 
+    const handleAppTypeChange = (nextAppType: AppType) => {
+        const previousDefaultUrl = defaultUrlForApp(appType);
+        setAppType(nextAppType);
+        setFetchedModels([]);
+        setDefaultSonnetModel('');
+        setDefaultOpusModel('');
+        setDefaultHaikuModel('');
+        setDefaultReasoningModel('');
+
+        if (!url.trim() || url.trim() === previousDefaultUrl) {
+            setUrl(defaultUrlForApp(nextAppType));
+        }
+    };
+
+    const modelOptions = appType === 'codex'
+        ? fetchedModels.length > 0 ? fetchedModels : CODEX_MODEL_OPTIONS
+        : fetchedModels;
+
+    const applicableModelConfig = useMemo(() => appType === 'codex'
+        ? {
+            defaultSonnetModel: defaultSonnetModel.trim() || undefined,
+            defaultOpusModel: undefined,
+            defaultHaikuModel: undefined,
+            defaultReasoningModel: undefined,
+        }
+        : {
+            defaultSonnetModel: defaultSonnetModel.trim() || undefined,
+            defaultOpusModel: defaultOpusModel.trim() || undefined,
+            defaultHaikuModel: defaultHaikuModel.trim() || undefined,
+            defaultReasoningModel: defaultReasoningModel.trim() || undefined,
+        }, [appType, defaultSonnetModel, defaultOpusModel, defaultHaikuModel, defaultReasoningModel]);
+
     const handleTestConnectivity = async () => {
         if (!url.trim() || !apiKey.trim()) {
             showToast(t('providers.fetchModelsNeedUrlKey'), 'error');
             return;
         }
-        const testModel = defaultSonnetModel || defaultOpusModel || defaultHaikuModel || defaultReasoningModel || (() => {
+        const configuredTestModel = appType === 'codex'
+            ? defaultSonnetModel
+            : defaultSonnetModel || defaultOpusModel || defaultHaikuModel || defaultReasoningModel;
+        const testModel = configuredTestModel || (() => {
             switch (appType) {
                 case 'codex': return 'gpt-4o';
                 case 'gemini': return 'gemini-2.0-flash';
@@ -240,13 +284,10 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                 appType,
                 apiKey: finalApiKey,
                 url: finalUrl || undefined,
-                defaultSonnetModel: defaultSonnetModel.trim() || undefined,
-                defaultOpusModel: defaultOpusModel.trim() || undefined,
-                defaultHaikuModel: defaultHaikuModel.trim() || undefined,
-                defaultReasoningModel: defaultReasoningModel.trim() || undefined,
+                ...applicableModelConfig,
                 description: description.trim() || undefined,
                 tags: tags.length > 0 ? tags : undefined,
-                settingsConfig: (() => {
+                settingsConfig: appType === 'codex' ? undefined : (() => {
                     // 只保存白名单内的已知字段，排除历史残留
                     const clean: Record<string, any> = {};
                     if (internalSettings) {
@@ -310,16 +351,13 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             appType,
             apiKey: apiKey || 'your-api-key-here',
             url: url.trim() || undefined,
-            defaultSonnetModel: defaultSonnetModel.trim() || undefined,
-            defaultOpusModel: defaultOpusModel.trim() || undefined,
-            defaultHaikuModel: defaultHaikuModel.trim() || undefined,
-            defaultReasoningModel: defaultReasoningModel.trim() || undefined,
-            settingsConfig: Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
+            ...applicableModelConfig,
+            settingsConfig: appType === 'codex' ? undefined : Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
             proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
             isActive: false,
             createdAt: editingProvider?.createdAt || new Date().toISOString(),
         };
-    }, [editingProvider, name, appType, apiKey, url, defaultSonnetModel, defaultOpusModel, defaultHaikuModel, defaultReasoningModel, internalSettings, proxyConfig]);
+    }, [editingProvider, name, appType, apiKey, url, applicableModelConfig, internalSettings, proxyConfig]);
 
     // 防抖调用后端：获取预览结果，首次结果作为 baseline
     useEffect(() => {
@@ -402,7 +440,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             <select
                                 className="flex h-9 w-full items-center justify-between rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 py-2 text-sm text-gray-900 dark:text-slate-200 shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                                 value={appType}
-                                onChange={(e) => setAppType(e.target.value as AppType)}
+                                onChange={(e) => handleAppTypeChange(e.target.value as AppType)}
                             >
                                 {VISIBLE_APP_TYPES.map((type) => (
                                     <option key={type} value={type} className="bg-white dark:bg-slate-900">{APP_LABELS[type]}</option>
@@ -439,7 +477,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             <TextInput
                                 type="text"
                                 className="font-mono pr-10"
-                                placeholder="https://api.anthropic.com"
+                                placeholder={defaultUrlForApp(appType)}
                                 value={url}
                                 onChange={(e: any) => setUrl(e.target.value)}
                             />
@@ -513,37 +551,48 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             </div>
                         )}
                         
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                            {/* We maintain only the original 4 models to match what the user expected */}
-                            <ModelComboBox
-                                label="Sonnet Model"
-                                placeholder="claude-sonnet-4-..."
-                                value={defaultSonnetModel}
-                                onChange={(v) => setDefaultSonnetModel(v)}
-                                options={fetchedModels}
-                            />
-                            <ModelComboBox
-                                label="Opus Model"
-                                placeholder="claude-opus-4-..."
-                                value={defaultOpusModel}
-                                onChange={(v) => setDefaultOpusModel(v)}
-                                options={fetchedModels}
-                            />
-                            <ModelComboBox
-                                label="Haiku Model"
-                                placeholder="claude-haiku-..."
-                                value={defaultHaikuModel}
-                                onChange={(v) => setDefaultHaikuModel(v)}
-                                options={fetchedModels}
-                            />
-                            <ModelComboBox
-                                label={t('providers.reasoningModel', '推理模型 (Thinking)')}
-                                placeholder="claude-sonnet-4-..."
-                                value={defaultReasoningModel}
-                                onChange={(v) => setDefaultReasoningModel(v)}
-                                options={fetchedModels}
-                            />
-                        </div>
+                        {appType === 'codex' ? (
+                            <div className="grid grid-cols-1 gap-y-3">
+                                <ModelComboBox
+                                    label={t('providers.codexModel', 'Codex 模型')}
+                                    placeholder={CODEX_MODEL_OPTIONS[0] || 'gpt-5.2-codex'}
+                                    value={defaultSonnetModel}
+                                    onChange={setDefaultSonnetModel}
+                                    options={modelOptions}
+                                />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <ModelComboBox
+                                    label="Sonnet Model"
+                                    placeholder="claude-sonnet-4-..."
+                                    value={defaultSonnetModel}
+                                    onChange={setDefaultSonnetModel}
+                                    options={fetchedModels}
+                                />
+                                <ModelComboBox
+                                    label="Opus Model"
+                                    placeholder="claude-opus-4-..."
+                                    value={defaultOpusModel}
+                                    onChange={setDefaultOpusModel}
+                                    options={fetchedModels}
+                                />
+                                <ModelComboBox
+                                    label="Haiku Model"
+                                    placeholder="claude-haiku-..."
+                                    value={defaultHaikuModel}
+                                    onChange={setDefaultHaikuModel}
+                                    options={fetchedModels}
+                                />
+                                <ModelComboBox
+                                    label={t('providers.reasoningModel', '推理模型 (Thinking)')}
+                                    placeholder="claude-sonnet-4-..."
+                                    value={defaultReasoningModel}
+                                    onChange={setDefaultReasoningModel}
+                                    options={fetchedModels}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {/* 标签 */}
