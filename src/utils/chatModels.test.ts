@@ -68,6 +68,9 @@ describe('chat model list helpers', () => {
         ]);
         expect(models[1]?.label).toBe('GPT Custom Max');
         expect(models.some((model) => model.id === 'gpt-5.5')).toBe(true);
+        expect(models.some((model) => model.id === 'gpt-5.4')).toBe(true);
+        expect(models.some((model) => model.id === 'gpt-5.2-codex')).toBe(true);
+        expect(models.some((model) => model.id === 'gpt-5.6-sol')).toBe(true);
     });
 
     it('ignores malformed stored custom models instead of breaking fallback models', () => {
