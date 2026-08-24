@@ -68,7 +68,8 @@
             "turnFailed": "This turn failed",
             "stoppedByUser": "Output stopped",
             "retryTurn": "Resend",
-            "retryUnavailable": "Cannot resend automatically: no previous message, it has attachments, or a turn is running"
+            "retryUnavailable": "Cannot resend automatically: no previous message, it has attachments, or a turn is running",
+            "quote": "Quote in composer"
         },
         "thinking": {
             "title": "AI is thinking…"
@@ -532,6 +533,30 @@
                 "noSystemChange": "Uses CCG Switch private data only and does not modify system PATH."
             },
             "missingBanner": "{{name}} is not installed yet. Install it to start chatting."
+        },
+        "working": {
+            "responding": "Responding",
+            "runningTool": "Running {{tool}}",
+            "completedSteps": "{{count}} steps done",
+            "outputTokens": "{{tokens}} tokens"
+        },
+        "turn": {
+            "complete": "Done",
+            "stopped": "Stopped",
+            "tokens": "{{tokens}} tokens",
+            "usageInput": "Input {{tokens}}",
+            "usageCacheWrite": "Cache write {{tokens}}",
+            "usageCacheRead": "Cache read {{tokens}}",
+            "usageOutput": "Output {{tokens}}"
+        },
+        "meta": {
+            "duration": "Took",
+            "durationShort": "took",
+            "input": "in",
+            "output": "out",
+            "tokensShort": "tokens",
+            "outputShort": "out",
+            "usageBreakdown": "Input {{input}} · Cache write {{cacheWrite}} · Cache read {{cacheRead}} · Output {{output}}"
         }
     },
     "tools": {

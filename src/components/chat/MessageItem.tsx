@@ -1,18 +1,23 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AlertTriangle, Check, CircleSlash, Copy, FoldVertical, History, RefreshCw, User} from 'lucide-react';
+import {AlertTriangle, Check, CircleSlash, Copy, FoldVertical, History, Quote, RefreshCw, User} from 'lucide-react';
 import type {ChatMessage, ContentBlock, TextBlock, ThinkingBlock, ToolResultBlock} from '../../types/chat';
 import {STOPPED_OUTPUT_ERROR, useChatStore} from '../../stores/useChatStore';
 import {useChatPaneTabKey} from './paneTabContext';
 import {showToast} from '../common/ToastContainer';
 import {cn} from '../../utils/cn';
 import {getRenderableContentBlocks, isCompactSummaryMessage, shouldRenderChatMessage,} from '../../utils/chatMessageFlow';
+import {resolveTurnActivity} from '../../utils/chatFormat';
 import CompactSummaryBlock from './CompactSummaryBlock';
 import ContentBlockRenderer from './ContentBlockRenderer';
 import MarkdownBlock from './MarkdownBlock';
 import MessageMeta from './MessageMeta';
 import RewindConfirmDialog from './RewindConfirmDialog';
-import StreamingPlaceholder from './StreamingPlaceholder';
+import TurnCompleteDivider from './TurnCompleteDivider';
+import WorkingIndicator from './WorkingIndicator';
+
+/** 引用到输入框时截断，避免把一整篇回复灌进 composer。 */
+const QUOTE_MAX_LENGTH = 1_200;
 
 interface MessageItemProps {
     message: ChatMessage;
@@ -60,6 +65,24 @@ function translateWithFallback(t: (key: string) => string, key: string, fallback
     return translated === key ? fallback : translated;
 }
 
+/** 把正文转成 Markdown 引用块，供「引用到输入框」使用。 */
+export function buildQuotedDraft(source: string, maxLength: number = QUOTE_MAX_LENGTH): string {
+    const trimmed = source.trim();
+    if (!trimmed) return '';
+
+    const clipped = trimmed.length > maxLength ? `${trimmed.slice(0, maxLength).trimEnd()}…` : trimmed;
+    return clipped
+        .split('\n')
+        .map((line) => (line.trim() ? `> ${line}` : '>'))
+        .join('\n');
+}
+
+export function appendQuoteToDraft(currentDraft: string, quoted: string): string {
+    if (!quoted) return currentDraft;
+    const base = currentDraft.replace(/\s+$/, '');
+    return base ? `${base}\n\n${quoted}\n\n` : `${quoted}\n\n`;
+}
+
 export default function MessageItem({
     message,
     isLast,
@@ -68,10 +91,10 @@ export default function MessageItem({
     onAnchorRef,
     findToolResult,
 }: MessageItemProps) {
-    const { t } = useTranslation();
+    const {t} = useTranslation();
     const [copied, setCopied] = useState(false);
     const copyTimerRef = useRef<number | null>(null);
-    // 宿主 pane 的 tab（侧聊）；null=主聊天全局投影。重发按钮据此路由到正确会话。
+    // 宿主 pane 的 tab（侧聊）；null=主聊天全局投影。重发/引用据此路由到正确会话。
     const paneTabKey = useChatPaneTabKey();
     const [rewindOpen, setRewindOpen] = useState(false);
     const [rewindBusy, setRewindBusy] = useState(false);
@@ -85,17 +108,60 @@ export default function MessageItem({
         () => (isAssistant && isLast && message.streaming ? getLastThinkingBlockIndex(blocks) : undefined),
         [blocks, isAssistant, isLast, message.streaming],
     );
-    const isEmptyStreamingPlaceholder = isAssistant
-        && isLast
-        && Boolean(message.streaming)
-        && !message.content.trim()
-        && !hasBlocks;
+    // 等待期反馈：正在跑哪个工具、已完成几步（详见 chatFormat.resolveTurnActivity）
+    const turnActivity = useMemo(
+        () => (isAssistant && message.streaming
+            ? resolveTurnActivity(blocks, findToolResult)
+            : null),
+        [blocks, findToolResult, isAssistant, message.streaming],
+    );
+
+    const handleAnchorRef = useCallback((node: HTMLElement | null) => {
+        if (!anchorId || !onAnchorRef) return;
+        onAnchorRef(anchorId, node);
+    }, [anchorId, onAnchorRef]);
 
     useEffect(() => () => {
         if (copyTimerRef.current !== null) {
             window.clearTimeout(copyTimerRef.current);
         }
     }, []);
+
+    const handleCopy = useCallback(async () => {
+        if (!copyText.trim()) return;
+
+        try {
+            await navigator.clipboard.writeText(copyText);
+            setCopied(true);
+            if (copyTimerRef.current !== null) {
+                window.clearTimeout(copyTimerRef.current);
+            }
+            copyTimerRef.current = window.setTimeout(() => setCopied(false), 1600);
+        } catch (e) {
+            console.error('[MessageItem] Copy failed:', e);
+        }
+    }, [copyText]);
+
+    const handleQuote = useCallback(() => {
+        const quoted = buildQuotedDraft(copyText);
+        if (!quoted) return;
+
+        const store = useChatStore.getState();
+        // 侧聊的草稿存在 openTabs 里；活跃 tab 的草稿走顶层投影。
+        const isBackgroundTab = Boolean(paneTabKey) && paneTabKey !== store.activeTabKey;
+        const currentDraft = isBackgroundTab
+            ? store.openTabs.find((tab) => tab.key === paneTabKey)?.draft ?? ''
+            : store.draft;
+        const nextDraft = appendQuoteToDraft(currentDraft, quoted);
+
+        if (paneTabKey) {
+            store.setTabDraft(paneTabKey, nextDraft);
+        } else {
+            store.setDraft(nextDraft);
+        }
+    }, [copyText, paneTabKey]);
+
+    // ---- 以下开始条件渲染；所有 hook 都在上面，保证调用顺序稳定 ----
 
     if (!shouldRenderChatMessage(message)) {
         return null;
@@ -111,17 +177,17 @@ export default function MessageItem({
             : '';
         return (
             <div
-                className="chat-message-row mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-2"
+                className="chat-message-row chat-turn-divider"
                 role="separator"
                 aria-label={compactLabel}
             >
-                <span className="h-px flex-1 bg-base-content/10" />
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-base-300/70 bg-base-200/60 px-2.5 py-0.5 text-[11px] text-base-content/55">
+                <span className="chat-turn-divider-line" aria-hidden="true" />
+                <span className="chat-turn-divider-badge">
                     <FoldVertical size={11} aria-hidden="true" />
                     {compactLabel}
                     {preTokensLabel}
                 </span>
-                <span className="h-px flex-1 bg-base-content/10" />
+                <span className="chat-turn-divider-line" aria-hidden="true" />
             </div>
         );
     }
@@ -135,12 +201,8 @@ export default function MessageItem({
     const systemLabel = translateWithFallback(t, 'chat.message.system', 'System');
     const copyLabel = translateWithFallback(t, 'chat.message.copy', 'Copy');
     const copiedLabel = translateWithFallback(t, 'chat.message.copied', 'Copied');
+    const quoteLabel = translateWithFallback(t, 'chat.message.quote', 'Quote in composer');
     const emptyUserLabel = translateWithFallback(t, 'chat.message.emptyUser', 'Empty message');
-    const streamingConnectedLabel = translateWithFallback(
-        t,
-        'chat.message.streamingConnected',
-        'Connected, generating response...',
-    );
     const turnFailedLabel = translateWithFallback(t, 'chat.message.turnFailed', 'This turn failed');
     const stoppedByUserLabel = translateWithFallback(t, 'chat.message.stoppedByUser', 'Output stopped');
     const retryTurnLabel = translateWithFallback(t, 'chat.message.retryTurn', 'Resend');
@@ -191,27 +253,8 @@ export default function MessageItem({
             ? assistantLabel
             : systemLabel;
 
-    const handleCopy = async () => {
-        if (!copyText.trim()) return;
-
-        try {
-            await navigator.clipboard.writeText(copyText);
-            setCopied(true);
-            if (copyTimerRef.current !== null) {
-                window.clearTimeout(copyTimerRef.current);
-            }
-            copyTimerRef.current = window.setTimeout(() => setCopied(false), 1600);
-        } catch (e) {
-            console.error('[MessageItem] Copy failed:', e);
-        }
-    };
-
     const canCopy = copyText.trim().length > 0;
     const copyButtonLabel = copied ? copiedLabel : copyLabel;
-    const handleAnchorRef = useCallback((node: HTMLElement | null) => {
-        if (!anchorId || !onAnchorRef) return;
-        onAnchorRef(anchorId, node);
-    }, [anchorId, onAnchorRef]);
 
     // 消息级回退：仅 user 消息且带会话 uuid 时可用（provider/回合状态在 store 侧校验）。
     const rewindLabel = translateWithFallback(t, 'chat.rewind.action', 'Rewind to here');
@@ -235,43 +278,54 @@ export default function MessageItem({
             });
     };
 
-    const rewindButton = canRewind ? (
-        <button
-            type="button"
-            className="btn btn-ghost btn-xs h-7 min-h-0 px-2 opacity-70 transition-opacity hover:opacity-100 focus:opacity-100"
-            title={rewindLabel}
-            aria-label={rewindLabel}
-            onClick={() => setRewindOpen(true)}
-        >
-            <History size={14} />
-        </button>
-    ) : null;
-
-    const copyButton = (
-        <button
-            type="button"
-            className={cn(
-                'btn btn-ghost btn-xs min-h-0 h-7 px-2 transition-opacity',
-                isAssistant
-                    ? 'absolute right-1 top-1 opacity-0 group-hover:opacity-100 focus:opacity-100'
-                    : 'opacity-70 hover:opacity-100 focus:opacity-100',
-                copied && 'opacity-100 text-success',
+    /**
+     * 消息操作条。改造前 assistant 的复制按钮是 `absolute right-1 top-1` 的孤零零
+     * 一颗，长消息里根本够不着，也没有别的动作。现在收成统一的一组，
+     * 悬停/聚焦显形，键盘可达。
+     */
+    const messageActions = (
+        <div className="chat-message-actions">
+            {canRewind && (
+                <button
+                    type="button"
+                    className="chat-message-action"
+                    title={rewindLabel}
+                    aria-label={rewindLabel}
+                    onClick={() => setRewindOpen(true)}
+                >
+                    <History size={13} />
+                </button>
             )}
-            title={copyButtonLabel}
-            aria-label={copyButtonLabel}
-            onClick={handleCopy}
-            disabled={!canCopy}
-        >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            <span className="hidden sm:inline">{copyButtonLabel}</span>
-        </button>
+            {canCopy && (
+                <button
+                    type="button"
+                    className="chat-message-action"
+                    title={quoteLabel}
+                    aria-label={quoteLabel}
+                    onClick={handleQuote}
+                >
+                    <Quote size={13} />
+                </button>
+            )}
+            {canCopy && (
+                <button
+                    type="button"
+                    className={cn('chat-message-action', copied && 'chat-message-action-done')}
+                    title={copyButtonLabel}
+                    aria-label={copyButtonLabel}
+                    onClick={handleCopy}
+                >
+                    {copied ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+            )}
+        </div>
     );
 
     const messageContent = (
         <div
             className={cn(
                 'min-w-0 text-sm font-normal leading-relaxed text-base-content',
-                isAssistant ? 'assistant-message-content pr-9' : 'space-y-2',
+                isAssistant ? 'assistant-message-content' : 'space-y-2',
                 isUser && 'user-message-content',
             )}
         >
@@ -286,13 +340,11 @@ export default function MessageItem({
                 />
             ) : message.content ? (
                 <MarkdownBlock content={message.content} isStreaming={message.streaming} />
-            ) : isEmptyStreamingPlaceholder ? (
-                <StreamingPlaceholder />
             ) : isUser ? (
                 <span className="italic text-base-content/40">{emptyUserLabel}</span>
             ) : null}
 
-            {message.error && (
+            {message.error && !isAssistant && (
                 <div className="flex items-start gap-2 rounded-lg border border-error/20 bg-error/10 px-3 py-2 text-sm text-error">
                     <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
                     <span>{message.error}</span>
@@ -308,8 +360,8 @@ export default function MessageItem({
                 ref={anchorId ? handleAnchorRef : undefined}
                 data-message-anchor-id={anchorId}
                 className={cn(
-                    'chat-message-row mx-auto w-full max-w-4xl px-3 py-2',
-                    isSearchMatch && 'rounded-lg bg-primary/5 ring-1 ring-primary/15',
+                    'chat-message-row chat-message-row-compact',
+                    isSearchMatch && 'chat-message-row-match',
                 )}
             >
                 <CompactSummaryBlock content={message.content} />
@@ -323,29 +375,24 @@ export default function MessageItem({
                 ref={anchorId ? handleAnchorRef : undefined}
                 data-message-anchor-id={anchorId}
                 className={cn(
-                    'chat-message-row user-message-row group mx-auto flex w-full max-w-4xl justify-end px-3 py-2',
-                    isSearchMatch && 'rounded-lg bg-primary/5 ring-1 ring-primary/15',
+                    'chat-message-row user-message-row group',
+                    isSearchMatch && 'chat-message-row-match',
                 )}
             >
                 <div
                     className={cn(
-                        'user-message-bubble max-w-[78%] rounded-2xl rounded-br-md border border-orange-100 bg-orange-50/75 px-3.5 py-2.5 shadow-sm sm:max-w-[760px]',
-                        'dark:border-orange-500/20 dark:bg-orange-500/10',
-                        message.error && 'border-error/30 bg-error/5 dark:border-error/40 dark:bg-error/10',
+                        'user-message-bubble',
+                        message.error && 'user-message-bubble-error',
                     )}
                 >
-                    <header className="mb-1.5 flex items-center justify-between gap-2 text-xs text-base-content/50">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm">
-                                <User size={12} />
-                            </span>
-                            <span className="font-medium text-base-content/65">{roleLabel}</span>
-                            <span>{time}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5">
-                            {rewindButton}
-                            {copyButton}
-                        </div>
+                    <header className="chat-message-header">
+                        <span className="chat-message-avatar">
+                            <User size={12} />
+                        </span>
+                        <span className="chat-message-role">{roleLabel}</span>
+                        <span className="chat-message-time tabular-nums">{time}</span>
+                        <span className="flex-1" />
+                        {messageActions}
                     </header>
 
                     {messageContent}
@@ -374,29 +421,34 @@ export default function MessageItem({
         return (
             <article
                 className={cn(
-                    'chat-message-row assistant-message-flow group relative mx-auto w-full max-w-4xl px-4 py-3 transition-colors',
-                    isSearchMatch && 'rounded-lg bg-primary/5 ring-1 ring-primary/15',
-                    message.error && !isStoppedByUser && 'rounded-lg bg-error/5 ring-1 ring-error/20',
+                    'chat-message-row assistant-message-flow group',
+                    isSearchMatch && 'chat-message-row-match',
+                    message.error && !isStoppedByUser && 'chat-message-row-error',
                 )}
             >
-                {canCopy && copyButton}
-
-                {message.streaming && (
-                    <div className="mb-1 inline-flex items-center gap-1.5 text-xs text-success/75">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success/80" />
-                        {streamingConnectedLabel}
-                    </div>
-                )}
-
                 {messageContent}
 
                 {assistantErrorNotice}
 
-                {!message.streaming && (
-                    <footer className="assistant-message-meta mt-1">
-                        <MessageMeta durationMs={message.durationMs} usage={message.usage} compact />
-                    </footer>
-                )}
+                {/* 收尾行：状态在左（流式=工作中指示器，完成=回合分隔条），操作在右。
+                    放在正文下方而不是浮在右上角，既不遮挡首行，也正好落在读完的位置。 */}
+                <footer className="chat-message-footer">
+                    {message.streaming ? (
+                        <WorkingIndicator
+                            startedAt={message.createdAt}
+                            outputTokens={message.usage?.output_tokens ?? 0}
+                            activeToolName={turnActivity?.activeToolName ?? null}
+                            completedToolCount={turnActivity?.completedToolCount ?? 0}
+                        />
+                    ) : (
+                        <TurnCompleteDivider
+                            durationMs={message.durationMs}
+                            usage={message.usage}
+                            stopped={isStoppedByUser}
+                        />
+                    )}
+                    {messageActions}
+                </footer>
             </article>
         );
     }
@@ -404,26 +456,16 @@ export default function MessageItem({
     return (
         <article
             className={cn(
-                'chat-message-row group relative mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-gray-100 bg-white/95 px-4 py-3 pl-5 shadow-sm transition-all hover:border-base-content/20 hover:shadow-md',
-                'dark:border-base-200 dark:bg-base-100/95',
-                isSearchMatch && 'border-primary/35 bg-primary/5 shadow-md ring-1 ring-primary/15',
-                message.error && 'border-error/30 bg-error/5 dark:border-error/40 dark:bg-error/10',
+                'chat-message-row system-message-card group',
+                isSearchMatch && 'chat-message-row-match',
+                message.error && 'chat-message-row-error',
             )}
         >
-            <div
-                className={cn(
-                    'absolute inset-y-0 left-0 w-1 bg-base-content/10',
-                    message.error && 'bg-error/70',
-                )}
-            />
-
-            <header className="mb-2 flex items-start justify-between gap-3 text-xs text-base-content/50">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="font-medium text-base-content/70">{roleLabel}</span>
-                    <span>{time}</span>
-                </div>
-
-                {canCopy && copyButton}
+            <header className="chat-message-header">
+                <span className="chat-message-role">{roleLabel}</span>
+                <span className="chat-message-time tabular-nums">{time}</span>
+                <span className="flex-1" />
+                {messageActions}
             </header>
 
             {messageContent}

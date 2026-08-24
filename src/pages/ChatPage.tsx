@@ -382,9 +382,13 @@ export default function ChatPage() {
 
     return (
         <div className="flex flex-col h-full">
-            {/* 头部：daemon 状态 + 依赖 + 清空 */}
-            <div className="flex items-center justify-between px-4 py-2.5">
-                <div className="flex items-center gap-1.5 text-xs" title={daemonDiagnosticDisplayText ?? daemonStatusText}>
+            {/* 顶部 chrome：daemon 状态在右侧 StatusStrip 已有一份，这里只在
+                「窄屏（dock 被隐藏）」或「状态不正常」时出现，避免同一信息占两遍位置。 */}
+            <div className="flex items-center justify-between gap-2 px-4 py-1.5">
+                <div
+                    className={`flex items-center gap-1.5 text-xs ${daemonStatusKind === 'ready' ? 'xl:hidden' : ''}`}
+                    title={daemonDiagnosticDisplayText ?? daemonStatusText}
+                >
                     <span
                         className={`inline-block w-2 h-2 rounded-full ${daemonIndicatorClass}`}
                     />
@@ -405,21 +409,27 @@ export default function ChatPage() {
                         </button>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-1 items-center justify-end gap-1">
                     <button
-                        className={`btn btn-ghost btn-sm ${sdkMissing ? 'text-warning' : ''}`}
+                        type="button"
+                        className={`btn btn-ghost btn-xs h-7 min-h-0 gap-1.5 px-2 ${sdkMissing ? 'text-warning' : 'text-base-content/60'}`}
+                        title={sdkManageLabel}
+                        aria-label={sdkManageLabel}
                         onClick={() => setSdkModalOpen(true)}
                     >
-                        <Package size={16}/>
-                        {sdkManageLabel}
+                        <Package size={14} />
+                        <span className="hidden sm:inline">{sdkManageLabel}</span>
                     </button>
                     <button
-                        className="btn btn-ghost btn-sm"
+                        type="button"
+                        className="btn btn-ghost btn-xs h-7 min-h-0 gap-1.5 px-2 text-base-content/60"
+                        title={clearChatLabel}
+                        aria-label={clearChatLabel}
                         onClick={handleClear}
                         disabled={!pane.hasMessages}
                     >
-                        <Trash2 size={16}/>
-                        {clearChatLabel}
+                        <Trash2 size={14} />
+                        <span className="hidden sm:inline">{clearChatLabel}</span>
                     </button>
                 </div>
             </div>

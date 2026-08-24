@@ -57,7 +57,8 @@
             "turnFailed": "本轮回复失败",
             "stoppedByUser": "已停止输出",
             "retryTurn": "重新发送",
-            "retryUnavailable": "无法自动重发：没有上一条消息、消息包含附件，或回合仍在进行"
+            "retryUnavailable": "无法自动重发：没有上一条消息、消息包含附件，或回合仍在进行",
+            "quote": "引用到输入框"
         },
         "thinking": {
             "title": "AI 正在思考…"
@@ -521,6 +522,30 @@
                 "noSystemChange": "仅使用 CCG Switch 私有数据目录，不会修改系统 PATH。"
             },
             "missingBanner": "{{name}} 尚未安装，安装后才能开始对话。"
+        },
+        "working": {
+            "responding": "响应中",
+            "runningTool": "执行 {{tool}}",
+            "completedSteps": "已完成 {{count}} 步",
+            "outputTokens": "{{tokens}} tokens"
+        },
+        "turn": {
+            "complete": "完成",
+            "stopped": "已停止",
+            "tokens": "{{tokens}} tokens",
+            "usageInput": "输入 {{tokens}}",
+            "usageCacheWrite": "缓存写 {{tokens}}",
+            "usageCacheRead": "缓存读 {{tokens}}",
+            "usageOutput": "输出 {{tokens}}"
+        },
+        "meta": {
+            "duration": "本次耗时",
+            "durationShort": "耗时",
+            "input": "输入",
+            "output": "输出",
+            "tokensShort": "tokens",
+            "outputShort": "out",
+            "usageBreakdown": "输入 {{input}} · 缓存写 {{cacheWrite}} · 缓存读 {{cacheRead}} · 输出 {{output}}"
         }
     },
     "tools": {
