@@ -16,6 +16,10 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
+(
+    globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT?: boolean}
+).IS_REACT_ACT_ENVIRONMENT = true;
+
 let activeRoot: Root | null = null;
 let activeContainer: HTMLDivElement | null = null;
 

@@ -107,6 +107,7 @@
             "searchPlaceholder": "搜索当前对话",
             "scrollToTop": "滚动到顶部",
             "scrollToBottom": "滚动到底部",
+            "unreadMessages": "{{count}} 条新消息",
             "statusPanel": "会话状态",
             "runtimeContext": "运行上下文",
             "workspace": "工作区",

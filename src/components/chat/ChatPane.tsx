@@ -143,6 +143,7 @@ export function ChatPane({
 
             <ScrollControl
                 visible={controller.hasMessages && !controller.isNearBottom}
+                unreadCount={controller.unreadCount}
                 onScrollToBottom={controller.scrollToBottom}
             />
 

@@ -118,6 +118,7 @@
             "searchPlaceholder": "Search this conversation",
             "scrollToTop": "Scroll to top",
             "scrollToBottom": "Scroll to bottom",
+            "unreadMessages": "{{count}} new messages",
             "statusPanel": "Session status",
             "runtimeContext": "Runtime context",
             "workspace": "Workspace",

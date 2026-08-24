@@ -34,10 +34,14 @@ import {
     getSearchStatusContextMessages,
     isMessageAnchorCandidate,
 } from '../../utils/chatNavigation';
+import {
+    isFollowDetachIntent,
+    isNearBottom as isNearBottomMetrics,
+    nextUnreadCount,
+    resolveFollowScrollBehavior,
+} from '../../utils/chatScrollFollow';
 import {getSessionSelectionKey} from '../../types/session';
 import type {ChatMessage} from '../../types/chat';
-
-const BOTTOM_REVEAL_THRESHOLD = 160;
 
 function findToolAnchorElement(root: HTMLElement, toolId: string): HTMLElement | null {
     const candidates = root.querySelectorAll<HTMLElement>('[data-chat-tool-id], [data-chat-tool-ids]');
@@ -109,6 +113,8 @@ export interface ChatPaneController {
     // 滚动
     scrollRef: RefObject<HTMLDivElement | null>;
     isNearBottom: boolean;
+    /** 脱离底部跟随后累积的新增消息数，供「回到底部」按钮显示角标。 */
+    unreadCount: number;
     updateBottomState: () => void;
     scrollToBottom: () => void;
     scrollToTop: () => void;
@@ -160,6 +166,7 @@ export function useChatPaneController({
     const lastSessionLoadMetrics = view.lastSessionLoadMetrics;
 
     const [isNearBottom, setIsNearBottom] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedAnchorCount, setCollapsedAnchorCount] = useState<number | null>(null);
     const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
@@ -174,6 +181,14 @@ export function useChatPaneController({
     const searchInputRef = useRef<HTMLInputElement>(null);
     const fullHistorySearchStateRef = useRef<FullHistorySearchState | null>(null);
     const isNearBottomRef = useRef(true);
+    /** 是否跟随底部。用户手势显式脱离，滚回底部区域自动恢复。 */
+    const followRef = useRef(true);
+    /** 已排期的「读取滚动位置」帧，用于把高频 scroll 事件压到每帧一次。 */
+    const bottomStateFrameRef = useRef<number | null>(null);
+    /** 已排期的「跟随滚到底」帧，一帧最多滚一次。 */
+    const followScrollFrameRef = useRef<number | null>(null);
+    /** 上一次结算时的可渲染条数，用于算未读增量。 */
+    const renderableCountRef = useRef(0);
     const messageNodeMapRef = useRef<Map<string, HTMLElement>>(new Map());
     const toolAnchorHighlightCleanupRef = useRef<(() => void) | null>(null);
 
@@ -181,24 +196,58 @@ export function useChatPaneController({
         toolAnchorHighlightCleanupRef.current?.();
     }, []);
 
-    const updateBottomState = useCallback(() => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl) return;
-
-        const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
-        const nextIsNearBottom = distanceFromBottom < BOTTOM_REVEAL_THRESHOLD;
-        isNearBottomRef.current = nextIsNearBottom;
-        setIsNearBottom(nextIsNearBottom);
+    useEffect(() => () => {
+        if (bottomStateFrameRef.current !== null) cancelAnimationFrame(bottomStateFrameRef.current);
+        if (followScrollFrameRef.current !== null) cancelAnimationFrame(followScrollFrameRef.current);
     }, []);
 
+    /**
+     * 转录容器的 `onScroll` 直连本函数。改造前它每个滚动事件同步 `setState` 一次，
+     * 一次惯性滚动能触发上百次 pane 级重渲染；现在压到每帧最多读一次布局，
+     * 并且值没变就不 setState（React 对同值 bail out）。
+     */
+    const updateBottomState = useCallback(() => {
+        if (bottomStateFrameRef.current !== null) return;
+
+        bottomStateFrameRef.current = requestAnimationFrame(() => {
+            bottomStateFrameRef.current = null;
+            const scrollEl = scrollRef.current;
+            if (!scrollEl) return;
+
+            const nextIsNearBottom = isNearBottomMetrics(scrollEl);
+            isNearBottomRef.current = nextIsNearBottom;
+            setIsNearBottom(nextIsNearBottom);
+
+            // 回到底部区域 → 自动恢复跟随并清未读。
+            if (nextIsNearBottom && !followRef.current) {
+                followRef.current = true;
+                setUnreadCount(0);
+            }
+        });
+    }, []);
+
+    // 脱离跟随只认用户手势。`scroll` 事件分不清程序滚动与用户滚动，
+    // 用它判定会让我们自己的 scrollTo 把自己踢出跟随状态。
     useEffect(() => {
         const scrollEl = scrollRef.current;
-        if (!scrollEl || !isNearBottomRef.current) return;
+        if (!scrollEl) return undefined;
 
-        requestAnimationFrame(() => {
-            scrollEl.scrollTo({top: scrollEl.scrollHeight, behavior: 'smooth'});
-        });
-    }, [messages]);
+        const handleDetachIntent = (event: Event) => {
+            if (!followRef.current) return;
+            if (!isFollowDetachIntent(event)) return;
+            followRef.current = false;
+        };
+
+        scrollEl.addEventListener('wheel', handleDetachIntent, {passive: true});
+        scrollEl.addEventListener('touchmove', handleDetachIntent, {passive: true});
+        scrollEl.addEventListener('keydown', handleDetachIntent);
+
+        return () => {
+            scrollEl.removeEventListener('wheel', handleDetachIntent);
+            scrollEl.removeEventListener('touchmove', handleDetachIntent);
+            scrollEl.removeEventListener('keydown', handleDetachIntent);
+        };
+    }, []);
 
     useEffect(() => {
         if (!bindSearchShortcut) return undefined;
@@ -315,6 +364,48 @@ export function useChatPaneController({
         () => messages.some((message) => Boolean(message.streaming)),
         [messages],
     );
+    /**
+     * 供 rAF 回调在**执行时**读取，而不是沿用排期那一刻的闭包值。
+     * 合批窗口内 streaming 可能刚翻转（回合开始/结束正好落在同一帧），
+     * 用闭包值会在流式起点排出一次平滑动画——正是我们要消掉的那种动画。
+     */
+    const isStreamingRef = useRef(isStreaming);
+    isStreamingRef.current = isStreaming;
+
+    /**
+     * 底部跟随。改造前这个 effect 依赖整个 `messages` 且用 `behavior: 'smooth'`，
+     * 流式期间每个增量都排一次平滑滚动，动画互相打断成抖动、还追不上底部。
+     * 现在：跟随状态由用户手势控制，滚动按帧合批，流式期间用 `instant`。
+     */
+    useEffect(() => {
+        const previousCount = renderableCountRef.current;
+        renderableCountRef.current = renderableMessageCount;
+
+        if (!followRef.current) {
+            setUnreadCount((currentUnread) => nextUnreadCount({
+                following: false,
+                previousCount,
+                nextCount: renderableMessageCount,
+                currentUnread,
+            }));
+            return;
+        }
+
+        setUnreadCount(0);
+        if (followScrollFrameRef.current !== null) return;
+
+        followScrollFrameRef.current = requestAnimationFrame(() => {
+            followScrollFrameRef.current = null;
+            const scrollEl = scrollRef.current;
+            // 帧回调期间用户可能已经上滚接管，重新确认后再滚。
+            if (!scrollEl || !followRef.current) return;
+            scrollEl.scrollTo({
+                top: scrollEl.scrollHeight,
+                behavior: resolveFollowScrollBehavior(isStreamingRef.current),
+            });
+        });
+    }, [messages, renderableMessageCount]);
+
     const statusMessages = useMemo(() => {
         if (isSearchingTranscript) {
             return getSearchStatusContextMessages(searchSourceMessages, filteredMessages);
@@ -488,6 +579,10 @@ export function useChatPaneController({
         messageNodeMapRef.current.clear();
         isNearBottomRef.current = true;
         setIsNearBottom(true);
+        // 切会话/清空后回到跟随态，未读计数与旧会话的条数基线一起清掉。
+        followRef.current = true;
+        renderableCountRef.current = 0;
+        setUnreadCount(0);
     }, []);
 
     const handleSearchChange = useCallback((value: string) => {
@@ -495,6 +590,8 @@ export function useChatPaneController({
         setActiveAnchorId(null);
 
         if (value.trim()) {
+            // 搜索会把视口带到顶部，这是明确的「我要自己看」，退出跟随。
+            followRef.current = false;
             requestAnimationFrame(() => {
                 scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
             });
@@ -519,12 +616,15 @@ export function useChatPaneController({
         const anchor = findToolAnchorElement(scrollEl, tool.toolId);
         if (!anchor) return;
 
+        // 跳转到历史工具卡片同样是「我要自己看」：不退出跟随的话，
+        // 下一条流式增量会立刻把视口拽回底部。
+        followRef.current = false;
         anchor.scrollIntoView({behavior: 'smooth', block: 'center'});
         anchor.focus({preventScroll: true});
         toolAnchorHighlightCleanupRef.current = highlightTranscriptToolAnchor(anchor, {
             previousCleanup: toolAnchorHighlightCleanupRef.current,
         });
-        requestAnimationFrame(updateBottomState);
+        updateBottomState();
     }, [updateBottomState]);
 
     const handleSelectedEditChange = useCallback((edit: ChatStatusEditSummary) => {
@@ -538,6 +638,8 @@ export function useChatPaneController({
         scrollEl.scrollTo({top: scrollEl.scrollHeight, behavior: 'smooth'});
         isNearBottomRef.current = true;
         setIsNearBottom(true);
+        followRef.current = true;
+        setUnreadCount(0);
     }, []);
 
     const scrollToTop = useCallback(() => {
@@ -547,6 +649,7 @@ export function useChatPaneController({
         scrollEl.scrollTo({top: 0, behavior: 'smooth'});
         isNearBottomRef.current = false;
         setIsNearBottom(false);
+        followRef.current = false;
     }, []);
 
     return {
@@ -566,6 +669,7 @@ export function useChatPaneController({
         handleRetryFullHistorySearch,
         scrollRef,
         isNearBottom,
+        unreadCount,
         updateBottomState,
         scrollToBottom,
         scrollToTop,
