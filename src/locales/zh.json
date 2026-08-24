@@ -546,6 +546,9 @@
             "tokensShort": "tokens",
             "outputShort": "out",
             "usageBreakdown": "输入 {{input}} · 缓存写 {{cacheWrite}} · 缓存读 {{cacheRead}} · 输出 {{output}}"
+        },
+        "toolSteps": {
+            "folded": "展开折叠的 {{count}} 个中间步骤"
         }
     },
     "tools": {

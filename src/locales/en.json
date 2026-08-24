@@ -557,6 +557,9 @@
             "tokensShort": "tokens",
             "outputShort": "out",
             "usageBreakdown": "Input {{input}} · Cache write {{cacheWrite}} · Cache read {{cacheRead}} · Output {{output}}"
+        },
+        "toolSteps": {
+            "folded": "Show {{count}} collapsed steps"
         }
     },
     "tools": {

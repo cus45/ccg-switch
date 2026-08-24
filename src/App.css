@@ -528,6 +528,13 @@ a {
   margin-inline: auto;
   padding: var(--chat-row-pad-y) var(--chat-row-pad-x);
   overflow-wrap: anywhere;
+  /* 长会话滚动成本：让浏览器跳过视口外消息的样式/布局/绘制。
+     `auto` 关键字使其记住上次实测高度，避免滚动条跳动；不支持的旧 WKWebView
+     会忽略这两条属性，行为等同改造前。删掉这两行即可完全回滚。
+     与既有功能不冲突：转录搜索是自实现过滤（非浏览器 Ctrl+F），
+     锚点跳转用 scrollIntoView，浏览器会强制布局被跳过的子树。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
   /* 新消息进场：轻微上浮淡入，历史批量加载因同帧渲染几乎无感 */
   animation: chatMessageEnter 0.18s ease-out;
 }
@@ -736,6 +743,32 @@ a {
 .chat-turn-divider-detail {
   font-variant-numeric: tabular-nums;
   color: oklch(var(--bc) / 0.42);
+}
+
+/* 中间工具步骤折叠 chip */
+.chat-tool-steps-fold {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.625rem;
+  border: 1px dashed oklch(var(--bc) / 0.2);
+  border-radius: 9999px;
+  background: oklch(var(--b2) / 0.5);
+  font-size: 11px;
+  line-height: 1.4;
+  color: oklch(var(--bc) / 0.55);
+  transition: border-color 0.12s ease-out, color 0.12s ease-out;
+}
+
+.chat-tool-steps-fold:hover {
+  border-color: oklch(var(--p) / 0.4);
+  color: oklch(var(--p));
+}
+
+.chat-tool-steps-fold:focus-visible {
+  outline: 2px solid oklch(var(--p) / 0.4);
+  outline-offset: 1px;
 }
 
 /* 系统消息卡：保留左强调条，但描边/圆角走统一变量 */

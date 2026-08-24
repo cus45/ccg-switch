@@ -1,11 +1,12 @@
 import {useEffect, useMemo, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {X} from 'lucide-react';
+import {ChevronDown, X} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import {convertFileSrc} from '@tauri-apps/api/core';
 import type {ContentBlock, ImageBlock, ToolResultBlock, ToolUseBlock} from '../../types/chat';
 import {mergeAdjacentTextContentBlocks} from '../../utils/chatMessageFlow';
 import {groupToolBlocks} from '../../utils/toolGrouping';
+import {planToolStepFold} from '../../utils/toolStepFolding';
 import {getToolType} from '../../types/tools';
 import {
     getImageBlockDataUrl,
@@ -242,6 +243,8 @@ export default function ContentBlockRenderer({
 }: ContentBlockRendererProps) {
     const { t } = useTranslation();
     const [lightboxImage, setLightboxImage] = useState<ImageRenderData | null>(null);
+    // 中间工具步骤是否已展开；按消息实例保存，切消息自然复位
+    const [toolStepsExpanded, setToolStepsExpanded] = useState(false);
     const resolvedImageDisplay = imageDisplay ?? (compact ? 'compact' : 'default');
 
     useEffect(() => {
@@ -261,6 +264,19 @@ export default function ContentBlockRenderer({
 
     // 应用分组算法
     const groupedBlocks = useMemo(() => groupToolBlocks(renderableBlocks), [renderableBlocks]);
+
+    // 中间步骤折叠：一轮几十个工具调用平铺会把正文冲散、把滚动距离拉长。
+    // 流式期间不折叠——用户正盯着最新动作看。
+    const foldPlan = useMemo(
+        () => planToolStepFold(groupedBlocks, toolStepsExpanded || streaming),
+        [groupedBlocks, streaming, toolStepsExpanded],
+    );
+    const foldedStepsLabel = (() => {
+        const translated = t('chat.toolSteps.folded', {count: foldPlan.foldedCount});
+        return translated === 'chat.toolSteps.folded'
+            ? `Show ${foldPlan.foldedCount} collapsed steps`
+            : translated;
+    })();
 
     // 渲染单个工具块
     const renderToolBlock = (block: ToolUseBlock, result: ToolResultBlock | null | undefined) => {
@@ -361,6 +377,26 @@ export default function ContentBlockRenderer({
     return (
         <div className={compact ? 'chat-content-blocks chat-content-blocks-compact' : 'chat-content-blocks chat-content-blocks-default'}>
             {groupedBlocks.map((grouped, index) => {
+                if (foldPlan.hiddenIndices.has(index)) {
+                    // 被折叠的中间步骤：在第一个隐藏位插入一枚可展开 chip，其余静默跳过
+                    if (index !== foldPlan.chipAtIndex) return null;
+
+                    return (
+                        <button
+                            key={`tool-steps-fold-${index}`}
+                            type="button"
+                            className="chat-tool-steps-fold"
+                            title={foldedStepsLabel}
+                            aria-label={foldedStepsLabel}
+                            aria-expanded={false}
+                            onClick={() => setToolStepsExpanded(true)}
+                        >
+                            <ChevronDown size={12} aria-hidden="true" />
+                            <span>{foldedStepsLabel}</span>
+                        </button>
+                    );
+                }
+
                 if (resolvedImageDisplay === 'user-thumbnail' && grouped.type === 'single' && isImageContentBlock(grouped.block)) {
                     const previousBlock = groupedBlocks[index - 1];
                     if (previousBlock?.type === 'single' && isImageContentBlock(previousBlock.block)) {

@@ -89,29 +89,26 @@ npm run build
 
 ## S4 — 转录信息密度（P2）
 
-- [ ] 4.1 新建 `src/utils/turnFileChanges.ts` + 单测：
-      从一轮的 `tool_use`/`tool_result` 聚合 Edit/Write 涉及的文件与增删行数
-      （参考 `desktop-cc-gui/src/features/messages/utils/turnFileChanges.ts`）
-- [ ] 4.2 新建 `TurnFilesChangedCard.tsx`：文件清单 + 点击跳转对应工具锚点
-      （复用 `controller.handleSelectStatusTool` 路径）
-- [ ] 4.3 `MessageItem.tsx`：非流式 assistant 消息且本轮有文件变更时渲染该卡
-- [ ] 4.4 中间步骤折叠：`ContentBlockRenderer.tsx` 在工具块数 > 阈值时，
-      把首尾之外的部分折叠为一枚 chip（参考对方 `MiddleStepsCollapsedChip`）
-- [ ] 4.5 zh/en locale 补文案
+- [x] 4.1 中间步骤折叠：`toolStepFolding.ts` + 单测（纯函数），
+      工具类条目 > 8 时把中间部分折成一枚 chip，保留首 2 尾 3；
+      文本/思考/图片永不折叠；流式期间不折叠
+- [x] 4.2 `ContentBlockRenderer.tsx` 接入折叠方案 + chip 样式 + zh/en 文案
+- [ ] ~~4.3 `turnFileChanges.ts` + `TurnFilesChangedCard.tsx`~~ —— **撤销，见下方决策 E2**
 
 **验证门 G4**
 ```bash
-npm test -- turnFileChanges TurnFilesChangedCard ContentBlockRenderer
+npm test -- toolStepFolding ContentBlockRenderer
 npm run build
 ```
-手验：跑一轮含多次 Edit 的任务 → 结束后能看到文件变更清单并可跳转（AC8）
+手验：跑一轮含十几次工具调用的任务 → 中间步骤折叠为 chip，点击展开（AC8 折叠部分）
 
 ---
 
 ## S5 — 长会话滚动成本（P2）
 
-- [ ] 5.1 `App.css`：`.chat-message-row { content-visibility: auto; contain-intrinsic-size: auto 200px; }`
-- [ ] 5.2 验证锚点跳转 / 转录搜索 / MessageAnchorRail 在 occlusion 下行为不变
+- [x] 5.1 `App.css`：`.chat-message-row` 加
+      `content-visibility: auto; contain-intrinsic-size: auto 200px;`
+- [ ] 5.2 手验锚点跳转 / 转录搜索 / MessageAnchorRail 在 occlusion 下行为不变
 - [ ] 5.3 若观察到滚动条跳动，调整 `contain-intrinsic-size` 基线或按角色分档
 
 **验证门 G5**
@@ -120,6 +117,33 @@ npm test
 npm run build
 ```
 手验：加载 500+ 条历史的会话，滚动流畅度对比改动前
+
+---
+
+## 执行期偏离决策
+
+### E1 StreamStallHint 的 90s 阈值保持不变（原计划 3.4 要分级下调）
+
+计划里写的是「静默 20s 给弱提示，90s 给停止按钮」。落地 `WorkingIndicator`
+之后重新评估：这一项要解决的问题（PRD #11「90s 才提示，中间 89s 用户完全不知道
+系统是否活着」）已经被持续计时 + 当前工具名直接解决了。而 20s 再叠一条横幅，
+在「0:20 · 执行 Bash」已经显示的情况下纯属噪音——与本轮要降的信息密度目标相反。
+
+90s 这个数有明确理由（长 Bash 任务本来就可能长时间无输出），它测的是
+「daemon 静默多久」，和回合耗时是不同信号。没有新证据就不动它。
+
+### E2 撤销「本轮文件变更汇总卡」（原计划 4.1–4.3）
+
+动手前核对发现右侧 dock 的 StatusStrip/ReviewPanel 已经在展示
+`pane.statusSummary.allEdits`（文件清单 + 增删行数 + 点击跳转 diff），
+`buildChatStatusSummary` 就是现成的聚合实现。再在每条 assistant 消息下加一张卡：
+
+1. 信息重复，且重复的正是本轮要削减的密度；
+2. `buildChatStatusSummary` 按 `ChatMessage[]` 聚合，tool_result 落在后一条 user
+   消息里，单条消息喂进去会把所有工具算成 pending——要正确复用得改它的签名或
+   造合成消息，为一个重复信息付这个代价不值。
+
+AC8 的「本轮文件变更」部分因此未交付，已在下方验收清单标注。
 
 ---
 
