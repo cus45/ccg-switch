@@ -104,19 +104,9 @@ npm run build
 
 ---
 
-## S5 — 长会话滚动成本（P2）
+## S5 — 长会话滚动成本（P2）—— **撤回，见决策 E3**
 
-- [x] 5.1 `App.css`：`.chat-message-row` 加
-      `content-visibility: auto; contain-intrinsic-size: auto 200px;`
-- [ ] 5.2 手验锚点跳转 / 转录搜索 / MessageAnchorRail 在 occlusion 下行为不变
-- [ ] 5.3 若观察到滚动条跳动，调整 `contain-intrinsic-size` 基线或按角色分档
-
-**验证门 G5**
-```bash
-npm test
-npm run build
-```
-手验：加载 500+ 条历史的会话，滚动流畅度对比改动前
+- [x] ~~5.1 `.chat-message-row` 加 `content-visibility: auto`~~ 已 revert
 
 ---
 
@@ -144,6 +134,26 @@ npm run build
    造合成消息，为一个重复信息付这个代价不值。
 
 AC8 的「本轮文件变更」部分因此未交付，已在下方验收清单标注。
+
+### E3 撤回 `content-visibility: auto`（原计划 S5 全部）
+
+先加上了、跑通了 build，随后核对既有功能时发现两点，决定 revert：
+
+1. `MessageAnchorRail` 靠 `node.offsetTop`（`MessageAnchorRail.tsx:139` 判定当前
+   锚点、`:244` 计算跳转目标）定位。`content-visibility: auto` 下视口外消息只有
+   `contain-intrinsic-size` 的占位高度，`offsetTop` 是估算值——跳转会先落到近似
+   位置、渲染真实内容后再位移。这是在拿用户正在用的锚点导航精度换性能。
+2. 收益本来就被覆盖掉大半：渲染条数已由 `VISIBLE_MESSAGE_WINDOW`（15 + 每页 30）
+   封住，DOM 里的消息数是有界的，遮挡优化的边际收益远小于无界长列表的场景。
+
+顺带确认过 `contain: paint` 的裁剪风险不成立：消息内部的三个全屏浮层
+（MermaidViewer / RewindConfirmDialog / ImageLightbox）都走 `createPortal`
+到 document.body，toolBlocks 里没有非 portal 的绝对定位浮层。
+也就是说这条属性不会破坏浮层，但上面第 1 点仍然成立。
+
+AC 中「长会话滚动成本」一项因此未交付。若后续确实需要，正确做法是改造
+`MessageAnchorRail` 改用 `IntersectionObserver`（它已经在用）+ 相对偏移，
+而不是继续依赖 `offsetTop`。
 
 ---
 
