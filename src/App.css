@@ -148,6 +148,13 @@ a {
   color: inherit;
 }
 
+/* 流式期间正文按 CommonMark 块边界切成多个 fragment（见 markdownBlocks.ts）。
+   容器不产生盒子，布局上等价于把块内容平铺进 .markdown-block，
+   既不影响下面所有排版规则，也不引入额外间距。 */
+.markdown-fragment {
+  display: contents;
+}
+
 /* Mermaid 图表容器：居中、可横向滚动，浅底保证深色主题下节点文字可读 */
 .markdown-block .mermaid-diagram {
   display: flex;
@@ -585,6 +592,17 @@ a {
 .assistant-message-flow .markdown-block p:last-child,
 .user-message-bubble .markdown-block p:last-child {
   margin-bottom: 0;
+}
+
+/* 分块渲染修正：每个 fragment 的末段都会命中上面的归零规则，导致流式期间块间
+   段距塌陷、settle 后又跳回来。给非末尾 fragment 补回段距；单 fragment 的
+   完成态不受影响。 */
+.assistant-message-flow .markdown-block .markdown-fragment:not(:last-child) > p:last-child {
+  margin-bottom: 0.75em;
+}
+
+.user-message-bubble .markdown-block .markdown-fragment:not(:last-child) > p:last-child {
+  margin-bottom: 1em;
 }
 
 .assistant-message-flow .markdown-block pre {

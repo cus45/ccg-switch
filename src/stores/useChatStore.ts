@@ -971,6 +971,89 @@ function appendToStreamingAssistantMessages(
     return nextMessages;
 }
 
+// ============================================================
+// 流式增量合批
+// ============================================================
+
+/**
+ * 是否把 `[CONTENT_DELTA]` 合批到一帧内提交。置 false 走逐条 `set()` 的旧路径，
+ * 作为出问题时的一键回滚开关。
+ */
+const CHAT_STREAM_COALESCE = true;
+
+/**
+ * 只覆盖本文件实际使用的 updater 形态；`set` 接受更宽的入参，可直接传入。
+ */
+type ChatStateUpdater = (updater: (state: ChatState) => ChatState | Partial<ChatState>) => void;
+
+/**
+ * 每个进行中请求已到达但尚未提交的文本增量。
+ *
+ * daemon 每收到一截模型输出就发一行 `[CONTENT_DELTA]`，快模型下每秒可达数十次。
+ * 逐条 `set()` 会让整棵订阅树按同样频率重渲染；这里按帧合并成一次提交。
+ * 缓冲最多存活一帧，无需额外清理。
+ */
+const pendingStreamDeltas = new Map<string, string>();
+let pendingStreamFlushHandle: number | null = null;
+
+function cancelPendingStreamFlush(): void {
+    if (pendingStreamFlushHandle === null) return;
+    cancelAnimationFrame(pendingStreamFlushHandle);
+    pendingStreamFlushHandle = null;
+}
+
+function applyStreamDelta(set: ChatStateUpdater, requestId: string, delta: string): void {
+    set((state) => updateRequestTabState(state, requestId, (tab) => ({
+        ...tab,
+        messages: appendToStreamingAssistantMessages(tab.messages, delta),
+        status: 'running',
+    })));
+}
+
+/**
+ * 排空增量缓冲。省略 `requestId` 时排空全部。
+ *
+ * **保序契约**：任何会读或改 transcript 的后续事件（`[BLOCK_RESET]` 封口、
+ * `[USAGE]`、`chat://message`、`chat://done`、中止）都必须先调用本函数，
+ * 否则缓冲中的文本会越过这些事件、落到错误的内容块里。
+ */
+function flushPendingStreamDeltas(set: ChatStateUpdater, requestId?: string): void {
+    if (pendingStreamDeltas.size === 0) return;
+
+    if (requestId !== undefined) {
+        const buffered = pendingStreamDeltas.get(requestId);
+        if (buffered === undefined) return;
+        pendingStreamDeltas.delete(requestId);
+        if (pendingStreamDeltas.size === 0) cancelPendingStreamFlush();
+        if (buffered) applyStreamDelta(set, requestId, buffered);
+        return;
+    }
+
+    const buffered = [...pendingStreamDeltas.entries()];
+    pendingStreamDeltas.clear();
+    cancelPendingStreamFlush();
+    buffered.forEach(([id, delta]) => {
+        if (delta) applyStreamDelta(set, id, delta);
+    });
+}
+
+function queueStreamDelta(set: ChatStateUpdater, requestId: string, delta: string): void {
+    // 合批的意义是「一帧只提交一次」。没有 requestAnimationFrame 的环境（Node 测试、
+    // SSR）本就没有帧可对齐，直接同步提交，语义与旧路径完全一致。
+    if (!CHAT_STREAM_COALESCE || typeof requestAnimationFrame !== 'function') {
+        applyStreamDelta(set, requestId, delta);
+        return;
+    }
+
+    pendingStreamDeltas.set(requestId, (pendingStreamDeltas.get(requestId) ?? '') + delta);
+    if (pendingStreamFlushHandle !== null) return;
+
+    pendingStreamFlushHandle = requestAnimationFrame(() => {
+        pendingStreamFlushHandle = null;
+        flushPendingStreamDeltas(set);
+    });
+}
+
 function addUsageToStreamingAssistantMessages(
     messages: ChatMessage[],
     usage: TokenUsage,
@@ -1415,6 +1498,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 const marker = text.startsWith('[THREAD_ID]') ? '[THREAD_ID]' : '[SESSION_ID]';
                 const sid = text.slice(marker.length).trim();
                 if (sid) {
+                    flushPendingStreamDeltas(set, requestId);
                     set((state) => updateRequestTabState(state, requestId, (tab) => ({
                         ...tab,
                         sessionId: sid,
@@ -1425,6 +1509,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
 
             // [CONTENT_DELTA]：JSON 编码的文本增量，追加到当前流式消息。
+            // 走帧合批：同一帧内的多截增量合成一次 set，见 queueStreamDelta。
             if (text.startsWith('[CONTENT_DELTA]')) {
                 const payload = text.slice('[CONTENT_DELTA]'.length).trim();
                 let delta = payload;
@@ -1433,22 +1518,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 } catch {
                     // 非 JSON，按原文处理
                 }
-                set((state) => updateRequestTabState(state, requestId, (tab) => ({
-                    ...tab,
-                    messages: appendToStreamingAssistantMessages(tab.messages, delta),
-                    status: 'running',
-                })));
+                queueStreamDelta(set, requestId, delta);
                 return;
             }
 
             // [CONTENT]：非流式模式的完整文本块（直接追加）。
+            // 与增量共用同一缓冲，保证两者的相对顺序。
             if (text.startsWith('[CONTENT]')) {
                 const content = text.slice('[CONTENT]'.length).trim();
-                set((state) => updateRequestTabState(state, requestId, (tab) => ({
-                    ...tab,
-                    messages: appendToStreamingAssistantMessages(tab.messages, content),
-                    status: 'running',
-                })));
+                queueStreamDelta(set, requestId, content);
                 return;
             }
 
@@ -1457,6 +1535,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 const payload = text.slice('[USAGE]'.length).trim();
                 try {
                     const usage = JSON.parse(payload) as TokenUsage;
+                    flushPendingStreamDeltas(set, requestId);
                     set((state) => updateRequestTabState(state, requestId, (tab) => {
                         // 上下文 token ≈ 本轮输入(含缓存) + 输出，作为用量环的估算值。
                         const contextTokens =
@@ -1488,6 +1567,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             // 发出，标记一个内容块边界。封口当前流式 assistant 的开启中文本段，
             // 使下一段 [CONTENT_DELTA] 文本开启新的 text block，保留交错源顺序。
             if (text.startsWith('[BLOCK_RESET]')) {
+                // 必须先排空缓冲：封口发生在缓冲文本之后的话，这一段会被算进
+                // 下一个内容块，交错顺序就错了。
+                flushPendingStreamDeltas(set, requestId);
                 sealStreamingTextSegment(get);
                 return;
             }
@@ -1502,6 +1584,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const stateBeforeDone = get();
             if (!shouldAcceptRequestEvent(stateBeforeDone, requestId)) return;
             bindPendingRequestIfNeeded(set, stateBeforeDone, requestId);
+            // 回合收尾前排空缓冲：否则最后一帧的文本会落在 streaming 标志清掉之后，
+            // 追加不到任何消息上（appendToStreamingAssistantMessages 只认流式消息）。
+            flushPendingStreamDeltas(set, requestId);
             const targetBeforeDone = requestTargetTab(get(), requestId) ?? stateBeforeDone;
             // retire 会清 requestTabKeys，可见性判定所需的目标 key 要先取。
             const targetTabKeyBeforeDone = requestTargetTabKey(get(), requestId);
@@ -1602,6 +1687,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 if (!shouldAcceptRequestEvent(stateBeforeMessage, requestId)) return;
                 bindPendingRequestIfNeeded(set, stateBeforeMessage, requestId);
                 noteRequestActivity(requestId);
+                // 工具卡片与正文共处一条 transcript，先排空缓冲保证先后顺序。
+                flushPendingStreamDeltas(set, requestId);
                 const raw = JSON.parse(event.payload.json) as MessageRaw;
 
                 // 子代理消息(带 parent_tool_use_id)不进主 transcript，
@@ -2866,6 +2953,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     abort: async () => {
+        // 中止会清掉 streaming 标志，缓冲里的文本此后就无处可去——先落盘，
+        // 再读状态，这样通知里的预览文本也是完整的。
+        flushPendingStreamDeltas(set);
         const stateBeforeAbort = get();
         const { activeRequestId, provider, messages } = stateBeforeAbort;
         if (hasActiveChatTurn(stateBeforeAbort)) {
