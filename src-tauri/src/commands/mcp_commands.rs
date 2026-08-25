@@ -38,7 +38,6 @@ pub fn import_mcp_from_apps(state: State<'_, AppState>) -> Result<usize, String>
     import::import_from_all(&state.db)
 }
 
-#[allow(dead_code)]
 #[tauri::command]
 pub async fn check_mcp_status(
     state: State<'_, AppState>,

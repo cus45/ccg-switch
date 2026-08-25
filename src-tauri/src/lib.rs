@@ -867,6 +867,7 @@ pub fn run() {
             mcp_commands::delete_mcp_server_v2,
             mcp_commands::toggle_mcp_app,
             mcp_commands::import_mcp_from_apps,
+            mcp_commands::check_mcp_status,
             // Skills v2 (数据库版)
             skill_commands::get_installed_skills,
             skill_commands::install_skill,

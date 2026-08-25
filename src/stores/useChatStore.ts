@@ -93,7 +93,18 @@ function scheduleDaemonReadyTimeout(
     daemonReadyTimeout = setTimeout(() => {
         daemonReadyTimeout = null;
         const state = get();
-        if (state.daemonReady || state.daemonStatus !== 'starting') return;
+        if (state.daemonReady) return;
+
+        if (state.daemonStatus !== 'starting') {
+            // 启动窗口内被其它 daemon 事件改过状态（如 stderr 日志行）。这里不覆盖
+            // 已有的诊断信息，但**必须**解除重连锁——否则 reconnectDaemon 的入口守卫
+            // `if (get().daemonReconnecting) return` 会让重连按钮永久失效，
+            // 一直停在「重连中…」。
+            if (state.daemonReconnecting) {
+                set({daemonReconnecting: false});
+            }
+            return;
+        }
 
         set({
             daemonReady: false,
@@ -1655,7 +1666,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 clearDaemonReadyTimeout();
                 set({ daemonReady: false, daemonStatus: 'shutdown', daemonReconnecting: false, daemonLogs });
             } else {
-                set({ daemonStatus: message ? `${name}: ${message}` : name, daemonLogs });
+                // 非生命周期事件（daemon 的 stderr 日志行等）不能顶掉 'starting'。
+                // 顶掉之后 ready 超时的守卫会走「状态已不是 starting」的早退分支，
+                // 于是既不报超时也不解锁重连——node 启动时随便一行 deprecation 警告
+                // 就足以让守护进程状态永久卡住。日志本身仍进 daemonLogs 可查。
+                set((state) => ({
+                    daemonStatus: state.daemonStatus === 'starting'
+                        ? state.daemonStatus
+                        : (message ? `${name}: ${message}` : name),
+                    daemonLogs,
+                }));
             }
         });
 
