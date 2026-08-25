@@ -115,19 +115,40 @@ npm run build
 | `WebFetch` / `WebSearch` | 同上，URL/query 埋在参数里 | — |
 | `ExitPlanMode` | plan 正文当普通参数打印，不渲染 Markdown | `ExitPlanToolContent.tsx` |
 
-- [ ] 6.1 `mcpToolName.ts` + 单测：解析 `mcp__server__tool`，含多段与畸形名兜底
-- [ ] 6.2 `types/tools.ts` 新增 `mcp` / `web` / `plan` ToolType 与识别
-- [ ] 6.3 `toolPresentation.ts`：MCP/Web 的 summary 走各自的可读形态
-- [ ] 6.4 `GenericToolBlock`：MCP 显示 server 徽标 + 干净工具名 + 插头图标；
-      Web 显示 URL/query + 地球图标（复用现有卡片骨架，不新建组件）
-- [ ] 6.5 `PlanToolBlock`：ExitPlanMode 的 plan 用 MarkdownBlock 渲染
-- [ ] 6.6 `ContentBlockRenderer` 路由 + zh/en 文案
+- [x] 6.1 `mcpToolName.ts` + 单测：解析 `mcp__server__tool`，含多段与畸形名兜底
+- [x] 6.2 `types/tools.ts` 新增 `mcp` / `web` / `plan` ToolType 与识别
+      （MCP 靠前缀判定且必须早于名称集合，否则 `mcp__files__read` 会被误判成本地 Read）
+- [x] 6.3 `toolPresentation.ts`：MCP 分支早于 target/command；
+      **顺带修掉既有缺陷**——WebSearch 入参就是 `query`，原先先命中
+      `summarizeSearchInput`，导致 `websearch` 分支是死代码、联网搜索和本地 Grep 长得一样
+- [x] 6.4 `GenericToolBlock`：MCP 用插头图标 + 干净工具名（原始名进 title），Web 用地球图标
+- [x] 6.5 `PlanToolBlock`：ExitPlanMode 的 plan 用 MarkdownBlock 渲染，默认展开
+- [x] 6.6 `ContentBlockRenderer` 路由 + zh/en 文案
 
-**验证门 G6**
-```bash
-npm test -- mcpToolName tools toolPresentation GenericToolBlock ContentBlockRenderer
-npm run build
-```
+**验证门 G6** — 通过（871 例 + build）
+
+---
+
+## S7 — 输入区与会话标签（第七轮，补上一轮漏掉的另两块诉求）
+
+- [x] 7.1 **上箭头草稿历史只能回退一步**：`navigateDraftHistory` 的守卫是「草稿为空
+      才接管」，而 `applyDraftFromHistory` 一执行就把草稿填满了 → 第二次上箭头被拒。
+      决策逻辑抽成纯函数 `resolveDraftHistoryNavigation`（ignore / consume / apply 三态），
+      并补上多行草稿的光标位置守卫（放开「继续接管」后才出现的新冲突）
+- [x] 7.2 **标签多到一定数量后点不到**：标签条刻意 `overflow-hidden`（既有测试有显式
+      `not.toContain('overflow-x-auto')` 断言），但 `min-w-24` 下限让 8 个以上标签被挤出
+      可视区。压到 `min-w-11`，像浏览器那样极限压缩到只剩图标 + 关闭按钮
+- [x] 7.3 **右键菜单跑出屏幕**：`contextMenuPosition.ts` 按菜单尺寸翻转 + 钳制
+- [x] 7.4 标签中键关闭
+
+**验证门 G7** — 通过（890 例 + build）
+
+### E4 没有把标签条改成横向滚动
+
+第一版改成了 `overflow-x-auto`，随后发现测试里有 `not.toContain('overflow-x-auto')`
+的显式断言——前一个会话是刻意从横向滚动换成压缩单行的。不清楚原因就翻回去，会把
+当初促成那个决定的问题一起带回来。因此改用不与该决策冲突的修法（压低宽度下限），
+并把这条约束及其理由写进测试，避免下一次再来回摆。
 
 ---
 
