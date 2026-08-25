@@ -2,9 +2,11 @@
 
 import {memo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Wrench} from 'lucide-react';
+import {Globe, Plug, Wrench} from 'lucide-react';
 import type {ToolResultBlock} from '../../types/chat';
 import type {ToolInput} from '../../types/tools';
+import {getToolType} from '../../types/tools';
+import {formatMcpToolLabel, parseMcpToolName} from '../../utils/mcpToolName';
 import {useIsToolDenied} from '../../hooks/useIsToolDenied';
 import {
     extractResultText,
@@ -54,6 +56,17 @@ const GenericToolBlock = memo(function GenericToolBlock({
 
   // 工具名称
   const toolName = name || t('tools.unknown');
+  // MCP 工具的原始名是 mcp__<server>__<tool>，直接当标题既长又认不出来；
+  // 拆成「插头图标 + 干净工具名」，server 由 actionSummary 的 chip 承担。
+  const mcpName = parseMcpToolName(name);
+  const displayToolName = mcpName
+    ? (formatMcpToolLabel(mcpName.tool) || mcpName.server)
+    : toolName;
+  const TitleIcon = mcpName
+    ? Plug
+    : getToolType(name ?? '') === 'web'
+      ? Globe
+      : Wrench;
   const target = resolveToolTarget(input);
   const actionSummary = summarizeGenericTool(name, input);
   const command = typeof input.command === 'string'
@@ -95,7 +108,7 @@ const GenericToolBlock = memo(function GenericToolBlock({
       : actionSummary.summary;
   const showResultSummary = Boolean(resultSummary) && resultSummary !== primarySummary;
   const openFileLabel = target?.isFile ? `${t('tools.openFile')}: ${target.displayPath}` : '';
-  const headerToggleTarget = primarySummary || toolName;
+  const headerToggleTarget = primarySummary || displayToolName;
   const headerToggleLabel = hasExpandableContent
     ? t('tools.genericDetailsToggle', { target: headerToggleTarget })
     : undefined;
@@ -210,8 +223,10 @@ const GenericToolBlock = memo(function GenericToolBlock({
         style={{ cursor: hasExpandableContent ? 'pointer' : 'default' }}
       >
         <div className="task-title-section">
-          <Wrench className="tool-title-lucide" aria-hidden="true" />
-          <span className="tool-title-text">{toolName}</span>
+          <TitleIcon className="tool-title-lucide" aria-hidden="true" />
+          <span className="tool-title-text" title={mcpName ? toolName : undefined}>
+            {displayToolName}
+          </span>
           <span className={`tool-command-chip ${actionSummary.accentClass}`}>
             {actionSummary.label}
           </span>

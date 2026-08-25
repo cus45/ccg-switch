@@ -674,7 +674,10 @@
         "queryCount": "{{count}} queries",
         "resultFile": "{{count}} files",
         "find": "Find",
-        "glob": "Glob"
+        "glob": "Glob",
+        "planProposed": "Proposed plan",
+        "collapsePlan": "Collapse plan",
+        "expandPlan": "Expand plan"
     },
     "mcp": {
         "title": "MCP Server Management",

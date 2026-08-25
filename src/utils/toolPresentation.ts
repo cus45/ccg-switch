@@ -2,6 +2,7 @@
 
 import type {ToolResultBlock, ToolUseBlock} from '../types/chat';
 import type {LineInfo, ToolInput, ToolTargetInfo} from '../types/tools';
+import {formatMcpToolLabel, parseMcpToolName} from './mcpToolName';
 
 interface PatchOperation {
   filePath: string;
@@ -1028,6 +1029,26 @@ export function summarizeGenericTool(name: string | undefined, input: ToolInput)
       ? input.cmd
       : '';
 
+  // MCP 工具优先按 server/tool 呈现：入参形态由第三方 server 决定，无法穷举，
+  // 而「哪个 server 的哪个能力」才是用户唯一能靠它认出这次调用的信息。
+  // 必须早于 target/command 判定——否则带 file_path 的 MCP 工具会被显示成普通文件操作，
+  // 看不出是外部服务调用。
+  const mcpName = parseMcpToolName(name);
+  if (mcpName) {
+    const toolLabel = formatMcpToolLabel(mcpName.tool);
+    return {
+      label: mcpName.server,
+      accentClass: 'tool-command-mcp',
+      summary: truncateInline(
+        toolLabel
+          || stringValue(input.description)
+          || stringValue(input.prompt)
+          || target?.displayPath
+          || mcpName.server,
+      ),
+    };
+  }
+
   if (target) {
     return {
       label: 'File',
@@ -1045,20 +1066,14 @@ export function summarizeGenericTool(name: string | undefined, input: ToolInput)
     };
   }
 
-  const searchSummary = summarizeSearchInput(input);
-  if (searchSummary) {
-    return {
-      label: lowerName.includes('glob') ? 'Glob' : 'Search',
-      accentClass: 'tool-command-search',
-      summary: truncateInline(searchSummary),
-    };
-  }
-
+  // Web 判定必须早于 summarizeSearchInput：WebSearch 的入参就是 `query`，
+  // 会先命中搜索分支，导致联网搜索和本地 Grep 在转录里长得一模一样
+  // （原来的 websearch 分支因此是死代码）。
   if (lowerName.includes('webfetch')) {
     return {
       label: 'Fetch',
       accentClass: 'tool-command-web',
-      summary: stringValue(input.url) ?? stringValue(input.prompt) ?? toolName,
+      summary: truncateInline(stringValue(input.url) ?? stringValue(input.prompt) ?? toolName),
     };
   }
 
@@ -1066,7 +1081,16 @@ export function summarizeGenericTool(name: string | undefined, input: ToolInput)
     return {
       label: 'Web',
       accentClass: 'tool-command-web',
-      summary: stringValue(input.query) ?? toolName,
+      summary: truncateInline(stringValue(input.query) ?? toolName),
+    };
+  }
+
+  const searchSummary = summarizeSearchInput(input);
+  if (searchSummary) {
+    return {
+      label: lowerName.includes('glob') ? 'Glob' : 'Search',
+      accentClass: 'tool-command-search',
+      summary: truncateInline(searchSummary),
     };
   }
 

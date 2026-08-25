@@ -663,7 +663,10 @@
         "queryCount": "{{count}} 个查询",
         "resultFile": "{{count}} 个文件",
         "find": "查找",
-        "glob": "Glob"
+        "glob": "Glob",
+        "planProposed": "提出的计划",
+        "collapsePlan": "收起计划",
+        "expandPlan": "展开计划"
     },
     "mcp": {
         "title": "MCP 服务器管理",

@@ -1,5 +1,7 @@
 // 工具分类与常量定义
 
+import {isMcpToolName} from '../utils/mcpToolName';
+
 /** 工具输入参数（通用） */
 export interface ToolInput {
   [key: string]: unknown;
@@ -140,8 +142,33 @@ export const TODO_TOOL_NAMES = new Set([
   'todowrite',
 ]);
 
+/** 网络读取工具名称集合（规范化后） */
+export const WEB_TOOL_NAMES = new Set([
+  'webfetch',
+  'websearch',
+  'fetch',
+  'webread',
+]);
+
+/** 计划提交工具名称集合（规范化后）。plan 正文需要按 Markdown 渲染，不能当普通参数打印。 */
+export const PLAN_TOOL_NAMES = new Set([
+  'exitplanmode',
+  'exitplan',
+  'submitplan',
+]);
+
 /** 工具类型 */
-export type ToolType = 'bash' | 'read' | 'edit' | 'search' | 'agent' | 'todo' | 'generic';
+export type ToolType =
+  | 'bash'
+  | 'read'
+  | 'edit'
+  | 'search'
+  | 'agent'
+  | 'todo'
+  | 'web'
+  | 'plan'
+  | 'mcp'
+  | 'generic';
 
 /**
  * 规范化工具名称（小写 + 移除下划线和连字符）
@@ -171,6 +198,11 @@ export function isToolName(name: string | undefined, toolNames: Set<string>): bo
  * @returns 工具类型
  */
 export function getToolType(name: string): ToolType {
+  // MCP 工具名形如 mcp__<server>__<tool>，server/tool 段无法穷举，
+  // 因此靠前缀判定而不是名称集合。必须排在其它判定之前：
+  // 某些 MCP 工具名尾段恰好是 read/search 之类，会被误分类。
+  if (isMcpToolName(name)) return 'mcp';
+
   const normalized = normalizeToolName(name);
 
   if (READ_TOOL_NAMES.has(normalized)) return 'read';
@@ -179,6 +211,8 @@ export function getToolType(name: string): ToolType {
   if (SEARCH_TOOL_NAMES.has(normalized)) return 'search';
   if (AGENT_TOOL_NAMES.has(normalized)) return 'agent';
   if (TODO_TOOL_NAMES.has(normalized)) return 'todo';
+  if (WEB_TOOL_NAMES.has(normalized)) return 'web';
+  if (PLAN_TOOL_NAMES.has(normalized)) return 'plan';
 
   return 'generic';
 }

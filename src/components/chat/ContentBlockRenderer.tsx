@@ -22,6 +22,7 @@ import {
     EditToolBlock,
     EditToolGroupBlock,
     GenericToolBlock,
+    PlanToolBlock,
     ReadToolBlock,
     ReadToolGroupBlock,
     SearchToolGroupBlock,
@@ -352,6 +353,19 @@ export default function ContentBlockRenderer({
             case 'todo':
                 return (
                     <TodoToolBlock
+                        name={block.name}
+                        input={block.input}
+                        result={result}
+                        toolId={block.id}
+                        compact={compact}
+                    />
+                );
+
+            case 'plan':
+                // ExitPlanMode 的计划正文要按 Markdown 读，落到 GenericToolBlock
+                // 会被当成普通入参打印成一坨纯文本。
+                return (
+                    <PlanToolBlock
                         name={block.name}
                         input={block.input}
                         result={result}

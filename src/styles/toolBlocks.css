@@ -385,6 +385,8 @@
 .tool-command-patch { background: #16a34a; border-color: #16a34a; }
 .tool-command-web { background: #0d9488; border-color: #0d9488; }
 .tool-command-plan { background: #9333ea; border-color: #9333ea; }
+/* MCP：外部服务来源，用独立色相和其它工具区分开 */
+.tool-command-mcp { background: #4f46e5; border-color: #4f46e5; }
 .tool-command-default { background: #64748b; border-color: #64748b; }
 
 .tool-command-meta {
@@ -3244,4 +3246,24 @@
   .assistant-message-flow .task-details {
     margin-left: 8px;
   }
+}
+
+/* ExitPlanMode 计划卡：默认展开，正文按 Markdown 渲染 */
+.plan-tool-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-tool-body {
+  padding: 6px 10px 10px;
+  border-top: 1px solid oklch(var(--bc) / 0.08);
+}
+
+.plan-tool-body .markdown-block {
+  font-size: 13px;
+  line-height: 1.6;
 }

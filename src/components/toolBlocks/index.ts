@@ -32,3 +32,6 @@ export type { TaskExecutionBlockProps } from './TaskExecutionBlock';
 
 export { default as TodoToolBlock } from './TodoToolBlock';
 export type { TodoToolBlockProps } from './TodoToolBlock';
+
+export { default as PlanToolBlock } from './PlanToolBlock';
+export type { PlanToolBlockProps } from './PlanToolBlock';

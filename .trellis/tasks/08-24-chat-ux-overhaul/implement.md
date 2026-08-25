@@ -104,6 +104,33 @@ npm run build
 
 ---
 
+## S6 — 工具卡片识别度（第七轮，补上一轮漏掉的「工具卡片」诉求）
+
+六轮只做了中间步骤折叠，没动单个工具卡片的呈现。逐个对标 cc-gui 的 toolBlocks
+清单后发现三类工具在我们这里全部落到 `GenericToolBlock` + 扳手图标：
+
+| 工具 | 现状 | 对方 |
+|------|------|------|
+| `mcp__<server>__<tool>` | 卡片显示原始名，扳手图标 | `McpToolBlock.tsx` |
+| `WebFetch` / `WebSearch` | 同上，URL/query 埋在参数里 | — |
+| `ExitPlanMode` | plan 正文当普通参数打印，不渲染 Markdown | `ExitPlanToolContent.tsx` |
+
+- [ ] 6.1 `mcpToolName.ts` + 单测：解析 `mcp__server__tool`，含多段与畸形名兜底
+- [ ] 6.2 `types/tools.ts` 新增 `mcp` / `web` / `plan` ToolType 与识别
+- [ ] 6.3 `toolPresentation.ts`：MCP/Web 的 summary 走各自的可读形态
+- [ ] 6.4 `GenericToolBlock`：MCP 显示 server 徽标 + 干净工具名 + 插头图标；
+      Web 显示 URL/query + 地球图标（复用现有卡片骨架，不新建组件）
+- [ ] 6.5 `PlanToolBlock`：ExitPlanMode 的 plan 用 MarkdownBlock 渲染
+- [ ] 6.6 `ContentBlockRenderer` 路由 + zh/en 文案
+
+**验证门 G6**
+```bash
+npm test -- mcpToolName tools toolPresentation GenericToolBlock ContentBlockRenderer
+npm run build
+```
+
+---
+
 ## S5 — 长会话滚动成本（P2）—— **撤回，见决策 E3**
 
 - [x] ~~5.1 `.chat-message-row` 加 `content-visibility: auto`~~ 已 revert
