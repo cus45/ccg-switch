@@ -70,6 +70,9 @@ vi.mock('../stores/useChatStore', () => ({
     useChatStore: () => chatStoreState,
     // ChatPane/useChatPaneController 在 tab 未命中时回退全局投影（chatStoreState）。
     useChatTab: () => null,
+    // 中心标签条只显示非侧聊 tab（dock 侧聊与它们共用 openTabs 池）。
+    isSideChatTab: (tab: {surface?: 'side'}) => tab.surface === 'side',
+    selectCenterTabs: (tabs: Array<{surface?: 'side'}>) => tabs.filter((tab) => tab.surface !== 'side'),
 }));
 
 vi.mock('../stores/useSdkStore', () => ({

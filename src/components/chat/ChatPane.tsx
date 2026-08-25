@@ -1,6 +1,7 @@
+import {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {cn} from '../../utils/cn';
-import {useChatStore} from '../../stores/useChatStore';
+import {selectCenterTabs, useChatStore} from '../../stores/useChatStore';
 import {getChatDaemonDiagnosticDisplayText} from '../../utils/chatDaemonStatus';
 import {getActivePermissionDialog, shouldRoutePermissionToSideChat} from '../../utils/chatUiBehavior';
 import {ChatPaneTabContext} from './paneTabContext';
@@ -66,6 +67,7 @@ export function ChatPane({
         approvePlan,
     } = useChatStore();
     const isMain = variant === 'main';
+    const centerTabs = useMemo(() => selectCenterTabs(openTabs), [openTabs]);
 
     // 权限请求就地弹出：仅当本 pane 是 dock 当前可见侧聊，且请求 sessionId
     // 与本 pane 会话一致时接管渲染（其余场景由 ChatPage 中心 modal 兜底）。
@@ -103,7 +105,9 @@ export function ChatPane({
             >
             {isMain && (
                 <ChatSessionTabs
-                    tabs={openTabs}
+                    // 只显示中心会话：dock 侧聊与它们共用 openTabs 池，
+                    // 不过滤的话每开一个侧聊，这里就会多出一个「新对话」。
+                    tabs={centerTabs}
                     activeTabKey={activeTabKey}
                     onFocusTab={focusTab}
                     onCloseTab={closeTab}

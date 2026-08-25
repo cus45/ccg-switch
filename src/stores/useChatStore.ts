@@ -358,6 +358,15 @@ export interface ChatSessionTab {
      * 也非 dock 当前可见侧聊（dockChatTabKey）时置 true；用户聚焦后清除。
      */
     unread?: boolean;
+    /**
+     * tab 归属的界面位置。缺省（undefined）= 中心会话标签条；
+     * `'side'` = 右侧 dock 的侧边聊天，**不出现在中心标签条里**。
+     *
+     * 侧聊与中心会话共用 `openTabs` 这一个池（会话状态、并发发送、未读都靠它），
+     * 但它们在界面上属于两个不同的容器。缺这个标记时，每开一个侧聊，中心标签条
+     * 就会多一个「新对话」——用户看到的是同一次点击在两处各加了一个标签。
+     */
+    surface?: 'side';
     /** 子代理(Task)实时轨迹：parentToolUseId(= 父 Task 工具块 id) → 子代理消息列表。 */
     subagentRuns: Record<string, ChatMessage[]>;
     /** 忙时排队的待发消息，回合成功结束后按序自动发送。 */
@@ -620,6 +629,22 @@ function projectTabToState(tab: ChatSessionTab): Partial<ChatState> {
         handoffContextProvider: tab.handoffContextProvider,
         error: tab.error,
     };
+}
+
+/**
+ * 该 tab 是否属于右侧 dock 的侧边聊天（而非中心会话标签条）。
+ *
+ * 中心标签条的渲染与「关闭其它/全部」都必须按这个判定排除侧聊：
+ * 前者否则会让一次侧聊点击在两处各加一个标签，后者否则会把 dock 里正在用的
+ * 侧聊 tab 一起清掉，留下指向不存在 tab 的空面板。
+ */
+export function isSideChatTab(tab: ChatSessionTab): boolean {
+    return tab.surface === 'side';
+}
+
+/** 中心会话标签条应当显示的 tab（排除 dock 侧聊）。 */
+export function selectCenterTabs(tabs: ChatSessionTab[]): ChatSessionTab[] {
+    return tabs.filter((tab) => !isSideChatTab(tab));
 }
 
 function upsertTab(tabs: ChatSessionTab[], tab: ChatSessionTab): ChatSessionTab[] {
@@ -2720,7 +2745,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const tabs = saveActiveProjection(state);
             const remainingTabs = removeTab(tabs, key);
             const nextActiveKey = getNextTabAfterClose({
-                tabs,
+                // 焦点回退只在中心 tab 里挑：dock 侧聊不该被提到中心来当活跃会话。
+                tabs: selectCenterTabs(tabs),
                 closingKey: key,
                 activeKey: state.activeTabKey,
             });
@@ -2728,7 +2754,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (!nextActiveKey) {
                 const emptyTab = createEmptyTabFromState(state);
                 return {
-                    openTabs: [],
+                    // 中心已无 tab，但 dock 里的侧聊要留着。
+                    openTabs: remainingTabs.filter(isSideChatTab),
                     activeTabKey: null,
                     ...projectTabToState(emptyTab),
                 };
@@ -2752,7 +2779,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (!targetTab) return {};
 
             return {
-                openTabs: [targetTab],
+                // 「关闭其它标签页」是中心标签条的动作，不该顺手清掉 dock 里的侧聊
+                // ——那会让侧聊面板变成指向不存在 tab 的空壳。
+                openTabs: [targetTab, ...tabs.filter((tab) => isSideChatTab(tab) && tab.key !== key)],
                 activeTabKey: targetTab.key,
                 ...projectTabToState(targetTab),
             };
@@ -2761,9 +2790,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     closeAllTabs: () => {
         set((state) => {
+            const tabs = saveActiveProjection(state);
             const emptyTab = createEmptyTabFromState(state, state.currentCwd);
             return {
-                openTabs: [],
+                openTabs: tabs.filter(isSideChatTab),
                 activeTabKey: null,
                 ...projectTabToState(emptyTab),
             };
@@ -2772,7 +2802,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     openSideChat: (opts) => {
         const state = get();
-        const sideTab = createEmptyTabFromState(state, opts?.cwd ?? state.currentCwd);
+        const sideTab: ChatSessionTab = {
+            ...createEmptyTabFromState(state, opts?.cwd ?? state.currentCwd),
+            // 标记归属，否则中心标签条会把它当成一个「新对话」一起显示出来。
+            surface: 'side',
+        };
         set((s) => ({
             openTabs: upsertTab(s.openTabs, sideTab),
             dockChatTabKey: sideTab.key,
