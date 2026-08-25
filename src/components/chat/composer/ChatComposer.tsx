@@ -181,6 +181,68 @@ export function shouldBlockPromptEnhance({
     return !hasPromptText || isEnhancing || isEnhanceInFlight;
 }
 
+export interface DraftHistoryNavigationInput {
+    direction: 'previous' | 'next';
+    historyLength: number;
+    /** 当前浏览到的历史下标；null=不在浏览历史（停在用户自己的草稿上）。 */
+    cursor: number | null;
+    /** 输入框当前文本。 */
+    text: string;
+    /** 光标在文本中的偏移。 */
+    caretOffset: number;
+}
+
+export type DraftHistoryNavigation =
+    /** 不接管按键，交回给编辑器做常规光标移动。 */
+    | {kind: 'ignore'}
+    /** 接管按键但内容不变（已到历史边界），避免光标跳到别处。 */
+    | {kind: 'consume'}
+    /** 应用某条历史；index 为 null 表示回到空草稿。 */
+    | {kind: 'apply'; index: number | null};
+
+/**
+ * 上/下方向键的草稿历史导航决策。
+ *
+ * 两个此前踩过的坑，都靠这里的纯逻辑守住：
+ * 1. **只能回退一步**：原判定是「草稿为空才接管」，而回填历史本身就把草稿填满了，
+ *    第二次上箭头直接被拒。现在只要 `cursor !== null`（已在浏览历史）就继续接管。
+ * 2. **多行草稿里方向键被抢**：回退出来的历史条目可能是多行的，此时上箭头应该
+ *    先在文本内移动光标，只有光标已在首行（下箭头则是末行）才翻下一条。
+ */
+export function resolveDraftHistoryNavigation({
+    direction,
+    historyLength,
+    cursor,
+    text,
+    caretOffset,
+}: DraftHistoryNavigationInput): DraftHistoryNavigation {
+    if (historyLength === 0) return {kind: 'ignore'};
+
+    const isNavigating = cursor !== null;
+    if (!isNavigating && text.trim()) return {kind: 'ignore'};
+
+    if (text.includes('\n')) {
+        if (direction === 'previous' && text.slice(0, caretOffset).includes('\n')) {
+            return {kind: 'ignore'};
+        }
+        if (direction === 'next' && text.slice(caretOffset).includes('\n')) {
+            return {kind: 'ignore'};
+        }
+    }
+
+    if (direction === 'previous') {
+        const current = cursor ?? historyLength;
+        // 已到最早一条：吞掉按键，不让光标跳走，也不再回退。
+        if (current <= 0) return {kind: 'consume'};
+        return {kind: 'apply', index: current - 1};
+    }
+
+    if (!isNavigating) return {kind: 'ignore'};
+
+    const nextIndex = (cursor ?? 0) + 1;
+    return {kind: 'apply', index: nextIndex >= historyLength ? null : nextIndex};
+}
+
 /**
  * 发送控制台：顶部上下文栏 + 富输入框（@/#/!// 补全）+ 底部控制工具栏。
  * 整合自 jcc-gui ChatInputBox 的交互能力，用 ccg-switch 现有栈重写。
@@ -523,19 +585,20 @@ export function ChatComposer({
     };
 
     const navigateDraftHistory = (direction: 'previous' | 'next'): boolean => {
-        const history = draftHistoryRef.current;
-        if (history.length === 0 || draft.trim()) return false;
+        const editor = editorRef.current;
+        const text = editor ? getPlainText(editor) : draft;
+        const decision = resolveDraftHistoryNavigation({
+            direction,
+            historyLength: draftHistoryRef.current.length,
+            cursor: historyCursorRef.current,
+            text,
+            caretOffset: editor ? getCaretOffset(editor) : text.length,
+        });
 
-        if (direction === 'previous') {
-            const current = historyCursorRef.current ?? history.length;
-            applyDraftFromHistory(Math.max(0, current - 1));
-            return true;
-        }
+        if (decision.kind === 'ignore') return false;
+        if (decision.kind === 'consume') return true;
 
-        if (historyCursorRef.current === null) return false;
-
-        const nextIndex = historyCursorRef.current + 1;
-        applyDraftFromHistory(nextIndex >= history.length ? null : nextIndex);
+        applyDraftFromHistory(decision.index);
         return true;
     };
 
