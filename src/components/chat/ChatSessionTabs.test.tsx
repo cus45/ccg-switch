@@ -153,6 +153,10 @@ describe('ChatSessionTabs', () => {
         expect(html).toContain('overflow-hidden');
         expect(html).toContain('max-w-56');
         expect(html).toContain('w-44');
+        // 压缩下限要低到「只剩 provider 图标 + 关闭按钮」也仍然可点：
+        // 标签条刻意不出横向滚动条，下限过高会把后面的标签挤出可视区变成点不到。
+        expect(html).toContain('min-w-11');
+        expect(html).not.toContain('min-w-24');
         expect(html).not.toContain('flex-1 basis-0');
         expect(html).not.toContain('overflow-x-auto');
         expect(html).not.toContain('shrink-0 items-center gap-1.5 rounded-t-md border px-2 text-xs');

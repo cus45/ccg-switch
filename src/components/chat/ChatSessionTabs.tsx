@@ -3,8 +3,13 @@ import {Loader2, X} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import type {ChatSessionTab} from '../../stores/useChatStore';
 import {cn} from '../../utils/cn';
+import {resolveContextMenuPosition} from '../../utils/contextMenuPosition';
 import {sessionTitle} from './chatSessionSidebarUtils';
 import {ProviderBrandIcon} from './composer/ModelIcon';
+
+/** 右键菜单的估算尺寸，用于视口内定位（两个菜单项 + 内边距）。 */
+const TAB_MENU_WIDTH = 160;
+const TAB_MENU_HEIGHT = 76;
 
 interface ChatSessionTabsProps {
     tabs: ChatSessionTab[];
@@ -113,7 +118,10 @@ export default function ChatSessionTabs({
                         aria-selected={active}
                         data-chat-session-tab-key={tab.key}
                         className={cn(
-                            'group flex h-7 min-w-24 w-44 max-w-56 flex-shrink items-center gap-1 rounded-t border px-1.5 text-[11px] transition-colors',
+                            // min-w 是「标签多到极限时」的下限：压到只剩 provider 图标 + 关闭按钮也仍然
+                            // 可点。原来的 min-w-24 在 8 个标签以上会把后面的挤出 overflow-hidden 之外，
+                            // 变成完全点不到（标签条刻意不出横向滚动条，见本文件测试）。
+                            'group flex h-7 min-w-11 w-44 max-w-56 flex-shrink items-center gap-1 rounded-t border px-1.5 text-[11px] transition-colors',
                             active
                                 ? 'border-base-300 border-b-base-100 bg-base-100 text-base-content shadow-sm'
                                 : 'border-transparent bg-base-200/55 text-base-content/65 hover:bg-base-200',
@@ -125,6 +133,12 @@ export default function ChatSessionTabs({
                                 x: event.clientX,
                                 y: event.clientY,
                             });
+                        }}
+                        // 中键关闭：标签页的通用手势，缺了它会让人反复去找那个 4px 的叉
+                        onAuxClick={(event) => {
+                            if (event.button !== 1) return;
+                            event.preventDefault();
+                            onCloseTab(tab.key);
                         }}
                     >
                         <button
@@ -176,7 +190,14 @@ export default function ChatSessionTabs({
             {contextMenu && (
                 <div
                     className="fixed z-50 min-w-36 rounded-md border border-base-300 bg-base-100 p-1 text-xs shadow-lg"
-                    style={{left: contextMenu.x, top: contextMenu.y}}
+                    style={resolveContextMenuPosition({
+                        x: contextMenu.x,
+                        y: contextMenu.y,
+                        width: TAB_MENU_WIDTH,
+                        height: TAB_MENU_HEIGHT,
+                        viewportWidth: window.innerWidth,
+                        viewportHeight: window.innerHeight,
+                    })}
                     role="menu"
                 >
                     <button
