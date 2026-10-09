@@ -682,8 +682,11 @@ async fn open_config_file(app: tauri::AppHandle, path: String) -> Result<bool, S
 
 // Universal Provider 命令
 #[tauri::command]
-fn apply_universal_provider(config: UniversalProviderConfig) -> Result<Vec<String>, String> {
-    universal_provider_service::apply_universal_provider(config).map_err(|e| e.to_string())
+fn apply_universal_provider(
+    config: UniversalProviderConfig,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    universal_provider_service::apply_universal_provider(&state.db, config)
 }
 
 // 工具版本检测

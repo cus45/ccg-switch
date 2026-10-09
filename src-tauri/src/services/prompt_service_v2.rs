@@ -77,7 +77,15 @@ impl PromptServiceV2 {
     /// 启用 prompt（核心流程：回填 + disable_all + enable + 写 live 文件）
     pub fn enable_prompt(db: &Arc<Database>, id: &str, app_type: &str) -> Result<(), String> {
         let live_path = Self::get_live_file_path(app_type)?;
+        Self::enable_prompt_at(db, id, app_type, &live_path)
+    }
 
+    fn enable_prompt_at(
+        db: &Arc<Database>,
+        id: &str,
+        app_type: &str,
+        live_path: &std::path::Path,
+    ) -> Result<(), String> {
         // 1. 读取 live 文件当前内容
         let live_content = if live_path.exists() {
             std::fs::read_to_string(&live_path).unwrap_or_default()
@@ -94,6 +102,23 @@ impl PromptServiceV2 {
                 updated.updated_at = chrono::Utc::now().timestamp();
                 db.save_prompt(&updated)?;
             }
+        } else if !live_content.trim().is_empty()
+            && !prompts.iter().any(|p| p.content.trim() == live_content.trim())
+        {
+            // 没有已启用的预设时，live 文件是用户手写的内容：覆盖前先存成一条预设，
+            // 避免首次启用预设时丢失（与 cc-switch 一致）
+            let now = chrono::Local::now();
+            let backup = PromptRow {
+                id: uuid::Uuid::new_v4().to_string(),
+                app_type: app_type.to_string(),
+                name: format!("原有内容（自动备份 {}）", now.format("%Y-%m-%d %H:%M")),
+                content: live_content.clone(),
+                description: Some(format!("启用预设前从 {} 自动保存", live_path.display())),
+                enabled: false,
+                created_at: now.timestamp(),
+                updated_at: now.timestamp(),
+            };
+            db.save_prompt(&backup)?;
         }
 
         // 3. 禁用所有
@@ -173,5 +198,60 @@ impl PromptServiceV2 {
         let content = std::fs::read_to_string(&live_path)
             .map_err(|e| format!("Failed to read live file: {e}"))?;
         Ok(Some(content))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prompt(id: &str, content: &str, enabled: bool) -> PromptRow {
+        PromptRow {
+            id: id.into(),
+            app_type: "claude".into(),
+            name: id.into(),
+            content: content.into(),
+            description: None,
+            enabled,
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
+    fn live_file(name: &str, content: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("ccg-prompt-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("CLAUDE.md");
+        std::fs::write(&path, content).unwrap();
+        path
+    }
+
+    #[test]
+    fn first_enable_saves_hand_written_file_as_prompt() {
+        let db = Arc::new(Database::in_memory().unwrap());
+        db.save_prompt(&prompt("p1", "preset body", false)).unwrap();
+        let path = live_file("first", "my own rules");
+
+        PromptServiceV2::enable_prompt_at(&db, "p1", "claude", &path).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "preset body");
+        let prompts = db.get_prompts_by_app("claude").unwrap();
+        let saved = prompts.iter().find(|p| p.id != "p1").expect("原有内容应被存为预设");
+        assert_eq!(saved.content, "my own rules");
+        assert!(!saved.enabled);
+    }
+
+    #[test]
+    fn no_duplicate_backup_when_content_already_in_library() {
+        let db = Arc::new(Database::in_memory().unwrap());
+        db.save_prompt(&prompt("p1", "preset body", false)).unwrap();
+        db.save_prompt(&prompt("p2", "same rules", false)).unwrap();
+        let path = live_file("dup", "same rules
+");
+
+        PromptServiceV2::enable_prompt_at(&db, "p1", "claude", &path).unwrap();
+
+        assert_eq!(db.get_prompts_by_app("claude").unwrap().len(), 2);
     }
 }

@@ -1139,6 +1139,10 @@
       "restoreTitle": "恢复 Claude Desktop 原配置？",
       "restoreMessage": "将移除本应用写入的网关条目，还原接管前生效的配置与部署模式，并取消 Claude Desktop 供应商的激活状态。",
       "restored": "已恢复 Claude Desktop 原配置，重启 Desktop 后生效"
+    },
+    "universal": {
+      "button": "通用供应商",
+      "title": "通用供应商"
     }
   },
   "settings": {

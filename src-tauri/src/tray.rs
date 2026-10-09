@@ -1,11 +1,19 @@
 use crate::models::app_type::AppType;
-use crate::services::provider_service;
+use crate::store::AppState;
 use tauri::{
     image::Image,
     menu::MenuBuilder,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+
+/// 托盘里展示的应用（与 cc-switch 的托盘切换范围一致）
+const TRAY_APPS: &[AppType] = &[
+    AppType::Claude,
+    AppType::ClaudeDesktop,
+    AppType::Codex,
+    AppType::Gemini,
+];
 
 /// AppType 显示名称
 fn display_name(app_type: &AppType) -> &'static str {
@@ -78,10 +86,15 @@ fn build_tray_menu(
     builder = builder.text("title", "CCG Switch");
     builder = builder.separator();
 
-    // 每个应用显示当前活跃的 Provider
-    for app_type in AppType::all() {
-        let providers = provider_service::list_providers(*app_type).unwrap_or_default();
-        let active = providers.iter().find(|p| p.is_active);
+    // 每个「切换」型应用显示当前活跃的 Provider（OpenCode 是多供应商共存，没有单一当前项）
+    let providers = handle
+        .try_state::<AppState>()
+        .and_then(|state| state.db.list_providers().ok())
+        .unwrap_or_default();
+    for app_type in TRAY_APPS {
+        let active = providers
+            .iter()
+            .find(|p| p.app_type == *app_type && p.is_active);
         let label = match active {
             Some(p) => format!("{}: {}", display_name(app_type), p.name),
             None => format!("{}: (none)", display_name(app_type)),

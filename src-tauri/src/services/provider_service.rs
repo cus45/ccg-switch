@@ -193,55 +193,6 @@ pub fn move_provider_in_db(
     db.update_provider_sort_orders(&ordered_ids)
 }
 
-/// 列出指定应用的 providers（兼容旧版，使用 DB）
-pub fn list_providers(_app: AppType) -> Result<Vec<Provider>, String> {
-    // 从全局状态获取 DB（需要调用方通过 State 注入）
-    // TODO: 此函数保留兼容，新代码请使用 list_providers_from_db
-    Ok(vec![])
-}
-
-/// 列出所有应用的 providers（兼容旧版，使用 DB）
-pub fn list_all_providers() -> Result<Vec<Provider>, String> {
-    // TODO: 此函数保留兼容，新代码请使用 list_all_providers_from_db
-    Ok(vec![])
-}
-
-/// 获取单个 provider（兼容旧版，使用 DB）
-pub fn get_provider(_id: &str) -> Result<Provider, String> {
-    // TODO: 此函数保留兼容
-    Err(format!("Provider not found"))
-}
-
-/// 添加 provider（兼容旧版，使用 DB）
-pub fn add_provider(_provider: Provider) -> Result<(), String> {
-    // TODO: 此函数保留兼容
-    Ok(())
-}
-
-/// 更新 provider（兼容旧版，使用 DB）
-pub fn update_provider(_id: &str, _updated: Provider) -> Result<(), String> {
-    // TODO: 此函数保留兼容
-    Ok(())
-}
-
-/// 删除 provider（兼容旧版，使用 DB）
-pub fn delete_provider(_id: &str) -> Result<(), String> {
-    // TODO: 此函数保留兼容
-    Ok(())
-}
-
-/// 切换 provider（兼容旧版，使用 DB）
-pub fn switch_provider(_app: AppType, _provider_id: &str) -> Result<(), String> {
-    // TODO: 此函数保留兼容
-    Ok(())
-}
-
-/// 移动 provider 位置（兼容旧版，使用 DB）
-pub fn move_provider(_provider_id: &str, _target_index: usize) -> Result<(), String> {
-    // TODO: 此函数保留兼容
-    Ok(())
-}
-
 // ── 配置预览和同步函数（保持不变）─────────────────────────────────
 
 // ── settingsConfig 中需要映射为 env 变量的字段 ─────────────
@@ -873,8 +824,45 @@ fn preview_generic_settings(
 
 // ── 配置同步 ──────────────────────────────────────────────
 
+/// 各应用切换供应商时会改写的 live 配置文件（Claude Desktop 有自己的接管备份，不在此列）
+fn live_config_files(app: AppType, home: &std::path::Path) -> Vec<PathBuf> {
+    match app {
+        AppType::Claude => vec![home.join(".claude").join("settings.json")],
+        AppType::Codex => vec![
+            home.join(".codex").join("auth.json"),
+            home.join(".codex").join("config.toml"),
+        ],
+        AppType::Gemini => vec![home.join(".gemini").join(".env")],
+        AppType::OpenCode => vec![home.join(".config").join("opencode").join("opencode.json")],
+        _ => vec![],
+    }
+}
+
+/// 首次改写前备份 live 配置文件：`~/.ccg-switch/backups/live/<app>/<文件名>`
+///
+/// 只备份一次，保留本应用第一次改写之前用户的原始文件；之后的切换不再覆盖备份。
+fn backup_live_files_once(app: AppType, home: &std::path::Path, backup_root: &std::path::Path) -> io::Result<()> {
+    for file in live_config_files(app, home) {
+        let Some(name) = file.file_name() else { continue };
+        let target = backup_root.join(app.as_str()).join(name);
+        if target.exists() || !file.exists() {
+            continue;
+        }
+        fs::create_dir_all(target.parent().expect("has parent"))?;
+        fs::copy(&file, &target)?;
+    }
+    Ok(())
+}
+
 /// 将 provider 配置同步到对应应用的配置文件
 pub(crate) fn sync_provider_to_app_config(provider: &Provider) -> Result<(), io::Error> {
+    if let Some(home) = dirs::home_dir() {
+        let backup_root = home.join(".ccg-switch").join("backups").join("live");
+        if let Err(e) = backup_live_files_once(provider.app_type, &home, &backup_root) {
+            // 备份失败不阻断切换，但要留痕
+            tracing::warn!("[Provider] 备份 {} 原配置失败: {e}", provider.app_type);
+        }
+    }
     match provider.app_type {
         AppType::Claude => sync_to_claude_settings(provider),
         AppType::Codex => sync_to_codex_config(provider),
@@ -1077,6 +1065,24 @@ fn sync_to_gemini_config(provider: &Provider) -> Result<(), io::Error> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn live_files_are_backed_up_only_once() {
+        let root = std::env::temp_dir().join(format!("ccg-live-backup-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let home = root.join("home");
+        let backups = root.join("backups");
+        fs::create_dir_all(home.join(".codex")).unwrap();
+        fs::write(home.join(".codex").join("config.toml"), "original").unwrap();
+
+        backup_live_files_once(AppType::Codex, &home, &backups).unwrap();
+        fs::write(home.join(".codex").join("config.toml"), "rewritten").unwrap();
+        backup_live_files_once(AppType::Codex, &home, &backups).unwrap();
+
+        let saved = fs::read_to_string(backups.join("codex").join("config.toml")).unwrap();
+        assert_eq!(saved, "original", "备份保留第一次改写前的内容");
+        assert!(!backups.join("codex").join("auth.json").exists(), "不存在的文件不备份");
+    }
     use super::*;
     use chrono::Utc;
 

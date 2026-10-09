@@ -4,7 +4,6 @@ pub mod body_filter;
 pub mod circuit_breaker;
 pub mod error;
 pub mod error_mapper;
-pub(crate) mod failover_switch;
 pub mod handlers;
 pub mod health;
 pub mod http_client;

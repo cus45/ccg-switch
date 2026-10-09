@@ -35,6 +35,7 @@ import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
 import ClaudeDesktopPanel from '../components/providers/ClaudeDesktopPanel';
 import AppFilterBar from '../components/common/AppFilterBar';
+import UniversalProviderPanel from '../components/providers/UniversalProviderPanel';
 import UsageScriptModal from '../components/providers/UsageScriptModal';
 import {useHealthCheck} from '../hooks/useHealthCheck';
 import HealthStatusBadge from '../components/providers/HealthStatusBadge';
@@ -96,6 +97,7 @@ function ProvidersPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterApp, setFilterApp] = useState<AppType | 'all'>('all');
     const [isFormOpen, setIsFormOpen] = useState(false);
+    const [universalOpen, setUniversalOpen] = useState(false);
     const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
     const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: '', name: '' });
@@ -392,6 +394,14 @@ function ProvidersPage() {
                             {t('common.refresh')}
                         </button>
                         <button
+                            onClick={() => setUniversalOpen(true)}
+                            className="btn btn-outline btn-sm gap-2 whitespace-nowrap"
+                            title={t('providers.universal.hint', '一次性为多个应用配置相同的 Provider 信息')}
+                        >
+                            <Zap className="w-4 h-4 text-yellow-500" />
+                            {t('providers.universal.button', '通用供应商')}
+                        </button>
+                        <button
                             onClick={handleAdd}
                             className="btn bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-none btn-sm gap-2 whitespace-nowrap"
                         >
@@ -678,6 +688,23 @@ function ProvidersPage() {
             </div>
 
             {/* 表单弹窗 */}
+            {universalOpen && (
+                <div className="modal modal-open z-[90]">
+                    <div className="modal-box max-w-lg bg-white dark:bg-base-100 rounded-2xl">
+                        <h3 className="mb-4 text-lg font-bold text-gray-900 dark:text-base-content">
+                            {t('providers.universal.title', '通用供应商')}
+                        </h3>
+                        <UniversalProviderPanel
+                            onClose={() => {
+                                setUniversalOpen(false);
+                                void loadAllProviders(true);
+                            }}
+                        />
+                    </div>
+                    <div className="modal-backdrop bg-black/40" onClick={() => setUniversalOpen(false)} />
+                </div>
+            )}
+
             <ProviderForm
                 isOpen={isFormOpen}
                 editingProvider={editingProvider}

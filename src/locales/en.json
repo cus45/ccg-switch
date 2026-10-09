@@ -1252,6 +1252,10 @@
       "restoreTitle": "Restore Claude Desktop config?",
       "restoreMessage": "Removes the gateway entry written by this app, restores the previously applied entry and deployment mode, and deactivates Claude Desktop providers.",
       "restored": "Claude Desktop config restored; restart Desktop to apply"
+    },
+    "universal": {
+      "button": "Universal provider",
+      "title": "Universal provider"
     }
   },
   "settings": {
