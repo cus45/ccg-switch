@@ -287,7 +287,8 @@ pub fn update_provider_in_db(db: &Arc<Database>, id: &str, updated: Provider) ->
 ## OpenCode config (additive mode)
 
 `services/opencode_config.rs` owns `~/.config/opencode/opencode.json` (same path on Windows).
-Provider switching writes only `provider.<providerId>`, `model` and `small_model`; MCP sync
+Like cc-switch, every OpenCode provider is written to `provider.<providerId>` on add/update/switch and
+removed on delete; top-level `model` / `small_model` / `theme` belong to the user and are never touched. MCP sync
 (`mcp/opencode.rs`) writes only `mcp.<id>`. Every other key is preserved (read → modify → atomic
 write). A file that fails to parse (e.g. JSONC with comments) is an error — never overwrite it.
 OpenCode is not a proxy-takeover app (`TAKEOVER_APPS` / frontend `PROXY_APP_TYPES` exclude it).

@@ -1126,8 +1126,8 @@
     "test_connectivity_success": "连接成功 ({{latency}}ms)",
     "test_connectivity_failed": "连接失败：{{error}}",
     "opencodeNpm": "SDK 类型 (npm)",
-    "opencodeModel": "主模型 (model)",
-    "opencodeSmallModel": "小模型 (small_model)"
+    "opencodeModel": "模型",
+    "opencodeSmallModel": "附加模型（可选）"
   },
   "settings": {
     "title": "设置",

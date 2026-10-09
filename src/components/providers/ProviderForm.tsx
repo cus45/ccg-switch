@@ -227,7 +227,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         ? fetchedModels.length > 0 ? fetchedModels : CODEX_MODEL_OPTIONS
         : fetchedModels;
 
-    // OpenCode：Sonnet 位 = 主模型（model），Haiku 位 = 小模型（small_model）
+    // OpenCode：Sonnet / Haiku 两个位置写入 provider.<id>.models（顶层 model 由用户在 OpenCode 里选）
     const applicableModelConfig = useMemo(() => appType === 'codex'
         ? {
             defaultSonnetModel: defaultSonnetModel.trim() || undefined,
@@ -598,14 +598,14 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                     </select>
                                 </div>
                                 <ModelComboBox
-                                    label={t('providers.opencodeModel', '主模型 (model)')}
+                                    label={t('providers.opencodeModel', '模型')}
                                     placeholder="gpt-5"
                                     value={defaultSonnetModel}
                                     onChange={setDefaultSonnetModel}
                                     options={fetchedModels}
                                 />
                                 <ModelComboBox
-                                    label={t('providers.opencodeSmallModel', '小模型 (small_model)')}
+                                    label={t('providers.opencodeSmallModel', '附加模型（可选）')}
                                     placeholder="gpt-5-mini"
                                     value={defaultHaikuModel}
                                     onChange={setDefaultHaikuModel}

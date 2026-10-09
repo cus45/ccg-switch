@@ -71,7 +71,12 @@ pub fn get_provider_from_db(db: &Arc<Database>, id: &str) -> Result<Provider, St
 
 /// 添加 provider（写入数据库）
 pub fn add_provider_to_db(db: &Arc<Database>, provider: Provider) -> Result<(), String> {
-    db.upsert_provider(&provider)
+    db.upsert_provider(&provider)?;
+    // OpenCode 累加模式：所有供应商都写入配置，由用户在 OpenCode 里选择（与 cc-switch 一致）
+    if provider.app_type == AppType::OpenCode {
+        sync_provider_to_app_config(&provider).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// 更新 provider（更新数据库并同步 active provider 到应用配置）
@@ -93,7 +98,10 @@ pub fn update_provider_in_db(
 
     // 如果是 active provider，立即同步到应用配置。
     // 接管模式下跳过：Live 配置指向本地代理，代理按请求实时读取数据库配置。
-    if provider.is_active && !crate::services::proxy_takeover::has_backup(db, provider.app_type) {
+    let additive = provider.app_type == AppType::OpenCode;
+    if (provider.is_active || additive)
+        && !crate::services::proxy_takeover::has_backup(db, provider.app_type)
+    {
         sync_provider_to_app_config(&provider).map_err(|e| e.to_string())?;
     }
 

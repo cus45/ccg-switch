@@ -1239,8 +1239,8 @@
     "test_connectivity_success": "Connected ({{latency}}ms)",
     "test_connectivity_failed": "Failed: {{error}}",
     "opencodeNpm": "SDK type (npm)",
-    "opencodeModel": "Main model (model)",
-    "opencodeSmallModel": "Small model (small_model)"
+    "opencodeModel": "Model",
+    "opencodeSmallModel": "Extra model (optional)"
   },
   "settings": {
     "title": "Settings",

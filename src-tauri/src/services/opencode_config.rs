@@ -1,7 +1,8 @@
 //! OpenCode 配置读写：`~/.config/opencode/opencode.json`
 //!
-//! OpenCode 是累加（additive）模式：多个供应商并存于 `provider` 对象下，
-//! 切换只写入 / 更新本应用负责的条目与顶层 `model`，用户手写的其它字段原样保留。
+//! OpenCode 是累加（additive）模式：多个供应商并存于 `provider` 对象下，由用户在 OpenCode 里选模型。
+//! 与 cc-switch 一致，只写入 / 删除本应用负责的 `provider.<id>` 条目，
+//! 不碰用户自有的 `model` / `small_model` / `theme` 等顶层配置。
 //! 文件解析失败（例如带注释的 JSONC）时报错，绝不覆盖用户文件。
 
 use crate::models::provider::Provider;
@@ -155,46 +156,15 @@ pub fn build_provider_fragment(p: &Provider) -> Value {
     Value::Object(frag)
 }
 
-/// 把供应商写入配置根对象：`provider.<id>`、`model`、`small_model`
+/// 把供应商写入配置根对象的 `provider.<id>`
 pub fn apply_provider(root: &mut Map<String, Value>, p: &Provider) {
-    let frag = build_provider_fragment(p);
-    let first_model = frag
-        .get("models")
-        .and_then(Value::as_object)
-        .and_then(|m| m.keys().next().cloned());
-    child_object(root, "provider").insert(p.id.clone(), frag);
-
-    if let Some(main) = non_empty(&p.default_sonnet_model).map(str::to_string).or(first_model) {
-        root.insert("model".into(), json!(format!("{}/{}", p.id, main)));
-    }
-    match non_empty(&p.default_haiku_model) {
-        Some(small) => {
-            root.insert("small_model".into(), json!(format!("{}/{}", p.id, small)));
-        }
-        None => {
-            // 上一个供应商留下的 small_model 指向别家，切走后会失效
-            let stale = root
-                .get("small_model")
-                .and_then(Value::as_str)
-                .map(|s| !s.starts_with(&format!("{}/", p.id)))
-                .unwrap_or(false);
-            if stale {
-                root.remove("small_model");
-            }
-        }
-    }
+    child_object(root, "provider").insert(p.id.clone(), build_provider_fragment(p));
 }
 
-/// 删除供应商条目；如果 model / small_model 指向它也一并移除
+/// 删除供应商条目
 pub fn remove_provider(root: &mut Map<String, Value>, id: &str) {
     if let Some(providers) = root.get_mut("provider").and_then(Value::as_object_mut) {
         providers.remove(id);
-    }
-    let prefix = format!("{id}/");
-    for key in ["model", "small_model"] {
-        if root.get(key).and_then(Value::as_str).is_some_and(|m| m.starts_with(&prefix)) {
-            root.remove(key);
-        }
     }
 }
 
@@ -281,8 +251,7 @@ mod tests {
         assert_eq!(p1["options"]["baseURL"], "https://relay.example.com/v1");
         assert_eq!(p1["options"]["apiKey"], "sk-1");
         assert_eq!(p1["models"].as_object().unwrap().len(), 2, "去重后 gpt-5 / gpt-5-mini");
-        assert_eq!(v["model"], "p1/gpt-5");
-        assert_eq!(v["small_model"], "p1/gpt-5-mini");
+        assert!(v.get("model").is_none(), "不碰用户的顶层 model");
 
         // key 顺序保持：用户原有字段在前
         let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
@@ -299,13 +268,15 @@ mod tests {
     }
 
     #[test]
-    fn remove_clears_dangling_model() {
+    fn remove_only_drops_own_entry() {
         let mut root = Map::new();
+        root.insert("model".into(), json!("p1/gpt-5"));
         apply_provider(&mut root, &provider("p1"));
+        apply_provider(&mut root, &provider("p2"));
         remove_provider(&mut root, "p1");
-        assert!(root["provider"].as_object().unwrap().is_empty());
-        assert!(root.get("model").is_none());
-        assert!(root.get("small_model").is_none());
+        assert!(root["provider"].get("p1").is_none());
+        assert!(root["provider"].get("p2").is_some());
+        assert_eq!(root["model"], "p1/gpt-5", "顶层 model 由用户管理");
     }
 
     #[test]
@@ -320,15 +291,4 @@ mod tests {
         assert_eq!(frag["options"]["apiKey"], "sk-1", "Key 以 provider 字段为准");
     }
 
-    #[test]
-    fn switching_drops_foreign_small_model() {
-        let mut root = Map::new();
-        apply_provider(&mut root, &provider("p1"));
-        let mut p2 = provider("p2");
-        p2.default_haiku_model = None;
-        apply_provider(&mut root, &p2);
-        assert_eq!(root["model"], "p2/gpt-5");
-        assert!(root.get("small_model").is_none());
-        assert!(root["provider"].get("p1").is_some(), "累加模式不删除其它供应商");
-    }
 }
