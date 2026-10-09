@@ -28,11 +28,19 @@ describe('ProviderIcon', () => {
         expect(geminiHtml).not.toContain('base64');
     });
 
-    it('keeps hidden legacy providers on the first-letter fallback', () => {
+    it('renders the cc-switch OpenCode glyph', () => {
         const opencodeHtml = renderToStaticMarkup(<ProviderIcon appType="opencode" />);
 
-        expect(opencodeHtml).toContain('>O</div>');
-        expect(opencodeHtml).not.toContain('data-provider-brand-icon="opencode"');
-        expect(opencodeHtml).not.toContain('<svg');
+        expect(opencodeHtml).toContain('data-provider-brand-icon="opencode"');
+        expect(opencodeHtml).toContain('data-chat-provider-icon-glyph="opencode"');
+        expect(opencodeHtml).not.toContain('>O</div>');
+    });
+
+    it('keeps hidden legacy providers on the first-letter fallback', () => {
+        const openclawHtml = renderToStaticMarkup(<ProviderIcon appType="openclaw" />);
+
+        expect(openclawHtml).toContain('>O</div>');
+        expect(openclawHtml).not.toContain('data-provider-brand-icon="openclaw"');
+        expect(openclawHtml).not.toContain('<svg');
     });
 });

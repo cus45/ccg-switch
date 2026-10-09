@@ -128,11 +128,13 @@ describe('ProvidersPage', () => {
 
         const html = renderToStaticMarkup(renderProvidersPage());
 
-        expect(html).toContain('provider-filter-dropdown');
+        expect(html).not.toContain('provider-filter-dropdown');
         expect(html).not.toContain('<select');
-        expect(html).toContain('data-provider-filter-option="claude"');
-        expect(html).toContain('data-provider-filter-option="codex"');
-        expect(html).toContain('data-provider-filter-option="gemini"');
+        expect(html).toContain('data-app-filter="all"');
+        expect(html).toContain('data-app-filter="claude"');
+        expect(html).toContain('data-app-filter="codex"');
+        expect(html).toContain('data-app-filter="gemini"');
+        expect(html).toContain('data-app-filter="opencode"');
         expect(html).toContain('data-provider-config-shortcut="claude"');
         expect(html).toContain('data-provider-config-shortcut="codex"');
         expect(html).toContain('data-provider-config-shortcut="gemini"');
@@ -202,7 +204,7 @@ describe('ProvidersPage', () => {
         expect(container.innerHTML).not.toContain('background-color:#2563EB');
     });
 
-    it('closes the provider filter dropdown after selecting an option', async () => {
+    it('filters providers by clicking an app icon', async () => {
         providerState.providers = [
             createProvider('claude-1', 'claude'),
             createProvider('codex-1', 'codex'),
@@ -215,17 +217,15 @@ describe('ProvidersPage', () => {
             root?.render(renderProvidersPage());
         });
 
-        const filterDropdown = container.querySelector<HTMLDetailsElement>('.provider-filter-dropdown');
-        const codexOption = container.querySelector<HTMLButtonElement>('[data-provider-filter-option="codex"]');
-        expect(filterDropdown).toBeInstanceOf(HTMLDetailsElement);
+        const codexOption = container.querySelector<HTMLButtonElement>('[data-app-filter="codex"]');
         expect(codexOption).toBeInstanceOf(HTMLButtonElement);
-        filterDropdown!.open = true;
+        expect(codexOption?.getAttribute('title')).toBe('Codex');
 
         await act(async () => {
             codexOption?.dispatchEvent(new MouseEvent('click', {bubbles: true}));
         });
 
-        expect(filterDropdown!.open).toBe(false);
-        expect(filterDropdown?.querySelector('summary')?.getAttribute('title')).toBe('Codex');
+        expect(codexOption?.getAttribute('aria-checked')).toBe('true');
+        expect(container.querySelector('[data-app-filter="all"]')?.getAttribute('aria-checked')).toBe('false');
     });
 });

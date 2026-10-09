@@ -977,7 +977,8 @@
       "sourceLocal": "本地",
       "sourceProxyHint": "经本地代理转发并记录的请求",
       "sourceLocalHint": "扫描本机 ~/.claude 会话与历史文件得出"
-    }
+    },
+    "localSessionTitle": "本地会话"
   },
   "prompts": {
     "title": "Prompt 预设管理",

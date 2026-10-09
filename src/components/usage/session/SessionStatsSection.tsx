@@ -31,7 +31,13 @@ interface DonutSegment extends PieShareItem {
  *
  * 原先在主页的可折叠区里，现迁到 /usage 的「本地会话」分区；图表逻辑保持原样。
  */
-export default function SessionStatsSection() {
+interface SessionStatsSectionProps {
+    /** overview：主页用，只要趋势 / 模型占比 / 项目排行 / 时段图；full：/usage 本地会话分区完整版 */
+    variant?: 'full' | 'overview';
+}
+
+export default function SessionStatsSection({ variant = 'full' }: SessionStatsSectionProps) {
+    const overview = variant === 'overview';
     const { t } = useTranslation();
     const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData, refreshStatsCache, refreshingStats } = useDashboardStore();
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
@@ -179,6 +185,7 @@ export default function SessionStatsSection() {
 
     return (
         <div className="space-y-4">
+                            {!overview && (<>
                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                                 <StatCard icon={Activity} label={t('dashboard.stats_startups')} value={stats.num_startups} color="text-blue-500" />
                                 <StatCard icon={Coins} label={t('token_usage.total_tokens')} value={totalTokens} color="text-emerald-500" />
@@ -231,6 +238,8 @@ export default function SessionStatsSection() {
 
                                 <HourlyClockChart hourData={hourData} maxHourCount={maxHourCount} />
                             </div>
+
+                            </>)}
 
                             {/* Token 每日趋势 + 模型占比 */}
                             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -454,6 +463,7 @@ export default function SessionStatsSection() {
                 </div>
 
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                {!overview && (
                                 <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
                         <div className="flex items-center gap-2 mb-4">
                             <Coins className="w-5 h-5 text-amber-500" />
@@ -488,6 +498,7 @@ export default function SessionStatsSection() {
                             </table>
                         </div>
                     </div>
+                                )}
 
                                 <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
                         <div className="flex items-center gap-2 mb-4">
@@ -529,6 +540,8 @@ export default function SessionStatsSection() {
                             </div>
                         )}
                     </div>
+
+                                {overview && <HourlyClockChart hourData={hourData} maxHourCount={maxHourCount} />}
                 </div>
         </div>
     );

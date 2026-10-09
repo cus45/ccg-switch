@@ -1019,7 +1019,8 @@
       "sourceLocal": "Local",
       "sourceProxyHint": "Requests forwarded and logged by the local proxy",
       "sourceLocalHint": "Scanned from local ~/.claude session and history files"
-    }
+    },
+    "localSessionTitle": "Local sessions"
   },
   "prompts": {
     "title": "Prompt Preset Management",

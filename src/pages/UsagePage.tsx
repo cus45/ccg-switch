@@ -28,6 +28,8 @@ import { ProviderStatsTable } from '../components/usage/ProviderStatsTable';
 import { ModelStatsTable } from '../components/usage/ModelStatsTable';
 import { PricingConfigPanel } from '../components/usage/PricingConfigPanel';
 import SessionStatsSection from '../components/usage/session/SessionStatsSection';
+import AppFilterBar from '../components/common/AppFilterBar';
+import { PROXY_APP_TYPES, type AppType } from '../types/app';
 import { getUsageProviderLabel } from '../components/usage/providerLabel';
 import { showToast } from '../components/common/ToastContainer';
 import {
@@ -338,19 +340,15 @@ export default function UsagePage() {
                 {/* 顶部全局筛选行：作用范围是整页 —— 汇总、趋势与三张明细表 */}
                 <div className={cn(card, 'p-4')}>
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                        <label className="block">
+                        <div className="block">
                             <span className={fieldLabel}>{t('usage.appType')}</span>
-                            <select
-                                className={select}
-                                value={appType}
-                                onChange={(e) => changeAppType(e.target.value)}
-                            >
-                                <option value="all">{t('usage.allApps')}</option>
-                                <option value="claude">Claude</option>
-                                <option value="codex">Codex</option>
-                                <option value="gemini">Gemini</option>
-                            </select>
-                        </label>
+                            <AppFilterBar
+                                apps={PROXY_APP_TYPES}
+                                value={appType as AppType | 'all'}
+                                onChange={changeAppType}
+                                allLabel={t('usage.allApps')}
+                            />
+                        </div>
 
                         <label className="block">
                             <span className={fieldLabel}>{t('usage.providerFilter.label')}</span>

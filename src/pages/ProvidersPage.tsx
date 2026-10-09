@@ -1,7 +1,6 @@
 import {useTranslation} from 'react-i18next';
 import {
     Activity,
-    ChevronDown,
     Copy,
     Download,
     Edit2,
@@ -35,6 +34,7 @@ import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
 import ClaudeDesktopPanel from '../components/providers/ClaudeDesktopPanel';
+import AppFilterBar from '../components/common/AppFilterBar';
 import UsageScriptModal from '../components/providers/UsageScriptModal';
 import {useHealthCheck} from '../hooks/useHealthCheck';
 import HealthStatusBadge from '../components/providers/HealthStatusBadge';
@@ -109,7 +109,6 @@ function ProvidersPage() {
     // 拖拽状态
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
-    const filterDropdownRef = useRef<HTMLDetailsElement | null>(null);
     const dragSourceRef = useRef<string | null>(null);
     const dragOverRef = useRef<string | null>(null);
 
@@ -250,11 +249,6 @@ function ProvidersPage() {
 
     const toggleShowKey = (id: string) => {
         setShowKeys(prev => ({ ...prev, [id]: !prev[id] }));
-    };
-
-    const handleFilterAppChange = (next: AppType | 'all') => {
-        setFilterApp(next);
-        filterDropdownRef.current?.removeAttribute('open');
     };
 
     // 拖拽逻辑
@@ -407,9 +401,9 @@ function ProvidersPage() {
                     </div>
                 </div>
 
-                {/* 搜索 + 过滤 */}
-                <div className="flex gap-3">
-                    <div className="flex-1 relative">
+                {/* 搜索 + 应用图标筛选（并排） */}
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
                         <input
                             type="text"
@@ -419,47 +413,12 @@ function ProvidersPage() {
                             className="input input-bordered input-sm w-full pl-9"
                         />
                     </div>
-                    <details ref={filterDropdownRef} className="dropdown dropdown-end provider-filter-dropdown">
-                        <summary
-                            className="btn btn-sm btn-outline min-w-24 justify-between gap-2"
-                            title={filterApp === 'all' ? t('providers.filter_all') : APP_LABELS[filterApp]}
-                        >
-                            {filterApp === 'all' ? (
-                                <span className="text-sm">{t('providers.filter_all')}</span>
-                            ) : (
-                                <span className="inline-flex items-center gap-2 text-sm">
-                                    <ProviderIcon appType={filterApp} size="sm" />
-                                    {APP_LABELS[filterApp]}
-                                </span>
-                            )}
-                            <ChevronDown className="w-3.5 h-3.5 opacity-70" />
-                        </summary>
-                        <ul className="dropdown-content menu bg-base-100 border border-base-300 rounded-box shadow-lg z-30 mt-1 w-36 p-1">
-                            <li>
-                                <button
-                                    type="button"
-                                    data-provider-filter-option="all"
-                                    onClick={() => handleFilterAppChange('all')}
-                                    className={filterApp === 'all' ? 'active' : ''}
-                                >
-                                    {t('providers.filter_all')}
-                                </button>
-                            </li>
-                            {VISIBLE_APP_TYPES.map(type => (
-                                <li key={type}>
-                                    <button
-                                        type="button"
-                                        data-provider-filter-option={type}
-                                        onClick={() => handleFilterAppChange(type)}
-                                        className={filterApp === type ? 'active' : ''}
-                                    >
-                                        <ProviderIcon appType={type} size="sm" />
-                                        {APP_LABELS[type]}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    </details>
+                    <AppFilterBar
+                        apps={VISIBLE_APP_TYPES}
+                        value={filterApp}
+                        onChange={setFilterApp}
+                        allLabel={t('providers.filter_all')}
+                    />
                 </div>
 
                 {filterApp === 'claudedesktop' && (
