@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-                  {
+                    {
+    version: '1.7.1',
+    date: '2026-10-09',
+    type: 'patch',
+    changes: [
+      { type: 'fix', text: '修复请求日志速度列全空；筛选行移至页面顶部全局生效，供应商与模型支持下拉选择' }
+    ]
+  },
+{
     version: '1.7.0',
     date: '2026-08-25',
     type: 'minor',
