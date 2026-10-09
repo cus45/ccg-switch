@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Zap, Plus, RefreshCw, Trash2, Edit, Eye, FolderOpen, User, Search, Download, Package, FolderInput, ExternalLink, Share2, Import, Star, Copy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useSkillStore } from '../stores/useSkillStore';
 import { useSkillStoreV2 } from '../stores/useSkillStoreV2';
 import { useProviderStore } from '../stores/useProviderStore';
@@ -38,6 +39,50 @@ function SkillsPage() {
     const [repoBranch, setRepoBranch] = useState('');
     const [repoError, setRepoError] = useState('');
     const [scanning, setScanning] = useState(false);
+    const [zipInstalling, setZipInstalling] = useState(false);
+    const [updatingAll, setUpdatingAll] = useState(false);
+
+    /** 选择本地 ZIP 安装技能；与「发现」页一致，新技能默认对 Claude 启用 */
+    const handleZipInstall = async () => {
+        const path = await openFileDialog({ multiple: false, filters: [{ name: 'ZIP', extensions: ['zip'] }] });
+        if (!path || Array.isArray(path)) return;
+        setZipInstalling(true);
+        try {
+            const result = await invoke<{ installed: string[]; skipped: string[] }>('install_skills_from_zip', { path, currentApp: 'claude' });
+            await loadInstalled();
+            if (result.installed.length > 0) {
+                showToast(t('skills.zipInstalled', { count: result.installed.length, defaultValue: `已安装 ${result.installed.length} 个技能` }), 'success');
+            }
+            if (result.skipped.length > 0) {
+                showToast(t('skills.zipSkipped', { names: result.skipped.join(', '), defaultValue: `已存在，跳过：${result.skipped.join(', ')}` }), 'info');
+            }
+        } catch (e) {
+            showToast(String(e), 'error');
+        } finally {
+            setZipInstalling(false);
+        }
+    };
+
+    /** 检查并更新全部来自仓库的技能 */
+    const handleUpdateAll = async () => {
+        setUpdatingAll(true);
+        try {
+            const result = await invoke<{ checked: number; updated: string[]; failed: string[] }>('update_all_skills');
+            await loadInstalled();
+            if (result.updated.length > 0) {
+                showToast(t('skills.updatedAll', { count: result.updated.length, defaultValue: `已更新 ${result.updated.length} 个技能` }), 'success');
+            } else if (result.failed.length === 0) {
+                showToast(t('skills.allUpToDate', { count: result.checked, defaultValue: `已检查 ${result.checked} 个技能，都是最新版本` }), 'info');
+            }
+            if (result.failed.length > 0) {
+                showToast(t('skills.updateFailedSome', { names: result.failed.join('\n'), defaultValue: `部分技能更新失败：\n${result.failed.join('\n')}` }), 'error', 8000);
+            }
+        } catch (e) {
+            showToast(String(e), 'error');
+        } finally {
+            setUpdatingAll(false);
+        }
+    };
     
     // Import/Export States
     const [importModal, setImportModal] = useState(false);
@@ -223,6 +268,14 @@ function SkillsPage() {
                                 }} disabled={scanning || v2Loading} className="px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1.5 disabled:opacity-50">
                                     <FolderInput className={`w-4 h-4 ${scanning ? 'animate-pulse' : ''}`} />
                                     {scanning ? '扫描中...' : '扫描导入'}
+                                </button>
+                                <button onClick={handleZipInstall} disabled={zipInstalling || v2Loading} className="px-3 py-1.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                                    <Package className={`w-4 h-4 ${zipInstalling ? 'animate-pulse' : ''}`} />
+                                    {t('skills.zipInstall', '从 ZIP 安装')}
+                                </button>
+                                <button onClick={handleUpdateAll} disabled={updatingAll || v2Loading} className="px-3 py-1.5 bg-teal-500 text-white text-sm font-medium rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-1.5 disabled:opacity-50" title={t('skills.updateAllHint', '检查来自 GitHub 仓库的技能，有新版本的全部更新')}>
+                                    <Download className={`w-4 h-4 ${updatingAll ? 'animate-bounce' : ''}`} />
+                                    {updatingAll ? t('skills.updatingAll', '更新中...') : t('skills.updateAll', '全部更新')}
                                 </button>
                                 <button onClick={async () => {
                                     const names = installed.map(s => s.name).join('\n');

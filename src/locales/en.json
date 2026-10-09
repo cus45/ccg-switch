@@ -1831,7 +1831,16 @@
     "all_apps": "All",
     "app_enabled": "Enabled",
     "app_disabled": "Disabled",
-    "search_placeholder": "Search skills..."
+    "search_placeholder": "Search skills...",
+    "zipInstall": "Install from ZIP",
+    "updateAll": "Update all",
+    "updatingAll": "Updating...",
+    "updateAllHint": "Check skills installed from GitHub repos and update those with new versions",
+    "zipInstalled": "Installed {{count}} skills",
+    "zipSkipped": "Already installed, skipped: {{names}}",
+    "updatedAll": "Updated {{count}} skills",
+    "allUpToDate": "Checked {{count}} skills, all up to date",
+    "updateFailedSome": "Some skills failed to update:\n{{names}}"
   },
   "sessions": {
     "all_sessions": "All Sessions",

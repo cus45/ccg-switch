@@ -979,6 +979,9 @@ pub fn run() {
             skill_commands::run_skill_sandbox,
             skill_commands::check_skill_update,
             skill_commands::apply_skill_update,
+            skill_commands::check_all_skill_updates,
+            skill_commands::update_all_skills,
+            skill_commands::install_skills_from_zip,
             // Prompts v2 (数据库版)
             prompt_commands::get_prompts_v2,
             prompt_commands::upsert_prompt_v2,

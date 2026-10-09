@@ -1,7 +1,9 @@
 use crate::database::dao::skills::{InstalledSkillRow, SkillRepo};
 use crate::services::sandbox_service::{run_sandbox_test, SandboxRequest, SandboxResponse};
 use crate::services::skill_discovery::DiscoverableSkill;
-use crate::services::skill_service_v2::{RemoteUpdateData, SkillServiceV2};
+use crate::services::skill_service_v2::{
+    RemoteUpdateData, SkillServiceV2, SkillUpdateStatus, UpdateAllResult, ZipInstallResult,
+};
 use crate::store::AppState;
 use tauri::State;
 
@@ -139,4 +141,28 @@ pub fn apply_skill_update(
     new_content: String,
 ) -> Result<(), String> {
     SkillServiceV2::apply_update(&state.db, &id, &new_content)
+}
+
+/// 检查所有来自仓库的技能是否有更新
+#[tauri::command]
+pub async fn check_all_skill_updates(
+    state: State<'_, AppState>,
+) -> Result<Vec<SkillUpdateStatus>, String> {
+    SkillServiceV2::check_all_updates(&state.db).await
+}
+
+/// 一键更新全部有更新的技能
+#[tauri::command]
+pub async fn update_all_skills(state: State<'_, AppState>) -> Result<UpdateAllResult, String> {
+    SkillServiceV2::update_all(&state.db).await
+}
+
+/// 从本地 ZIP 安装技能
+#[tauri::command]
+pub fn install_skills_from_zip(
+    state: State<'_, AppState>,
+    path: String,
+    current_app: String,
+) -> Result<ZipInstallResult, String> {
+    SkillServiceV2::install_from_zip(&state.db, std::path::Path::new(&path), &current_app)
 }

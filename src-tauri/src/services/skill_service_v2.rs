@@ -2,7 +2,7 @@
 //! Skills 数据库版服务层 (v2)
 //!
 //! SSOT 目录: ~/.ccg-switch/skills/<directory>/
-//! 应用目录: ~/.claude/skills/ / ~/.codex/skills/ / ~/.gemini/skills/
+//! 应用目录: ~/.claude/skills/ / ~/.codex/skills/ / ~/.gemini/skills/ / ~/.config/opencode/skills/
 
 use crate::database::dao::skills::{InstalledSkillRow, SkillRepo};
 use crate::database::Database;
@@ -605,6 +605,314 @@ impl SkillServiceV2 {
         }
 
         Ok(())
+    }
+
+    // ========== 批量更新 ==========
+
+    /// 并发检查所有来自仓库的技能是否有更新（本地技能跳过）
+    pub async fn check_all_updates(db: &Arc<Database>) -> Result<Vec<SkillUpdateStatus>, String> {
+        let repo_skills: Vec<InstalledSkillRow> = db
+            .get_all_installed_skills()?
+            .into_values()
+            .filter(|r| r.repo_owner.is_some() && r.repo_name.is_some())
+            .collect();
+        let checks = repo_skills.iter().map(|row| async move {
+            match Self::check_update(db, &row.id).await {
+                Ok(data) => SkillUpdateStatus {
+                    id: row.id.clone(),
+                    name: row.name.clone(),
+                    has_update: data.has_update,
+                    error: None,
+                },
+                Err(e) => SkillUpdateStatus {
+                    id: row.id.clone(),
+                    name: row.name.clone(),
+                    has_update: false,
+                    error: Some(e),
+                },
+            }
+        });
+        Ok(futures::future::join_all(checks).await)
+    }
+
+    /// 检查并更新全部有更新的技能，返回已更新与失败的技能名
+    pub async fn update_all(db: &Arc<Database>) -> Result<UpdateAllResult, String> {
+        let mut result = UpdateAllResult::default();
+        for status in Self::check_all_updates(db).await? {
+            result.checked += 1;
+            if let Some(e) = status.error {
+                result.failed.push(format!("{}: {e}", status.name));
+                continue;
+            }
+            if !status.has_update {
+                continue;
+            }
+            // 重新取一次远程内容再写入，避免两次请求之间远程又变化导致写入旧内容
+            match Self::check_update(db, &status.id).await {
+                Ok(data) => match Self::apply_update(db, &status.id, &data.remote_content) {
+                    Ok(()) => result.updated.push(status.name),
+                    Err(e) => result.failed.push(format!("{}: {e}", status.name)),
+                },
+                Err(e) => result.failed.push(format!("{}: {e}", status.name)),
+            }
+        }
+        Ok(result)
+    }
+
+    // ========== ZIP 安装 ==========
+
+    /// 从 ZIP 安装技能：包内每个含 SKILL.md 的目录都是一个技能
+    /// （根目录直接含 SKILL.md 时用 ZIP 文件名作目录名）。
+    ///
+    /// 已安装的同名目录跳过；新技能默认对 `current_app` 启用。
+    pub fn install_from_zip(
+        db: &Arc<Database>,
+        zip_path: &std::path::Path,
+        current_app: &str,
+    ) -> Result<ZipInstallResult, String> {
+        let ssot_dir = get_ssot_dir()?;
+        let staging = std::env::temp_dir().join(format!("ccg-skill-zip-{}", uuid::Uuid::new_v4()));
+        let outcome = (|| {
+            extract_zip(zip_path, &staging)?;
+            let fallback = zip_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("skill")
+                .to_string();
+            let roots = find_skill_roots(&staging, &fallback);
+            if roots.is_empty() {
+                return Err("ZIP 中没有找到包含 SKILL.md 的技能目录".to_string());
+            }
+            Self::install_roots(db, &ssot_dir, roots, current_app)
+        })();
+        let _ = fs::remove_dir_all(&staging);
+        outcome
+    }
+
+    fn install_roots(
+        db: &Arc<Database>,
+        ssot_dir: &std::path::Path,
+        roots: Vec<(String, PathBuf)>,
+        current_app: &str,
+    ) -> Result<ZipInstallResult, String> {
+        let existing: std::collections::HashSet<String> = db
+            .get_all_installed_skills()?
+            .values()
+            .map(|r| r.directory.to_lowercase())
+            .collect();
+        let mut result = ZipInstallResult::default();
+        for (directory, src) in roots {
+            if existing.contains(&directory.to_lowercase()) || ssot_dir.join(&directory).exists() {
+                result.skipped.push(directory);
+                continue;
+            }
+            copy_dir(&src, &ssot_dir.join(&directory))?;
+            let (name, description) = match parse_skill_frontmatter(&src.join("SKILL.md")) {
+                Ok(Some((n, d))) => (n, Some(d)),
+                _ => (directory.clone(), None),
+            };
+            let row = InstalledSkillRow {
+                id: uuid::Uuid::new_v4().to_string(),
+                name: name.clone(),
+                description,
+                directory: directory.clone(),
+                repo_owner: None,
+                repo_name: None,
+                repo_branch: None,
+                readme_url: None,
+                enabled_claude: current_app == "claude",
+                enabled_codex: current_app == "codex",
+                enabled_gemini: current_app == "gemini",
+                installed_at: chrono::Utc::now().timestamp(),
+                enabled_opencode: current_app == "opencode",
+            };
+            db.save_skill(&row)?;
+            if Self::app_enabled(&row, current_app) {
+                let _ = sync_to_app_dir(&row.directory, current_app);
+            }
+            result.installed.push(name);
+        }
+        Ok(result)
+    }
+}
+
+/// 单个技能的更新检查结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdateStatus {
+    pub id: String,
+    pub name: String,
+    pub has_update: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAllResult {
+    pub checked: usize,
+    pub updated: Vec<String>,
+    pub failed: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZipInstallResult {
+    pub installed: Vec<String>,
+    /// 已存在而跳过的目录名
+    pub skipped: Vec<String>,
+}
+
+/// 解压 ZIP；只接受包内的相对路径（`enclosed_name`），防止 zip-slip 写出目标目录
+fn extract_zip(zip_path: &std::path::Path, dest: &std::path::Path) -> Result<(), String> {
+    let file = fs::File::open(zip_path).map_err(|e| format!("无法打开 ZIP: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("ZIP 格式无效: {e}"))?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        let Some(rel) = entry.enclosed_name() else {
+            continue;
+        };
+        let out = dest.join(rel);
+        if entry.is_dir() {
+            fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(parent) = out.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            let mut f = fs::File::create(&out).map_err(|e| e.to_string())?;
+            std::io::copy(&mut entry, &mut f).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// 找出包含 SKILL.md 的技能目录，返回 (目录名, 路径)；最多向下 3 层，找到即不再深入
+fn find_skill_roots(root: &std::path::Path, fallback_name: &str) -> Vec<(String, PathBuf)> {
+    if root.join("SKILL.md").is_file() {
+        return vec![(sanitize_dir_name(fallback_name), root.to_path_buf())];
+    }
+    let mut out = Vec::new();
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !path.is_dir() || name.starts_with('.') || name == "__MACOSX" {
+                continue;
+            }
+            if path.join("SKILL.md").is_file() {
+                out.push((sanitize_dir_name(&name), path));
+            } else if depth < 2 {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+fn sanitize_dir_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '-' })
+        .collect();
+    let trimmed = cleaned.trim_matches(|c| c == '-' || c == '.');
+    if trimmed.is_empty() {
+        "skill".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+#[cfg(test)]
+mod zip_tests {
+    use super::*;
+    use std::io::Write;
+
+    fn make_zip(path: &std::path::Path, files: &[(&str, &str)]) {
+        let file = fs::File::create(path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        for (name, body) in files {
+            zip.start_file(*name, opts).unwrap();
+            zip.write_all(body.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    fn sandbox(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ccg-skillzip-{}-{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn finds_nested_skill_dirs_and_ignores_macosx() {
+        let dir = sandbox("nested");
+        let zip_path = dir.join("pack.zip");
+        make_zip(
+            &zip_path,
+            &[
+                ("pack/alpha/SKILL.md", "---\nname: Alpha\ndescription: a\n---\nbody"),
+                ("pack/beta/SKILL.md", "body"),
+                ("__MACOSX/pack/alpha/SKILL.md", "junk"),
+                ("pack/README.md", "x"),
+            ],
+        );
+        let out = dir.join("out");
+        extract_zip(&zip_path, &out).unwrap();
+        let roots = find_skill_roots(&out, "pack");
+        let names: Vec<&str> = roots.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["alpha", "beta"]);
+    }
+
+    #[test]
+    fn root_level_skill_uses_zip_name() {
+        let dir = sandbox("root");
+        let zip_path = dir.join("my skill.zip");
+        make_zip(&zip_path, &[("SKILL.md", "body")]);
+        let out = dir.join("out");
+        extract_zip(&zip_path, &out).unwrap();
+        let roots = find_skill_roots(&out, "my skill");
+        assert_eq!(roots[0].0, "my-skill");
+    }
+
+    #[test]
+    fn zip_slip_entries_are_not_written_outside() {
+        let dir = sandbox("slip");
+        let zip_path = dir.join("evil.zip");
+        make_zip(&zip_path, &[("../escaped.txt", "x"), ("ok/SKILL.md", "y")]);
+        let out = dir.join("out");
+        extract_zip(&zip_path, &out).unwrap();
+        assert!(!dir.join("escaped.txt").exists());
+        assert!(out.join("ok").join("SKILL.md").exists());
+    }
+
+    #[test]
+    fn install_roots_skips_existing_and_records_new() {
+        let dir = sandbox("install");
+        let ssot = dir.join("ssot");
+        fs::create_dir_all(ssot.join("dup")).unwrap();
+        let src_new = dir.join("src").join("fresh");
+        let src_dup = dir.join("src").join("dup");
+        for p in [&src_new, &src_dup] {
+            fs::create_dir_all(p).unwrap();
+            fs::write(p.join("SKILL.md"), "---\nname: Fresh Skill\ndescription: d\n---\n").unwrap();
+        }
+        let db = Arc::new(Database::in_memory().unwrap());
+        // 用不存在的应用名，避免测试同步到真实的应用目录
+        let result = SkillServiceV2::install_roots(
+            &db,
+            &ssot,
+            vec![("fresh".into(), src_new), ("dup".into(), src_dup)],
+            "none",
+        )
+        .unwrap();
+        assert_eq!(result.installed, vec!["Fresh Skill"]);
+        assert_eq!(result.skipped, vec!["dup"]);
+        assert!(ssot.join("fresh").join("SKILL.md").exists());
+        assert_eq!(db.get_all_installed_skills().unwrap().len(), 1);
     }
 }
 

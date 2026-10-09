@@ -1020,7 +1020,16 @@
     "all_apps": "全部",
     "app_enabled": "已启用",
     "app_disabled": "已禁用",
-    "search_placeholder": "搜索技能..."
+    "search_placeholder": "搜索技能...",
+    "zipInstall": "从 ZIP 安装",
+    "updateAll": "全部更新",
+    "updatingAll": "更新中...",
+    "updateAllHint": "检查来自 GitHub 仓库的技能，有新版本的全部更新",
+    "zipInstalled": "已安装 {{count}} 个技能",
+    "zipSkipped": "已存在，跳过：{{names}}",
+    "updatedAll": "已更新 {{count}} 个技能",
+    "allUpToDate": "已检查 {{count}} 个技能，都是最新版本",
+    "updateFailedSome": "部分技能更新失败：\n{{names}}"
   },
   "subagents": {
     "title": "子代理管理",
