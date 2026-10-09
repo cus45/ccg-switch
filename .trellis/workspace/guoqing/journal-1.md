@@ -554,3 +554,44 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 **Date**: 2026-07-06
 
 1) 权限就地弹窗:三个权限 dialog(AskUser/Plan/Tool)加 container='modal'|'inline'(inline 不 portal、absolute 覆盖宿主 pane、不注册全局快捷键防与中心 modal 双触发);新增 shouldRoutePermissionToSideChat(request.sessionId 与 dock 可见侧聊 tab.sessionId 均非空且相等才路由,其余一律中心兜底);ChatPane(side,relative)就地渲染归属本 pane 的请求,ChatPage 中心过滤已路由请求(getActivePermissionDialog 输入用过滤后的 center*)。spec component-guidelines 权限段同步改写。2) Codex 子代理历史:实证本机 ~/.codex/sessions 近 60 个真实会话(5500 shell 调用),0 条 spawn_agent/Task 子代理工具调用记录——无格式可依,暂缓实现(避免猜格式),结论入 journal。tsc/vitest 704 全绿(+2 路由测试)。
+
+
+## Session 17: OpenCode / Claude Desktop 配置、CLI 安装升级、主页统计重构
+
+**Date**: 2026-10-09
+**Task**: OpenCode / Claude Desktop 配置、CLI 安装升级、主页统计重构
+**Branch**: `main`
+
+### Summary
+
+参考 cc-switch 上游(origin/main)：OpenCode 恢复为可见应用(供应商累加写入 opencode.json、MCP/Prompt/技能同步、使用统计读取 opencode.db)；新增 Claude Desktop 3P 配置库直连模式(MSIX 路径探测、首次接管备份与恢复)；关于页 CLI 工具一键安装/升级(官方更新优先+npm 回退、PowerShell 回退链实测)；主页 KPI+趋势+会话概览，/usage 新增本地会话分区；应用筛选改为图标条，OpenCode 使用 cc-switch 图标。GUI 未实机验证，本机无 OpenCode 数据。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6f0276b` | (see git log) |
+| `a444760` | (see git log) |
+| `09d59d8` | (see git log) |
+| `d3ccc3c` | (see git log) |
+| `121ba33` | (see git log) |
+| `7681bcc` | (see git log) |
+| `9c8aea1` | (see git log) |
+| `3feca31` | (see git log) |
+| `868245d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
