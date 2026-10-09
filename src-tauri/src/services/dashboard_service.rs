@@ -75,7 +75,7 @@ fn scan_jsonl_inner(
             // 更新最新修改时间
             if let Ok(meta) = entry.metadata() {
                 if let Ok(modified) = meta.modified() {
-                    if latest.map_or(true, |l| modified > l) {
+                    if latest.is_none_or(|l| modified > l) {
                         *latest = Some(modified);
                     }
                 }
@@ -138,7 +138,7 @@ pub fn list_projects() -> Result<Vec<ProjectInfo>, io::Error> {
             .unwrap_or_else(|| decode_project_path(&dir_name));
         let display_name = project_path
             .split(['/', '\\'])
-            .last()
+            .next_back()
             .unwrap_or(&dir_name)
             .to_string();
 
@@ -325,7 +325,7 @@ pub fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, io::Error> {
             .unwrap_or_else(|| decode_project_path(&encoded));
         let project_name = project_path
             .split(['/', '\\'])
-            .last()
+            .next_back()
             .unwrap_or(&encoded)
             .to_string();
 
@@ -411,7 +411,8 @@ fn sum_session_tokens(path: &std::path::Path) -> Result<(u64, u64), io::Error> {
     let mut input_tokens = 0u64;
     let mut output_tokens = 0u64;
 
-    for line in reader.lines().flatten() {
+    // map_while：读错误（如磁盘错误）时停止，flatten 遇到持续报错的迭代器会死循环
+    for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;

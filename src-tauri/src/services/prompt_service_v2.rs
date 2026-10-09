@@ -88,7 +88,7 @@ impl PromptServiceV2 {
     ) -> Result<(), String> {
         // 1. 读取 live 文件当前内容
         let live_content = if live_path.exists() {
-            std::fs::read_to_string(&live_path).unwrap_or_default()
+            std::fs::read_to_string(live_path).unwrap_or_default()
         } else {
             String::new()
         };
@@ -134,7 +134,7 @@ impl PromptServiceV2 {
             .find(|p| p.id == id)
             .ok_or_else(|| format!("Prompt '{}' not found", id))?;
 
-        Self::atomic_write(&live_path, &target.content)?;
+        Self::atomic_write(live_path, &target.content)?;
 
         Ok(())
     }

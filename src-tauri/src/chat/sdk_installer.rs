@@ -339,6 +339,9 @@ fn remove_sdk_dir_with_retries(dir: &Path) -> Result<(), String> {
     ))
 }
 
+/// 删除 SDK 目录前清掉只读属性（Windows 上只读文件无法删除）。
+/// 紧接着整个目录就会被删除，Unix 上短暂放宽权限无影响。
+#[allow(clippy::permissions_set_readonly_false)]
 fn clear_readonly_attributes(path: &Path) -> std::io::Result<()> {
     if !path.exists() {
         return Ok(());

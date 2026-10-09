@@ -56,14 +56,11 @@ pub fn record_success(provider_id: &str) {
 
     entry.last_success = Some(Instant::now());
 
-    match entry.state {
-        CircuitBreakerState::HalfOpen => {
-            // HalfOpen + success → Closed，重置计数
-            entry.state = CircuitBreakerState::Closed;
-            entry.failure_count = 0;
-            entry.open_since = None;
-        }
-        _ => {}
+    if entry.state == CircuitBreakerState::HalfOpen {
+        // HalfOpen + success → Closed，重置计数
+        entry.state = CircuitBreakerState::Closed;
+        entry.failure_count = 0;
+        entry.open_since = None;
     }
 }
 

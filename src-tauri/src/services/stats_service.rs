@@ -107,7 +107,7 @@ fn collect_jsonl_files(dir: &Path, out: &mut Vec<PathBuf>) {
         let path = entry.path();
         if path.is_dir() {
             collect_jsonl_files(&path, out);
-        } else if path.extension().map_or(false, |ext| ext == "jsonl") {
+        } else if path.extension().is_some_and(|ext| ext == "jsonl") {
             out.push(path);
         }
     }
@@ -254,7 +254,7 @@ pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
                         let model_usage = cache
                             .model_usage
                             .entry(model.to_string())
-                            .or_insert(ModelUsage::default());
+                            .or_default();
                         model_usage.input_tokens += input_tokens;
                         model_usage.output_tokens += output_tokens;
                         model_usage.cache_read_input_tokens += cache_read;
@@ -264,7 +264,7 @@ pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
                         if let Some(date_str) = &date {
                             let daily_tokens = daily_tokens_map
                                 .entry(date_str.clone())
-                                .or_insert(HashMap::new());
+                                .or_default();
                             *daily_tokens.entry(model.to_string()).or_insert(0) +=
                                 input_tokens + output_tokens;
                         }

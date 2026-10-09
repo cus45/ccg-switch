@@ -1,6 +1,6 @@
 pub fn encode(input: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() * 4 + 2) / 3);
+    let mut out = String::with_capacity((input.len() * 4).div_ceil(3));
     let mut i = 0;
     while i < input.len() {
         let b0 = input[i];

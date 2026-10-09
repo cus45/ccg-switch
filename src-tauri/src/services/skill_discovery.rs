@@ -294,7 +294,7 @@ pub async fn fetch_repo_skills(repo: &SkillRepo) -> Result<Vec<DiscoverableSkill
 /// 从所有启用的仓库发现技能（并行）
 pub async fn discover_available(repos: Vec<SkillRepo>) -> Vec<DiscoverableSkill> {
     let enabled: Vec<SkillRepo> = repos.into_iter().filter(|r| r.enabled).collect();
-    let tasks: Vec<_> = enabled.iter().map(|r| fetch_repo_skills(r)).collect();
+    let tasks: Vec<_> = enabled.iter().map(fetch_repo_skills).collect();
     let results = futures::future::join_all(tasks).await;
 
     let mut all: Vec<DiscoverableSkill> = results.into_iter().flatten().flatten().collect();

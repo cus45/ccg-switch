@@ -165,8 +165,7 @@ impl ChatManager {
 
                 Ok::<Arc<dyn ManagerDaemonClient>, String>(client)
             })
-            .await
-            .map(|c| c.clone())
+            .await.cloned()
     }
 
     /// Get the daemon client and restart it if the cached process has exited.

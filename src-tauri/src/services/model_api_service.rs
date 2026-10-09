@@ -40,7 +40,7 @@ pub async fn fetch_models(url: String, api_key: String) -> Result<Vec<String>, i
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     let api_key = api_key.trim();
     let mut response = request_models(&client, &endpoint, api_key).await?;
@@ -53,8 +53,7 @@ pub async fn fetch_models(url: String, api_key: String) -> Result<Vec<String>, i
     }
 
     if !response.status().is_success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             format!("API returned status: {}", response.status()),
         ));
     }

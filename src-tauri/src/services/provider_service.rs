@@ -422,9 +422,9 @@ fn build_json_preview(
     Ok((
         path.to_string_lossy().to_string(),
         serde_json::to_string_pretty(preview)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
+            .map_err(io::Error::other)?,
         serde_json::to_string_pretty(&baseline)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
+            .map_err(io::Error::other)?,
     ))
 }
 
@@ -446,12 +446,12 @@ fn build_toml_preview(
         String::new()
     } else {
         toml::to_string_pretty(&baseline)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
+            .map_err(|e| io::Error::other(e.to_string()))?
     };
 
     let doc = build_doc(&baseline);
     let toml_str = toml::to_string_pretty(&doc)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| io::Error::other(e.to_string()))?;
 
     Ok((path.to_string_lossy().to_string(), toml_str, baseline_str))
 }
@@ -533,7 +533,7 @@ pub(crate) fn write_codex_toml_config(
     }
 
     let toml_str = toml::to_string_pretty(&doc)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| io::Error::other(e.to_string()))?;
     fs::write(config_path, toml_str.as_bytes())
 }
 
@@ -593,7 +593,7 @@ fn preview_claude_settings(
     };
 
     let baseline = serde_json::to_string_pretty(&settings)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     // 合并 settingsConfig 顶层字段
     if let Some(ref sc) = provider.settings_config {
@@ -672,7 +672,7 @@ fn preview_claude_settings(
     remap_settings_to_env(&mut settings);
 
     let content = serde_json::to_string_pretty(&settings)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     Ok(vec![(
         ".claude/settings.json".to_string(),
         content,
@@ -747,8 +747,8 @@ fn preview_gemini_config(provider: &Provider) -> Result<Vec<(String, String, Str
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
     let env_path = home.join(".gemini").join(".env");
 
-    let url = provider.url.as_ref().map(|s| s.as_str());
-    let model = provider.default_sonnet_model.as_ref().map(|s| s.as_str());
+    let url = provider.url.as_deref();
+    let model = provider.default_sonnet_model.as_deref();
 
     build_env_preview(&env_path, || {
         let mut lines = Vec::new();
@@ -787,7 +787,7 @@ fn preview_generic_settings(
     };
 
     let baseline = serde_json::to_string_pretty(&settings)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     if settings.get("env").is_none() {
         settings["env"] = serde_json::json!({});
@@ -818,7 +818,7 @@ fn preview_generic_settings(
         provider.app_type.config_file_name()
     );
     let content = serde_json::to_string_pretty(&settings)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     Ok(vec![(title, content, baseline)])
 }
 
@@ -1045,8 +1045,8 @@ fn sync_to_gemini_config(provider: &Provider) -> Result<(), io::Error> {
 
     // .env
     let env_path = gemini_dir.join(".env");
-    let url = provider.url.as_ref().map(|s| s.as_str());
-    let model = provider.default_sonnet_model.as_ref().map(|s| s.as_str());
+    let url = provider.url.as_deref();
+    let model = provider.default_sonnet_model.as_deref();
     write_gemini_env(&env_path, url, &provider.api_key, model)?;
 
     // settings.json

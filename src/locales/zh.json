@@ -19,7 +19,8 @@
     "import": "导入",
     "success": "成功",
     "error": "错误",
-    "close": "关闭"
+    "close": "关闭",
+    "refreshing": "刷新中..."
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -1285,6 +1286,10 @@
         "failed": "失败",
         "cancelled": "已取消"
       }
+    },
+    "save": "保存设置",
+    "about": {
+      "title": "关于"
     }
   },
   "token_usage": {

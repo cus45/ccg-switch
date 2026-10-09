@@ -133,9 +133,7 @@ fn resolve_file_path(file_path: &str, cwd: Option<&str>) -> PathBuf {
 fn extract_file_name(path_hint: &str) -> Option<String> {
     let normalized = path_hint.replace('\\', "/");
     normalized
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .next_back()
+        .split('/').rfind(|segment| !segment.is_empty())
         .map(ToString::to_string)
         .filter(|segment| !segment.is_empty())
 }

@@ -33,7 +33,7 @@ pub fn list_prompts() -> Result<Vec<PromptPreset>, io::Error> {
     for entry in fs::read_dir(&prompts_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "md") {
+        if path.extension().is_some_and(|ext| ext == "md") {
             let name = path
                 .file_stem()
                 .unwrap_or_default()

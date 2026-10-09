@@ -67,17 +67,14 @@ impl Default for CircuitBreakerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CircuitBreakerState {
+    #[default]
     Closed,
     Open,
     HalfOpen,
 }
 
-impl Default for CircuitBreakerState {
-    fn default() -> Self {
-        Self::Closed
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderHealth {

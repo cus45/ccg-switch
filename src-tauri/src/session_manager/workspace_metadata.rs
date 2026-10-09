@@ -80,7 +80,7 @@ fn save_root(file: &Path, root: &Map<String, Value>) -> Result<(), String> {
     Ok(())
 }
 
-fn section<'a>(root: &'a Map<String, Value>, key: &str) -> Map<String, Value> {
+fn section(root: &Map<String, Value>, key: &str) -> Map<String, Value> {
     root.get(key)
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default()

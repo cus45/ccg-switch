@@ -198,7 +198,7 @@ pub async fn check_stream(
                     "https" => reqwest::Proxy::https(&proxy_url),
                     _ => reqwest::Proxy::http(&proxy_url),
                 }
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
 
                 if let (Some(ref user), Some(ref pass)) = (&pc.proxy_username, &pc.proxy_password) {
                     proxy = proxy.basic_auth(user, pass);
@@ -211,7 +211,7 @@ pub async fn check_stream(
 
     let client = client_builder
         .build()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     let start = std::time::Instant::now();
 
@@ -313,7 +313,7 @@ pub async fn check_provider_health(
         .url
         .as_deref()
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| match protocol.as_str() {
+        .unwrap_or(match protocol.as_str() {
             "codex" | "openai-chat" => "https://api.openai.com",
             "gemini" => "https://generativelanguage.googleapis.com",
             _ => "https://api.anthropic.com",

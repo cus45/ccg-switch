@@ -285,7 +285,7 @@ fn parse_session_file(
         .unwrap_or(fallback_ts);
 
     // 标题：第一条用户消息
-    let title = json.get("messages").and_then(|msgs| extract_title(msgs));
+    let title = json.get("messages").and_then(extract_title);
 
     let source_path = file_path.to_string_lossy().to_string();
     let resume_command = format!("gemini --resume {}", session_id);

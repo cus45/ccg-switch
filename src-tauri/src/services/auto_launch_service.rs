@@ -28,7 +28,7 @@ fn get_macos_app_bundle_path(exe_path: &std::path::Path) -> Option<std::path::Pa
 /// 初始化 AutoLaunch 实例
 fn build_auto_launch() -> Result<auto_launch::AutoLaunch, io::Error> {
     let exe_path = std::env::current_exe()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("无法获取应用路径: {e}")))?;
+        .map_err(|e| io::Error::other(format!("无法获取应用路径: {e}")))?;
 
     // macOS 需要使用 .app bundle 路径
     #[cfg(target_os = "macos")]
@@ -41,7 +41,7 @@ fn build_auto_launch() -> Result<auto_launch::AutoLaunch, io::Error> {
         .set_app_name(APP_NAME)
         .set_app_path(&app_path.to_string_lossy())
         .build()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("创建 AutoLaunch 失败: {e}")))
+        .map_err(|e| io::Error::other(format!("创建 AutoLaunch 失败: {e}")))
 }
 
 /// 清理旧版本注册表键名 (CCSwitch → CCG Switch)
@@ -83,7 +83,7 @@ pub async fn get_auto_launch_status() -> Result<AutoLaunchStatus, io::Error> {
         }
     })
     .await
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("spawn_blocking 失败: {e}")))?
+    .map_err(|e| io::Error::other(format!("spawn_blocking 失败: {e}")))?
 }
 
 /// 设置或取消开机自启动（异步非阻塞）
@@ -93,13 +93,13 @@ pub async fn set_auto_launch(enabled: bool) -> Result<(), io::Error> {
 
         if enabled {
             auto_launch.enable().map_err(|e| {
-                io::Error::new(io::ErrorKind::Other, format!("启用开机自启失败: {e}"))
+                io::Error::other(format!("启用开机自启失败: {e}"))
             })?;
             // 启用新键后清理旧键
             cleanup_legacy_registry_key();
         } else {
             auto_launch.disable().map_err(|e| {
-                io::Error::new(io::ErrorKind::Other, format!("禁用开机自启失败: {e}"))
+                io::Error::other(format!("禁用开机自启失败: {e}"))
             })?;
             // 禁用时也清理旧键
             cleanup_legacy_registry_key();
@@ -108,5 +108,5 @@ pub async fn set_auto_launch(enabled: bool) -> Result<(), io::Error> {
         Ok(())
     })
     .await
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("spawn_blocking 失败: {e}")))?
+    .map_err(|e| io::Error::other(format!("spawn_blocking 失败: {e}")))?
 }

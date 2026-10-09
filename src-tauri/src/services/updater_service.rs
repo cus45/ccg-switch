@@ -173,7 +173,7 @@ pub async fn download_update(app: &AppHandle, url: &str) -> Result<String, Strin
         .map_err(|e| format!("下载失败: {}", e))?;
 
     let total = response.content_length().unwrap_or(0);
-    let file_name = url.split('/').last().unwrap_or("update-installer.exe");
+    let file_name = url.split('/').next_back().unwrap_or("update-installer.exe");
 
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(file_name);

@@ -151,7 +151,7 @@ fn record_block_timing(timings: &mut HashMap<String, MessageTiming>, value: &Val
             first_parent: parse_line_uuid(value, "parentUuid"),
             starts_at_first_block: value
                 .get("apiBlockIndex")
-                .map_or(true, |index| index.as_u64() == Some(0)),
+                .is_none_or(|index| index.as_u64() == Some(0)),
             end_ms: None,
         });
     timing.end_ms = timing.end_ms.max(block_end_ms);
@@ -424,7 +424,7 @@ impl RequestTimer {
             .usage_record
             .take()
             .filter(|(_, usage)| {
-                last.map_or(true, |last| {
+                last.is_none_or(|last| {
                     usage.input == last.input
                         && usage.cached_input == last.cached_input
                         && usage.output == last.output

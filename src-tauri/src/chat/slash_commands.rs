@@ -300,7 +300,7 @@ fn extract_command_description(path: &Path) -> Option<String> {
     let yaml = serde_yaml::from_str::<YamlValue>(&frontmatter).ok()?;
     match yaml {
         YamlValue::Mapping(mapping) => mapping
-            .get(&YamlValue::String("description".to_string()))
+            .get(YamlValue::String("description".to_string()))
             .and_then(|value| value.as_str())
             .map(str::trim)
             .filter(|value| !value.is_empty())

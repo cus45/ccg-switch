@@ -12,7 +12,7 @@ pub fn cleanup_stale_tmp_files(dir: &Path) {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "tmp") {
+            if path.extension().is_some_and(|ext| ext == "tmp") {
                 let _ = fs::remove_file(&path);
             }
         }
