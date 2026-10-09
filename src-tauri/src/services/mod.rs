@@ -20,6 +20,7 @@ pub mod skill_discovery;
 pub mod skill_service;
 pub mod skill_service_v2;
 pub mod stats_service;
+pub mod session_usage_gemini;
 pub mod session_usage_opencode;
 pub mod session_usage_scanner;
 pub mod storage;

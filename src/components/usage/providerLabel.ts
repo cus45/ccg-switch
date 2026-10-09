@@ -8,6 +8,7 @@ const SESSION_PROVIDER_APPS: Record<string, string> = {
     'Claude (Session)': 'Claude',
     'Codex (Session)': 'Codex',
     'OpenCode (Session)': 'OpenCode',
+    'Gemini (Session)': 'Gemini',
 };
 
 export interface UsageProviderLabel {

@@ -489,6 +489,7 @@ pub fn scan_all(db: &Database) -> Result<ScanResult, String> {
 
     total.merge(&scan_claude(db, claude_dir.as_deref()));
     total.merge(&scan_codex(db, codex_dir.as_deref()));
+    total.merge(&super::session_usage_gemini::scan_gemini(db));
     total.merge(&super::session_usage_opencode::scan_opencode(db));
 
     if total.inserted > 0 {
