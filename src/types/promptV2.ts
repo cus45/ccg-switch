@@ -15,4 +15,5 @@ export const PROMPT_APPS: { key: string; label: string; file: string }[] = [
     { key: 'claude', label: 'Claude', file: 'CLAUDE.md' },
     { key: 'codex', label: 'Codex', file: 'AGENTS.md' },
     { key: 'gemini', label: 'Gemini', file: 'GEMINI.md' },
+    { key: 'opencode', label: 'OpenCode', file: 'AGENTS.md' },
 ];

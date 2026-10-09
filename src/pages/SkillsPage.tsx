@@ -337,7 +337,7 @@ function SkillsPage() {
                                         <div className="flex items-center gap-4">
                                             {SKILL_APPS.map(({ key, label, app }) => (
                                                 <label key={app} className="flex items-center gap-1.5 cursor-pointer">
-                                                    <input type="checkbox" className="toggle toggle-xs toggle-primary" checked={skill[key]} onChange={(e) => toggleV2App(skill.id, app, e.target.checked)} />
+                                                    <input type="checkbox" className="toggle toggle-xs toggle-primary" checked={!!skill[key]} onChange={(e) => toggleV2App(skill.id, app, e.target.checked)} />
                                                     <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
                                                 </label>
                                             ))}

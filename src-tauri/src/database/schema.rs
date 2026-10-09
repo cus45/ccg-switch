@@ -27,7 +27,8 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
             enabled_claude BOOLEAN NOT NULL DEFAULT 0,
             enabled_codex BOOLEAN NOT NULL DEFAULT 0,
             enabled_gemini BOOLEAN NOT NULL DEFAULT 0,
-            installed_at INTEGER NOT NULL DEFAULT 0
+            installed_at INTEGER NOT NULL DEFAULT 0,
+            enabled_opencode BOOLEAN NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS skill_repos (
@@ -721,6 +722,12 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
             "ALTER TABLE mcp_servers ADD COLUMN enabled_opencode BOOLEAN NOT NULL DEFAULT 0;",
         )
         .map_err(|e| format!("Failed to add mcp_servers.enabled_opencode: {e}"))?;
+    }
+
+    // skills.enabled_opencode —— 技能同步到 ~/.config/opencode/skills
+    if table_exists(conn, "skills")? && !column_exists(conn, "skills", "enabled_opencode")? {
+        conn.execute_batch("ALTER TABLE skills ADD COLUMN enabled_opencode BOOLEAN NOT NULL DEFAULT 0;")
+            .map_err(|e| format!("Failed to add skills.enabled_opencode: {e}"))?;
     }
 
     // 迁移不假设表一定存在：生产路径先 create_tables 再 migrate，但只跑迁移的旧库测试没有这张表

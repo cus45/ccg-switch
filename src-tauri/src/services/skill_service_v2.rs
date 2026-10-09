@@ -48,6 +48,7 @@ fn get_app_skills_dir(app: &str) -> Result<PathBuf, String> {
         "claude" => home.join(".claude").join("skills"),
         "codex" => home.join(".codex").join("skills"),
         "gemini" => home.join(".gemini").join("skills"),
+        "opencode" => home.join(".config").join("opencode").join("skills"),
         _ => return Err(format!("不支持的 app: {}", app)),
     };
     Ok(dir)
@@ -168,13 +169,14 @@ impl SkillServiceV2 {
             enabled_claude: current_app == "claude",
             enabled_codex: current_app == "codex",
             enabled_gemini: current_app == "gemini",
+            enabled_opencode: current_app == "opencode",
             installed_at: now,
         };
 
         db.save_skill(&row)?;
 
         // 同步到启用的应用目录
-        for app in ["claude", "codex", "gemini"] {
+        for app in ["claude", "codex", "gemini", "opencode"] {
             if Self::app_enabled(&row, app) {
                 let _ = sync_to_app_dir(&row.directory, app);
             }
@@ -269,6 +271,7 @@ impl SkillServiceV2 {
             enabled_claude: true, // 默认在 Claude 中启用
             enabled_codex: false,
             enabled_gemini: false,
+            enabled_opencode: false,
             installed_at: now,
         };
 
@@ -297,7 +300,7 @@ impl SkillServiceV2 {
                 }
             }
             // 从应用目录删除
-            for app in ["claude", "codex", "gemini"] {
+            for app in ["claude", "codex", "gemini", "opencode"] {
                 remove_from_app_dir(&row.directory, app);
             }
         }
@@ -323,6 +326,7 @@ impl SkillServiceV2 {
             "claude" => row.enabled_claude = enabled,
             "codex" => row.enabled_codex = enabled,
             "gemini" => row.enabled_gemini = enabled,
+            "opencode" => row.enabled_opencode = enabled,
             _ => return Err(format!("不支持的 app: {}", app)),
         }
 
@@ -342,6 +346,7 @@ impl SkillServiceV2 {
             "claude" => row.enabled_claude,
             "codex" => row.enabled_codex,
             "gemini" => row.enabled_gemini,
+            "opencode" => row.enabled_opencode,
             _ => false,
         }
     }
@@ -402,6 +407,7 @@ impl SkillServiceV2 {
             ("claude", vec!["claude"]),
             ("codex", vec!["codex"]),
             ("gemini", vec!["gemini"]),
+            ("opencode", vec!["opencode"]),
         ] {
             if let Ok(dir) = get_app_skills_dir(app_name) {
                 scan_sources.push((dir, app_name.to_string(), apps));
@@ -500,6 +506,7 @@ impl SkillServiceV2 {
                     enabled_claude: default_apps.contains(&"claude"),
                     enabled_codex: default_apps.contains(&"codex"),
                     enabled_gemini: default_apps.contains(&"gemini"),
+                    enabled_opencode: default_apps.contains(&"opencode"),
                     installed_at: now,
                 };
 
@@ -592,6 +599,9 @@ impl SkillServiceV2 {
         }
         if row.enabled_gemini {
             let _ = sync_to_app_dir(&row.directory, "gemini");
+        }
+        if row.enabled_opencode {
+            let _ = sync_to_app_dir(&row.directory, "opencode");
         }
 
         Ok(())

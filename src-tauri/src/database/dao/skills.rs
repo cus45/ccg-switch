@@ -18,6 +18,9 @@ pub struct InstalledSkillRow {
     pub enabled_codex: bool,
     pub enabled_gemini: bool,
     pub installed_at: i64,
+    /// 旧版本导出的数据没有该字段
+    #[serde(default)]
+    pub enabled_opencode: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +37,7 @@ impl Database {
     pub fn get_all_installed_skills(&self) -> Result<IndexMap<String, InstalledSkillRow>, String> {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
-            .prepare("SELECT id, name, description, directory, repo_owner, repo_name, repo_branch, readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at FROM skills ORDER BY name ASC")
+            .prepare("SELECT id, name, description, directory, repo_owner, repo_name, repo_branch, readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at, enabled_opencode FROM skills ORDER BY name ASC")
             .map_err(|e| format!("Failed to prepare query: {e}"))?;
 
         let rows = stmt
@@ -52,6 +55,7 @@ impl Database {
                     enabled_codex: row.get(9)?,
                     enabled_gemini: row.get(10)?,
                     installed_at: row.get(11)?,
+                    enabled_opencode: row.get(12)?,
                 })
             })
             .map_err(|e| format!("Failed to query skills: {e}"))?;
@@ -67,7 +71,7 @@ impl Database {
     pub fn save_skill(&self, skill: &InstalledSkillRow) -> Result<(), String> {
         let conn = lock_conn!(self.conn);
         conn.execute(
-            "INSERT OR REPLACE INTO skills (id, name, description, directory, repo_owner, repo_name, repo_branch, readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT OR REPLACE INTO skills (id, name, description, directory, repo_owner, repo_name, repo_branch, readme_url, enabled_claude, enabled_codex, enabled_gemini, installed_at, enabled_opencode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             rusqlite::params![
                 skill.id,
                 skill.name,
@@ -81,6 +85,7 @@ impl Database {
                 skill.enabled_codex,
                 skill.enabled_gemini,
                 skill.installed_at,
+                skill.enabled_opencode,
             ],
         )
         .map_err(|e| format!("Failed to save skill: {e}"))?;

@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub struct PromptServiceV2;
 
 /// 支持的应用类型常量
-const PROMPT_APPS: &[&str] = &["claude", "codex", "gemini"];
+const PROMPT_APPS: &[&str] = &["claude", "codex", "gemini", "opencode"];
 
 impl PromptServiceV2 {
     /// 获取 live 文件路径
@@ -17,6 +17,8 @@ impl PromptServiceV2 {
             "claude" => Ok(home.join(".claude").join("CLAUDE.md")),
             "codex" => Ok(home.join(".codex").join("AGENTS.md")),
             "gemini" => Ok(home.join(".gemini").join("GEMINI.md")),
+            // 与 cc-switch 一致：OpenCode 全局规则文件
+            "opencode" => Ok(home.join(".config").join("opencode").join("AGENTS.md")),
             _ => Err(format!("Unknown app_type: {}", app_type)),
         }
     }

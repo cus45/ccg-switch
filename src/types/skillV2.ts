@@ -12,6 +12,7 @@ export interface InstalledSkillRow {
     enabledClaude: boolean;
     enabledCodex: boolean;
     enabledGemini: boolean;
+    enabledOpencode?: boolean;
     installedAt: number;
 }
 
@@ -35,8 +36,9 @@ export interface DiscoverableSkill {
     stars?: number;
 }
 
-export const SKILL_APPS: { key: keyof Pick<InstalledSkillRow, 'enabledClaude' | 'enabledCodex' | 'enabledGemini'>; label: string; app: string }[] = [
+export const SKILL_APPS: { key: keyof Pick<InstalledSkillRow, 'enabledClaude' | 'enabledCodex' | 'enabledGemini' | 'enabledOpencode'>; label: string; app: string }[] = [
     { key: 'enabledClaude', label: 'Claude', app: 'claude' },
     { key: 'enabledCodex', label: 'Codex', app: 'codex' },
     { key: 'enabledGemini', label: 'Gemini', app: 'gemini' },
+    { key: 'enabledOpencode', label: 'OpenCode', app: 'opencode' },
 ];
