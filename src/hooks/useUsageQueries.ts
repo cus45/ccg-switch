@@ -7,15 +7,24 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as usageApi from '../services/usage';
-import type { LogFilters, PricingModelSource, TimeRange } from '../types/usage';
+import type {
+    LogFilters,
+    PricingModelSource,
+    StatsFilters,
+    UsageRangeSelection,
+} from '../types/usage';
 
 /** 查询键命名空间 —— 失效时按前缀批量清理 */
 export const usageKeys = {
     all: ['usage'] as const,
-    summary: (range: TimeRange) => ['usage', 'summary', range] as const,
-    trends: (range: TimeRange) => ['usage', 'trends', range] as const,
-    providerStats: (range: TimeRange) => ['usage', 'providerStats', range] as const,
-    modelStats: (range: TimeRange) => ['usage', 'modelStats', range] as const,
+    summary: (range: UsageRangeSelection, filters: StatsFilters) =>
+        ['usage', 'summary', range, filters] as const,
+    trends: (range: UsageRangeSelection, filters: StatsFilters) =>
+        ['usage', 'trends', range, filters] as const,
+    providerStats: (range: UsageRangeSelection, filters: StatsFilters) =>
+        ['usage', 'providerStats', range, filters] as const,
+    modelStats: (range: UsageRangeSelection, filters: StatsFilters) =>
+        ['usage', 'modelStats', range, filters] as const,
     logs: (filters: LogFilters, page: number, pageSize: number) =>
         ['usage', 'logs', filters, page, pageSize] as const,
     detail: (requestId: string) => ['usage', 'detail', requestId] as const,
@@ -51,36 +60,52 @@ function aggregateQueryOptions(refreshMs: number) {
     };
 }
 
-export function useUsageSummary(range: TimeRange, refreshMs: number) {
+export function useUsageSummary(
+    range: UsageRangeSelection,
+    filters: StatsFilters,
+    refreshMs: number
+) {
     return useQuery({
-        queryKey: usageKeys.summary(range),
-        queryFn: () => usageApi.getUsageSummary(range),
+        queryKey: usageKeys.summary(range, filters),
+        queryFn: () => usageApi.getUsageSummary(range, filters),
         ...aggregateQueryOptions(refreshMs),
     });
 }
 
-export function useUsageTrends(range: TimeRange, refreshMs: number) {
+export function useUsageTrends(
+    range: UsageRangeSelection,
+    filters: StatsFilters,
+    refreshMs: number
+) {
     return useQuery({
-        queryKey: usageKeys.trends(range),
-        queryFn: () => usageApi.getUsageTrends(range),
+        queryKey: usageKeys.trends(range, filters),
+        queryFn: () => usageApi.getUsageTrends(range, filters),
         ...aggregateQueryOptions(refreshMs),
     });
 }
 
-/** 供应商聚合 —— 带时间范围，与汇总卡同步刷新 */
-export function useProviderStats(range: TimeRange, refreshMs: number) {
+/** 供应商聚合 —— 时间范围与筛选口径跟汇总卡一致 */
+export function useProviderStats(
+    range: UsageRangeSelection,
+    filters: StatsFilters,
+    refreshMs: number
+) {
     return useQuery({
-        queryKey: usageKeys.providerStats(range),
-        queryFn: () => usageApi.getProviderStats(range),
+        queryKey: usageKeys.providerStats(range, filters),
+        queryFn: () => usageApi.getProviderStats(range, filters),
         ...aggregateQueryOptions(refreshMs),
     });
 }
 
-/** 模型聚合 —— 带时间范围 */
-export function useModelStats(range: TimeRange, refreshMs: number) {
+/** 模型聚合 —— 时间范围与筛选口径跟汇总卡一致 */
+export function useModelStats(
+    range: UsageRangeSelection,
+    filters: StatsFilters,
+    refreshMs: number
+) {
     return useQuery({
-        queryKey: usageKeys.modelStats(range),
-        queryFn: () => usageApi.getModelStats(range),
+        queryKey: usageKeys.modelStats(range, filters),
+        queryFn: () => usageApi.getModelStats(range, filters),
         ...aggregateQueryOptions(refreshMs),
     });
 }

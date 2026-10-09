@@ -7,13 +7,15 @@ import {
     formatTokensPerSecond,
     getLocaleFromLanguage,
 } from '../../utils/format';
-import type { TimeRange } from '../../types/usage';
+import type { StatsFilters, UsageRangeSelection } from '../../types/usage';
 import { cn } from '../../utils/cn';
 import { getUsageProviderLabel, usageProviderTitle } from './providerLabel';
 import { card, chip, emptyState, row, tableWrap, thead, type ChipTone } from './styles';
 
 interface ProviderStatsTableProps {
-    range: TimeRange;
+    range: UsageRangeSelection;
+    /** 顶部筛选行下发的全局筛选（应用 / 供应商 / 模型） */
+    filters: StatsFilters;
     refreshMs: number;
 }
 
@@ -31,9 +33,13 @@ function successTone(rate: number): ChipTone {
  * Tokens 与汇总卡「真实消耗」同口径，各行之和等于顶部总数；
  * 后端已按请求数排序。
  */
-export function ProviderStatsTable({ range, refreshMs }: ProviderStatsTableProps) {
+export function ProviderStatsTable({ range, filters, refreshMs }: ProviderStatsTableProps) {
     const { t, i18n } = useTranslation();
-    const { data: stats, isLoading, isPlaceholderData } = useProviderStats(range, refreshMs);
+    const { data: stats, isLoading, isPlaceholderData } = useProviderStats(
+        range,
+        filters,
+        refreshMs
+    );
     const locale = getLocaleFromLanguage(i18n.resolvedLanguage || i18n.language);
 
     if (isLoading) {

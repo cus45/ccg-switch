@@ -17,7 +17,9 @@ import type {
     ModelPricingInfo,
     ProviderLimitStatus,
     SessionScanResult,
+    StatsFilters,
     TimeRange,
+    UsageRangeSelection,
     PricingModelSource,
 } from '../types/usage';
 
@@ -32,9 +34,17 @@ export const RANGE_LABEL_KEYS: Record<TimeRange, string> = {
     '30d': 'usage.last30days',
 };
 
-/** 是否按小时分桶展示（今天、24 小时） */
-export function isHourlyRange(range: TimeRange): boolean {
-    return range === 'today' || range === '1d';
+/**
+ * 是否按小时分桶展示
+ *
+ * 预设「今天 / 24 小时」按小时；自定义区间看实际跨度（≤ 24h 才按小时）。
+ */
+export function isHourlyRange(selection: UsageRangeSelection): boolean {
+    if (selection.preset !== 'custom') {
+        return selection.preset === 'today' || selection.preset === '1d';
+    }
+    const { startDate, endDate } = resolveUsageRange(selection);
+    return endDate - startDate <= 24 * 3600;
 }
 
 /**
@@ -57,26 +67,70 @@ export function getTimeWindow(
     return { startDate: endDate - hours * 3600, endDate };
 }
 
-export async function getUsageSummary(range: TimeRange): Promise<UsageSummary> {
-    const { startDate, endDate } = getTimeWindow(range);
-    return invoke('get_usage_summary', { startDate, endDate });
+/** 自定义区间默认跨度：24 小时（没填起止时按它兜底） */
+const DEFAULT_CUSTOM_RANGE_SECONDS = 24 * 3600;
+
+/**
+ * 把顶部的时间范围选择解析成 Unix 秒窗口
+ *
+ * 预设走 `getTimeWindow`；`custom` 用显式起止，`liveEndTime` 让终点始终是「现在」。
+ */
+export function resolveUsageRange(
+    selection: UsageRangeSelection,
+    nowMs: number = Date.now()
+): { startDate: number; endDate: number } {
+    if (selection.preset !== 'custom') {
+        return getTimeWindow(selection.preset, nowMs);
+    }
+    const nowSeconds = Math.floor(nowMs / 1000);
+    return {
+        startDate: selection.customStartDate ?? nowSeconds - DEFAULT_CUSTOM_RANGE_SECONDS,
+        endDate: selection.liveEndTime ? nowSeconds : (selection.customEndDate ?? nowSeconds),
+    };
 }
 
-export async function getUsageTrends(range: TimeRange): Promise<DailyStats[]> {
-    const { startDate, endDate } = getTimeWindow(range);
-    return invoke('get_usage_trends', { startDate, endDate });
+/** 把筛选条件转成命令参数；空值交给后端按「不筛选」处理 */
+function filterArgs(filters: StatsFilters) {
+    return {
+        appType: filters.appType,
+        providerName: filters.providerName,
+        model: filters.model,
+    };
 }
 
-/** 供应商聚合 —— 时间窗口与汇总卡一致 */
-export async function getProviderStats(range: TimeRange): Promise<ProviderStats[]> {
-    const { startDate, endDate } = getTimeWindow(range);
-    return invoke('get_provider_stats', { startDate, endDate });
+/** 汇总卡 —— 时间窗口与顶部筛选行同时生效 */
+export async function getUsageSummary(
+    range: UsageRangeSelection,
+    filters: StatsFilters = {}
+): Promise<UsageSummary> {
+    const { startDate, endDate } = resolveUsageRange(range);
+    return invoke('get_usage_summary', { startDate, endDate, ...filterArgs(filters) });
 }
 
-/** 模型聚合 —— 时间窗口与汇总卡一致 */
-export async function getModelStats(range: TimeRange): Promise<ModelStats[]> {
-    const { startDate, endDate } = getTimeWindow(range);
-    return invoke('get_model_stats', { startDate, endDate });
+export async function getUsageTrends(
+    range: UsageRangeSelection,
+    filters: StatsFilters = {}
+): Promise<DailyStats[]> {
+    const { startDate, endDate } = resolveUsageRange(range);
+    return invoke('get_usage_trends', { startDate, endDate, ...filterArgs(filters) });
+}
+
+/** 供应商聚合 —— 时间窗口与筛选口径跟汇总卡一致 */
+export async function getProviderStats(
+    range: UsageRangeSelection,
+    filters: StatsFilters = {}
+): Promise<ProviderStats[]> {
+    const { startDate, endDate } = resolveUsageRange(range);
+    return invoke('get_provider_stats', { startDate, endDate, ...filterArgs(filters) });
+}
+
+/** 模型聚合 —— 时间窗口与筛选口径跟汇总卡一致 */
+export async function getModelStats(
+    range: UsageRangeSelection,
+    filters: StatsFilters = {}
+): Promise<ModelStats[]> {
+    const { startDate, endDate } = resolveUsageRange(range);
+    return invoke('get_model_stats', { startDate, endDate, ...filterArgs(filters) });
 }
 
 export async function getRequestLogs(

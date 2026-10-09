@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { UsageSummaryCards } from '../components/usage/UsageSummaryCards';
 import {type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState} from 'react';
 import {useDashboardStore} from '../stores/useDashboardStore';
-import type {TimeRange} from '../types/usage';
+import type {UsageRangeSelection} from '../types/usage';
 
 interface PieShareItem {
     name: string;
@@ -37,7 +37,7 @@ function Dashboard() {
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
     const [sessionStatsExpanded, setSessionStatsExpanded] = useState(false);
     // 概览固定 7 天窗口；时间范围切换在 /usage 页面
-    const usageTimeRange: TimeRange = '7d';
+    const usageRange: UsageRangeSelection = { preset: '7d' };
     const usageRefreshMs = 0;
 
     useEffect(() => {
@@ -210,7 +210,7 @@ function Dashboard() {
                         </Link>
                     </div>
 
-                    <UsageSummaryCards range={usageTimeRange} refreshMs={usageRefreshMs} />
+                    <UsageSummaryCards range={usageRange} filters={{}} refreshMs={usageRefreshMs} />
                 </div>
 
                 {/* Session Stats Section (Collapsible) */}

@@ -12,14 +12,16 @@ import {
 } from 'recharts';
 import { useUsageTrends } from '../../hooks/useUsageQueries';
 import { formatCost, getLocaleFromLanguage, parseFiniteNumber } from '../../utils/format';
-import type { TimeRange } from '../../types/usage';
+import type { StatsFilters, UsageRangeSelection } from '../../types/usage';
 import { isHourlyRange } from '../../services/usage';
 import { cn } from '../../utils/cn';
 import { UsageChartSkeleton } from './UsageChartSkeleton';
 import { card, chip } from './styles';
 
 interface UsageTrendChartProps {
-    range: TimeRange;
+    range: UsageRangeSelection;
+    /** 顶部筛选行下发的全局筛选（应用 / 供应商 / 模型） */
+    filters: StatsFilters;
     refreshMs: number;
 }
 
@@ -70,9 +72,13 @@ function TrendTooltip({ active, payload, label, locale }: TrendTooltipProps) {
     );
 }
 
-export function UsageTrendChart({ range, refreshMs }: UsageTrendChartProps) {
+export function UsageTrendChart({ range, filters, refreshMs }: UsageTrendChartProps) {
     const { t, i18n } = useTranslation();
-    const { data: trends, isLoading, isPlaceholderData } = useUsageTrends(range, refreshMs);
+    const { data: trends, isLoading, isPlaceholderData } = useUsageTrends(
+        range,
+        filters,
+        refreshMs
+    );
 
     const isToday = isHourlyRange(range);
     const dateLocale = getLocaleFromLanguage(i18n.resolvedLanguage || i18n.language);
@@ -116,13 +122,15 @@ export function UsageTrendChart({ range, refreshMs }: UsageTrendChartProps) {
                     {t('usage.trends')}
                 </h3>
                 <span className={chip('neutral')}>
-                    {range === 'today'
+                    {range.preset === 'today'
                         ? t('usage.rangeThisDay')
-                        : range === '1d'
-                        ? t('usage.rangeToday')
-                        : range === '7d'
-                          ? t('usage.rangeLast7Days')
-                          : t('usage.rangeLast30Days')}
+                        : range.preset === '1d'
+                          ? t('usage.rangeToday')
+                          : range.preset === '7d'
+                            ? t('usage.rangeLast7Days')
+                            : range.preset === '30d'
+                              ? t('usage.rangeLast30Days')
+                              : t('usage.customRange')}
                 </span>
             </div>
 

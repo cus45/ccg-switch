@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
     Activity,
+    AlertCircle,
     BarChart3,
     Coins,
     ListFilter,
@@ -10,18 +11,36 @@ import {
     ScanLine,
     type LucideIcon,
 } from 'lucide-react';
-import { usageKeys, useScanSessionUsage } from '../hooks/useUsageQueries';
-import { RANGE_LABEL_KEYS, TIME_RANGES } from '../services/usage';
+import {
+    usageKeys,
+    useModelStats,
+    useProviderStats,
+    useScanSessionUsage,
+} from '../hooks/useUsageQueries';
+import { RANGE_LABEL_KEYS, TIME_RANGES, resolveUsageRange } from '../services/usage';
 import { UsageSummaryCards } from '../components/usage/UsageSummaryCards';
 import { UsageChartSkeleton } from '../components/usage/UsageChartSkeleton';
 import { RequestLogTable } from '../components/usage/RequestLogTable';
 import { ProviderStatsTable } from '../components/usage/ProviderStatsTable';
 import { ModelStatsTable } from '../components/usage/ModelStatsTable';
 import { PricingConfigPanel } from '../components/usage/PricingConfigPanel';
+import { getUsageProviderLabel } from '../components/usage/providerLabel';
 import { showToast } from '../components/common/ToastContainer';
-import { card, ghostBtn, muted, segment, segmentItem } from '../components/usage/styles';
+import {
+    card,
+    fieldLabel,
+    ghostBtn,
+    muted,
+    segment,
+    segmentItem,
+    select,
+} from '../components/usage/styles';
 import { cn } from '../utils/cn';
-import type { RefreshInterval, TimeRange } from '../types/usage';
+import type {
+    RefreshInterval,
+    StatsFilters,
+    UsageRangeSelection,
+} from '../types/usage';
 
 // recharts 体积大，拆成独立 chunk：首屏先出卡片与骨架，图表代码到达后再填充
 const UsageTrendChart = lazy(() =>
@@ -37,6 +56,25 @@ const AUTO_SCAN_INTERVAL_MS = 120_000;
 /** 进页面后首次扫描的延迟：先让汇总 / 趋势 / 日志查询拿到数据库，首屏不被扫描抢占 */
 const INITIAL_SCAN_DELAY_MS = 1_000;
 
+/** 自定义区间最大跨度：30 天（与预设里最长的范围对齐） */
+const MAX_CUSTOM_RANGE_SECONDS = 30 * 24 * 3600;
+
+/** 日期时间输入框：不占满整行 */
+const datetimeInput = 'input input-bordered input-sm tabular-nums';
+
+/** Unix 秒 → `datetime-local` 需要的 `YYYY-MM-DDTHH:mm`（本地时区） */
+function toDatetimeLocal(ts: number): string {
+    const d = new Date(ts * 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** `datetime-local` 字符串 → Unix 秒，非法返回 null */
+function fromDatetimeLocal(value: string): number | null {
+    if (value.length < 16) return null;
+    const ms = new Date(value).getTime();
+    return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+}
 
 type Tab = 'logs' | 'providers' | 'models';
 const TABS: { key: Tab; icon: LucideIcon; labelKey: string }[] = [
@@ -45,17 +83,116 @@ const TABS: { key: Tab; icon: LucideIcon; labelKey: string }[] = [
     { key: 'models', icon: BarChart3, labelKey: 'usage.modelStats' },
 ];
 
+/** 供应商下拉选项：名字 + 请求数 */
+interface Option {
+    name: string;
+    count: number;
+}
+
+/** 把聚合结果按名字汇总出下拉选项，按请求数降序 */
+function toOptions<T>(
+    rows: T[] | undefined,
+    nameOf: (row: T) => string,
+    countOf: (row: T) => number,
+    selected: string | undefined
+): Option[] {
+    const counts = new Map<string, number>();
+    for (const row of rows ?? []) {
+        const name = nameOf(row);
+        counts.set(name, (counts.get(name) ?? 0) + countOf(row));
+    }
+    // 数据刷新后选中项可能掉出列表（如改了时间范围）；补回去保证用户看得见、能清除
+    if (selected && !counts.has(selected)) counts.set(selected, 0);
+    return Array.from(counts, ([name, count]) => ({ name, count })).sort(
+        (a, b) => b.count - a.count
+    );
+}
+
 export default function UsagePage() {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
 
     // 与参考项目一致：默认 1d 窗口 + 30s 自动刷新
-    const [timeRange, setTimeRange] = useState<TimeRange>('1d');
+    const [range, setRange] = useState<UsageRangeSelection>({ preset: '1d' });
+    const [appType, setAppType] = useState('all');
+    const [providerName, setProviderName] = useState<string | undefined>(undefined);
+    const [model, setModel] = useState<string | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<Tab>('logs');
     const [refreshMs, setRefreshMs] = useState<RefreshInterval>(30000);
     const [pricingOpen, setPricingOpen] = useState(false);
 
     const scanSession = useScanSessionUsage();
+
+    /** 顶部筛选行下发的全局筛选；'all' 不下发 */
+    const filters: StatsFilters = useMemo(
+        () => ({
+            appType: appType === 'all' ? undefined : appType,
+            providerName,
+            model,
+        }),
+        [appType, providerName, model]
+    );
+
+    // 下拉选项池：供应商只跟应用 / 时间范围走（不受自身选中值影响）；
+    // 模型随所选供应商级联 —— 与参考项目一致。
+    const { data: providerRows } = useProviderStats(range, { appType: filters.appType }, refreshMs);
+    const { data: modelRows } = useModelStats(
+        range,
+        { appType: filters.appType, providerName },
+        refreshMs
+    );
+    const providerOptions = useMemo(
+        () =>
+            toOptions(
+                providerRows,
+                (row) => row.providerName,
+                (row) => row.requestCount,
+                providerName
+            ),
+        [providerRows, providerName]
+    );
+    const modelOptions = useMemo(
+        () => toOptions(modelRows, (row) => row.model, (row) => row.requestCount, model),
+        [modelRows, model]
+    );
+
+    // 切应用清掉下游筛选，避免留下一个在新范围内查无数据的「幽灵」组合；切供应商同理清模型
+    const changeAppType = (next: string) => {
+        setAppType(next);
+        if (next !== appType) {
+            setProviderName(undefined);
+            setModel(undefined);
+        }
+    };
+    const changeProviderName = (next: string | undefined) => {
+        setProviderName(next);
+        if (next !== providerName) setModel(undefined);
+    };
+
+    /** 自定义区间的校验：只看 custom 预设 */
+    const rangeError = useMemo(() => {
+        if (range.preset !== 'custom') return null;
+        const { startDate, endDate } = resolveUsageRange(range);
+        if (startDate > endDate) return t('usage.invalidTimeRangeOrder');
+        if (endDate - startDate > MAX_CUSTOM_RANGE_SECONDS) return t('usage.timeRangeTooLarge');
+        return null;
+    }, [range, t]);
+
+    /** 切到自定义：以当前窗口为起点，用户在此基础上改 */
+    const switchToCustom = () => {
+        const { startDate, endDate } = resolveUsageRange(range);
+        setRange({
+            preset: 'custom',
+            customStartDate: startDate,
+            customEndDate: endDate,
+            liveEndTime: false,
+        });
+    };
+
+    const handleCustomTime = (key: 'customStartDate' | 'customEndDate', value: string) => {
+        const ts = fromDatetimeLocal(value);
+        setRange((prev) => ({ ...prev, preset: 'custom', [key]: ts ?? undefined }));
+    };
 
     // 进页面延后 1s 扫一次，之后每 2 分钟自动扫 —— 会话文件是外部写入的，
     // 没有事件可监听，只能靠定时轮询。扫描是文件级增量，稳态下只是 stat 一遍文件。
@@ -106,6 +243,13 @@ export default function UsagePage() {
             onError: (e) => showToast(String(e), 'error'),
         });
 
+    const displayStart =
+        range.preset === 'custom' && range.customStartDate != null
+            ? range.customStartDate
+            : undefined;
+    const displayEnd =
+        range.preset === 'custom' && range.customEndDate != null ? range.customEndDate : undefined;
+
     return (
         <div className="h-full w-full overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -151,29 +295,159 @@ export default function UsagePage() {
                                 {refreshMs > 0 ? `${refreshMs / 1000}s` : '--'}
                             </span>
                         </button>
-                        <div className={segment} role="tablist" aria-label={t('usage.timeRange')}>
-                            {TIME_RANGES.map((r) => (
-                                <button
-                                    key={r}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={timeRange === r}
-                                    className={segmentItem(timeRange === r)}
-                                    onClick={() => setTimeRange(r)}
-                                >
-                                    {t(RANGE_LABEL_KEYS[r])}
-                                </button>
-                            ))}
-                        </div>
                     </div>
                 </div>
 
+                {/* 顶部全局筛选行：作用范围是整页 —— 汇总、趋势与三张明细表 */}
+                <div className={cn(card, 'p-4')}>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                        <label className="block">
+                            <span className={fieldLabel}>{t('usage.appType')}</span>
+                            <select
+                                className={select}
+                                value={appType}
+                                onChange={(e) => changeAppType(e.target.value)}
+                            >
+                                <option value="all">{t('usage.allApps')}</option>
+                                <option value="claude">Claude</option>
+                                <option value="codex">Codex</option>
+                                <option value="gemini">Gemini</option>
+                            </select>
+                        </label>
+
+                        <label className="block">
+                            <span className={fieldLabel}>{t('usage.providerFilter.label')}</span>
+                            <select
+                                className={select}
+                                value={providerName ?? ''}
+                                title={t('usage.providerFilter.title')}
+                                onChange={(e) => changeProviderName(e.target.value || undefined)}
+                            >
+                                <option value="">{t('usage.providerFilter.all')}</option>
+                                {providerOptions.map((option) => (
+                                    <option key={option.name} value={option.name}>
+                                        {`${getUsageProviderLabel(option.name, t).label} (${option.count})`}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="block">
+                            <span className={fieldLabel}>{t('usage.modelFilter.label')}</span>
+                            <select
+                                className={select}
+                                value={model ?? ''}
+                                title={t('usage.modelFilter.title')}
+                                onChange={(e) => setModel(e.target.value || undefined)}
+                            >
+                                <option value="">{t('usage.allModels')}</option>
+                                {modelOptions.map((option) => (
+                                    <option key={option.name} value={option.name}>
+                                        {`${option.name} (${option.count})`}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                    </div>
+
+                    <div className="mt-3">
+                        <span className={fieldLabel}>{t('usage.timeRange')}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div
+                                className={segment}
+                                role="radiogroup"
+                                aria-label={t('usage.timeRange')}
+                            >
+                                {TIME_RANGES.map((preset) => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={range.preset === preset}
+                                        className={segmentItem(range.preset === preset)}
+                                        onClick={() => setRange({ preset })}
+                                    >
+                                        {t(RANGE_LABEL_KEYS[preset])}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={range.preset === 'custom'}
+                                    className={segmentItem(range.preset === 'custom')}
+                                    onClick={switchToCustom}
+                                >
+                                    {t('usage.customRange')}
+                                </button>
+                            </div>
+
+                            {/* 自定义区间：显式起止 + 「结束时间跟随当前时刻」 */}
+                            {range.preset === 'custom' && (
+                                <>
+                                    <input
+                                        type="datetime-local"
+                                        className={datetimeInput}
+                                        value={
+                                            displayStart != null
+                                                ? toDatetimeLocal(displayStart)
+                                                : ''
+                                        }
+                                        onChange={(e) =>
+                                            handleCustomTime('customStartDate', e.target.value)
+                                        }
+                                    />
+                                    <span className={muted}>~</span>
+                                    <input
+                                        type="datetime-local"
+                                        className={cn(
+                                            datetimeInput,
+                                            range.liveEndTime && 'text-gray-400 dark:text-gray-500'
+                                        )}
+                                        disabled={range.liveEndTime}
+                                        value={
+                                            displayEnd != null ? toDatetimeLocal(displayEnd) : ''
+                                        }
+                                        onChange={(e) =>
+                                            handleCustomTime('customEndDate', e.target.value)
+                                        }
+                                    />
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                        <input
+                                            type="checkbox"
+                                            className="checkbox checkbox-xs"
+                                            checked={range.liveEndTime ?? false}
+                                            onChange={(e) =>
+                                                setRange((prev) => ({
+                                                    ...prev,
+                                                    liveEndTime: e.target.checked,
+                                                }))
+                                            }
+                                        />
+                                        {t('usage.liveEndTime')}
+                                    </label>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {rangeError && (
+                        <div
+                            role="alert"
+                            className="mt-3 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+                        >
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            {rangeError}
+                        </div>
+                    )}
+                </div>
+
                 {/* 汇总卡片 */}
-                <UsageSummaryCards range={timeRange} refreshMs={refreshMs} />
+                <UsageSummaryCards range={range} filters={filters} refreshMs={refreshMs} />
 
                 {/* 趋势图（懒加载：recharts 独立 chunk，先出骨架再填充） */}
                 <Suspense fallback={<UsageChartSkeleton />}>
-                    <UsageTrendChart range={timeRange} refreshMs={refreshMs} />
+                    <UsageTrendChart range={range} filters={filters} refreshMs={refreshMs} />
                 </Suspense>
 
                 {/* 明细标签页 */}
@@ -195,13 +469,13 @@ export default function UsagePage() {
                     </div>
 
                     {activeTab === 'logs' && (
-                        <RequestLogTable range={timeRange} refreshMs={refreshMs} />
+                        <RequestLogTable range={range} filters={filters} refreshMs={refreshMs} />
                     )}
                     {activeTab === 'providers' && (
-                        <ProviderStatsTable range={timeRange} refreshMs={refreshMs} />
+                        <ProviderStatsTable range={range} filters={filters} refreshMs={refreshMs} />
                     )}
                     {activeTab === 'models' && (
-                        <ModelStatsTable range={timeRange} refreshMs={refreshMs} />
+                        <ModelStatsTable range={range} filters={filters} refreshMs={refreshMs} />
                     )}
                 </div>
 

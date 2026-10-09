@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 
-import { getTimeWindow, isHourlyRange, TIME_RANGES } from './usage';
+import { getTimeWindow, isHourlyRange, resolveUsageRange, TIME_RANGES } from './usage';
 
 describe('getTimeWindow', () => {
     it('today 从本地今天 0 点开始，到现在结束', () => {
@@ -29,6 +29,52 @@ describe('getTimeWindow', () => {
 
 describe('isHourlyRange', () => {
     it('今天与 24 小时按小时分桶，7 天 / 30 天按天', () => {
-        expect(TIME_RANGES.filter(isHourlyRange)).toEqual(['today', '1d']);
+        const hourly = TIME_RANGES.filter((preset) => isHourlyRange({ preset }));
+        expect(hourly).toEqual(['today', '1d']);
+    });
+
+    it('自定义区间看实际跨度：≤24h 按小时，更长按天', () => {
+        const now = new Date(2026, 9, 9, 15, 0, 0).getTime();
+        const nowSec = Math.floor(now / 1000);
+        expect(
+            isHourlyRange({
+                preset: 'custom',
+                customStartDate: nowSec - 6 * 3600,
+                customEndDate: nowSec,
+            })
+        ).toBe(true);
+        expect(
+            isHourlyRange({
+                preset: 'custom',
+                customStartDate: nowSec - 3 * 24 * 3600,
+                customEndDate: nowSec,
+            })
+        ).toBe(false);
+    });
+});
+
+describe('resolveUsageRange', () => {
+    it('预设走 getTimeWindow', () => {
+        const now = Date.UTC(2026, 9, 9);
+        expect(resolveUsageRange({ preset: '7d' }, now)).toEqual(getTimeWindow('7d', now));
+    });
+
+    it('自定义区间用显式起止', () => {
+        const now = Date.UTC(2026, 9, 9);
+        const window = resolveUsageRange(
+            { preset: 'custom', customStartDate: 1000, customEndDate: 2000 },
+            now
+        );
+        expect(window).toEqual({ startDate: 1000, endDate: 2000 });
+    });
+
+    it('liveEndTime 让终点跟随当前时刻，忽略填写的结束时间', () => {
+        const now = Date.UTC(2026, 9, 9);
+        const window = resolveUsageRange(
+            { preset: 'custom', customStartDate: 1000, customEndDate: 2000, liveEndTime: true },
+            now
+        );
+        expect(window.startDate).toBe(1000);
+        expect(window.endDate).toBe(Math.floor(now / 1000));
     });
 });

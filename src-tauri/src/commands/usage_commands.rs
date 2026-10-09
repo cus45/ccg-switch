@@ -9,7 +9,7 @@ use crate::database::dao::usage_logs::ModelPricingRow;
 use crate::database::Database;
 use crate::models::usage::{
     DailyStats, LogFilters, ModelPricingInfo, ModelStats, PaginatedLogs, ProviderLimitStatus,
-    ProviderStats, RequestLogDetail, UsageSummary,
+    ProviderStats, RequestLogDetail, StatsFilters, UsageSummary,
 };
 use crate::proxy::usage::logger::{default_multiplier_key, pricing_model_source_key};
 use crate::store::AppState;
@@ -28,14 +28,25 @@ where
 }
 
 /// 汇总卡片
+///
+/// `app_type` / `provider_name` / `model` 是顶部筛选行传下来的全局筛选：
+/// 汇总、趋势、供应商、模型四张表必须吃同一套筛选，否则改筛选时部分数字不动。
 #[tauri::command]
 pub async fn get_usage_summary(
     state: State<'_, AppState>,
     start_date: Option<i64>,
     end_date: Option<i64>,
+    app_type: Option<String>,
+    provider_name: Option<String>,
+    model: Option<String>,
 ) -> Result<UsageSummary, String> {
     let db = state.db.clone();
-    run_blocking(move || db.get_usage_summary(start_date, end_date)).await
+    let filters = StatsFilters {
+        app_type,
+        provider_name,
+        model,
+    };
+    run_blocking(move || db.get_usage_summary(start_date, end_date, &filters)).await
 }
 
 /// 趋势图分桶数据
@@ -44,22 +55,38 @@ pub async fn get_usage_trends(
     state: State<'_, AppState>,
     start_date: Option<i64>,
     end_date: Option<i64>,
+    app_type: Option<String>,
+    provider_name: Option<String>,
+    model: Option<String>,
 ) -> Result<Vec<DailyStats>, String> {
     let db = state.db.clone();
-    run_blocking(move || db.get_daily_trends(start_date, end_date)).await
+    let filters = StatsFilters {
+        app_type,
+        provider_name,
+        model,
+    };
+    run_blocking(move || db.get_daily_trends(start_date, end_date, &filters)).await
 }
 
 /// 按 provider 聚合
 ///
-/// 时间窗口与汇总卡一致 —— 前端时间范围切换器覆盖全部统计表。
+/// 时间窗口与筛选口径与汇总卡一致 —— 前端顶部筛选行覆盖全部统计表。
 #[tauri::command]
 pub async fn get_provider_stats(
     state: State<'_, AppState>,
     start_date: Option<i64>,
     end_date: Option<i64>,
+    app_type: Option<String>,
+    provider_name: Option<String>,
+    model: Option<String>,
 ) -> Result<Vec<ProviderStats>, String> {
     let db = state.db.clone();
-    run_blocking(move || db.get_provider_stats(start_date, end_date)).await
+    let filters = StatsFilters {
+        app_type,
+        provider_name,
+        model,
+    };
+    run_blocking(move || db.get_provider_stats(start_date, end_date, &filters)).await
 }
 
 /// 按模型聚合
@@ -68,9 +95,17 @@ pub async fn get_model_stats(
     state: State<'_, AppState>,
     start_date: Option<i64>,
     end_date: Option<i64>,
+    app_type: Option<String>,
+    provider_name: Option<String>,
+    model: Option<String>,
 ) -> Result<Vec<ModelStats>, String> {
     let db = state.db.clone();
-    run_blocking(move || db.get_model_stats(start_date, end_date)).await
+    let filters = StatsFilters {
+        app_type,
+        provider_name,
+        model,
+    };
+    run_blocking(move || db.get_model_stats(start_date, end_date, &filters)).await
 }
 
 /// 请求日志分页

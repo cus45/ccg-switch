@@ -84,14 +84,26 @@ pub struct ModelStats {
 #[serde(rename_all = "camelCase")]
 pub struct LogFilters {
     pub app_type: Option<String>,
-    /// provider 名模糊匹配
+    /// provider 展示名精确匹配（顶部下拉的取值）
     pub provider_name: Option<String>,
-    /// 模型名模糊匹配
+    /// 模型名精确匹配（顶部下拉的取值）
     pub model: Option<String>,
     pub status_code: Option<u16>,
     /// Unix 秒
     pub start_date: Option<i64>,
     pub end_date: Option<i64>,
+}
+
+/// 聚合查询的筛选条件（应用 / 供应商 / 模型）
+///
+/// 汇总、趋势、供应商、模型四张聚合表共用，与请求日志表同一套匹配口径：
+/// 应用精确匹配；供应商按展示名精确匹配（会话占位行 "Claude (Session)" /
+/// "Codex (Session)" 也能选中）；模型精确匹配。
+#[derive(Debug, Clone, Default)]
+pub struct StatsFilters {
+    pub app_type: Option<String>,
+    pub provider_name: Option<String>,
+    pub model: Option<String>,
 }
 
 /// 单条请求日志

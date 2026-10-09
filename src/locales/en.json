@@ -55,7 +55,6 @@
     "rollingWindow": "Last 24 hours",
     "thisDay": "Today",
     "rangeThisDay": "Today (Hourly)",
-    "followRange": "Follow: {{range}}",
     "reasoningEffort": "Reasoning",
     "effortLevel": {
       "none": "Off",
@@ -88,11 +87,11 @@
       "label": "{{app}} · Session logs",
       "hint": "Read from the client's session logs when not routed through the proxy, so the provider can't be told apart"
     },
-    "fixedRange": "Fixed range",
+    "customRange": "Calendar filter",
+    "liveEndTime": "End time follows now",
     "timeRange": "Time Range",
     "statusCode": "Status Code",
     "pageOf": "Page {{page}} of {{pages}}",
-    "invalidTimeRange": "Please select both start and end time",
     "invalidTimeRangeOrder": "Start time cannot be later than end time",
     "timeRangeTooLarge": "Time range too large, up to 30 days",
     "totalRequests": "Total Requests",
@@ -127,8 +126,19 @@
     "totalRecords": "Total {{total}} records",
     "appType": "App Type",
     "allApps": "All Apps",
-    "searchProviderPlaceholder": "Search provider...",
-    "searchModelPlaceholder": "Search model...",
+    "providerFilter": {
+      "label": "Provider",
+      "all": "All providers",
+      "title": "Filter by provider"
+    },
+    "modelFilter": {
+      "label": "Model",
+      "title": "Filter by model (cascades from provider)"
+    },
+    "allModels": "All models",
+    "statusFilter": {
+      "all": "All status codes"
+    },
     "input": "Input",
     "output": "Output",
     "cacheWrite": "Write",

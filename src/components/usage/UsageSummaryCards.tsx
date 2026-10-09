@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { Activity, Database, DollarSign, Gauge, Layers, type LucideIcon } from 'lucide-react';
 import { useUsageSummary } from '../../hooks/useUsageQueries';
 import { formatCost, formatTokens, getLocaleFromLanguage } from '../../utils/format';
-import type { TimeRange } from '../../types/usage';
+import type { StatsFilters, UsageRangeSelection } from '../../types/usage';
 import { cn } from '../../utils/cn';
 import { card, cardHover, muted } from './styles';
 
 interface UsageSummaryCardsProps {
-    range: TimeRange;
+    range: UsageRangeSelection;
+    /** 顶部筛选行下发的全局筛选（应用 / 供应商 / 模型） */
+    filters: StatsFilters;
     refreshMs: number;
 }
 
@@ -118,9 +120,13 @@ function CacheHitRateCard({
     );
 }
 
-export function UsageSummaryCards({ range, refreshMs }: UsageSummaryCardsProps) {
+export function UsageSummaryCards({ range, filters, refreshMs }: UsageSummaryCardsProps) {
     const { t, i18n } = useTranslation();
-    const { data: summary, isLoading, isPlaceholderData } = useUsageSummary(range, refreshMs);
+    const { data: summary, isLoading, isPlaceholderData } = useUsageSummary(
+        range,
+        filters,
+        refreshMs
+    );
     const locale = getLocaleFromLanguage(i18n.resolvedLanguage || i18n.language);
 
     const inputTokens = summary?.totalInputTokens ?? 0;

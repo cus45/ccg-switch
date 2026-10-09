@@ -7,12 +7,12 @@
 use crate::database::{lock_conn, Database};
 use crate::models::usage::{
     DailyStats, LogFilters, ModelStats, PaginatedLogs, ProviderStats, RequestLogDetail,
-    UsageSummary,
+    StatsFilters, UsageSummary,
 };
 use crate::proxy::usage::calculator::{CostCalculator, ModelPricing};
 use crate::proxy::usage::parser::TokenUsage;
 use chrono::{Local, TimeZone};
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, ToSql};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -539,12 +539,14 @@ fn provider_name_coalesce(log_alias: &str, provider_alias: &str) -> String {
     )
 }
 
-/// 构造时间窗口 WHERE 子句
+/// 构造筛选条件（应用 / 供应商 / 模型）
 ///
-/// 返回 `(子句, 参数)`。`alias` 为空串表示无表别名的单表查询。
-/// 抽出来是因为汇总、趋势、provider、模型四张表的窗口口径必须完全一致 ——
-/// 各自拼一遍早晚会漏掉某一张，导致顶部切时间范围时部分表格数字不动。
-fn time_where(alias: &str, start_date: Option<i64>, end_date: Option<i64>) -> (String, Vec<i64>) {
+/// 与请求日志表同一套匹配口径：应用精确匹配；供应商按展示名精确匹配（会话占位行
+/// "Claude (Session)" / "Codex (Session)" 也能选中）；模型精确匹配。
+///
+/// `alias` 是日志表别名，空串表示无别名单表查询。供应商条件依赖 providers 表的
+/// `p` 别名 —— 调用方的 SQL 必须带 `LEFT JOIN providers p`。
+fn filter_conditions(alias: &str, filters: &StatsFilters) -> (Vec<String>, Vec<Box<dyn ToSql>>) {
     let col = |c: &str| {
         if alias.is_empty() {
             c.to_string()
@@ -554,15 +556,56 @@ fn time_where(alias: &str, start_date: Option<i64>, end_date: Option<i64>) -> (S
     };
 
     let mut conditions = Vec::new();
-    let mut params = Vec::new();
+    let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+    if let Some(app_type) = &filters.app_type {
+        conditions.push(format!("{} = ?", col("app_type")));
+        params.push(Box::new(app_type.clone()));
+    }
+    if let Some(name) = &filters.provider_name {
+        conditions.push(format!("{} = ?", provider_name_coalesce(alias, "p")));
+        params.push(Box::new(name.clone()));
+    }
+    if let Some(model) = &filters.model {
+        conditions.push(format!("{} = ?", col("model")));
+        params.push(Box::new(model.clone()));
+    }
+
+    (conditions, params)
+}
+
+/// 构造聚合查询的 WHERE 子句（时间窗口 + 应用/供应商/模型筛选）
+///
+/// 返回 `(子句, 参数)`。`alias` 为空串表示无表别名的单表查询。
+/// 抽出来是因为汇总、趋势、provider、模型四张表的口径必须完全一致 ——
+/// 各自拼一遍早晚会漏掉某一张，导致顶部切时间范围或改筛选时部分表格数字不动。
+fn stats_where(
+    alias: &str,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
+    filters: &StatsFilters,
+) -> (String, Vec<Box<dyn ToSql>>) {
+    let col = |c: &str| {
+        if alias.is_empty() {
+            c.to_string()
+        } else {
+            format!("{alias}.{c}")
+        }
+    };
+
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     if let Some(start) = start_date {
         conditions.push(format!("{} >= ?", col("created_at")));
-        params.push(start);
+        params.push(Box::new(start));
     }
     if let Some(end) = end_date {
         conditions.push(format!("{} <= ?", col("created_at")));
-        params.push(end);
+        params.push(Box::new(end));
     }
+
+    let (filter_conds, filter_params) = filter_conditions(alias, filters);
+    conditions.extend(filter_conds);
+    params.extend(filter_params);
 
     if conditions.is_empty() {
         (String::new(), params)
@@ -627,25 +670,29 @@ impl Database {
         &self,
         start_date: Option<i64>,
         end_date: Option<i64>,
+        filters: &StatsFilters,
     ) -> Result<UsageSummary, String> {
         let conn = lock_conn!(self.conn);
 
-        let (where_clause, params) = time_where("", start_date, end_date);
+        let (where_clause, params) = stats_where("l", start_date, end_date, filters);
 
-        let fresh_input = fresh_input_sql("");
+        let fresh_input = fresh_input_sql("l");
         let sql = format!(
             "SELECT
                 COUNT(*),
-                COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0),
+                COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0),
                 COALESCE(SUM({fresh_input}), 0),
-                COALESCE(SUM(output_tokens), 0),
-                COALESCE(SUM(cache_creation_tokens), 0),
-                COALESCE(SUM(cache_read_tokens), 0),
-                COALESCE(SUM(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 ELSE 0 END), 0)
-             FROM proxy_request_logs {where_clause}"
+                COALESCE(SUM(l.output_tokens), 0),
+                COALESCE(SUM(l.cache_creation_tokens), 0),
+                COALESCE(SUM(l.cache_read_tokens), 0),
+                COALESCE(SUM(CASE WHEN l.status_code >= 200 AND l.status_code < 300 THEN 1 ELSE 0 END), 0)
+             FROM proxy_request_logs l
+             LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
+             {where_clause}"
         );
+        let refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-        conn.query_row(&sql, rusqlite::params_from_iter(params.iter()), |row| {
+        conn.query_row(&sql, refs.as_slice(), |row| {
             let total_requests: i64 = row.get(0)?;
             let total_cost: f64 = row.get(1)?;
             let input = row.get::<_, i64>(2)?.max(0) as u64;
@@ -683,9 +730,10 @@ impl Database {
         &self,
         start_date: Option<i64>,
         end_date: Option<i64>,
+        filters: &StatsFilters,
     ) -> Result<Vec<DailyStats>, String> {
         let conn = lock_conn!(self.conn);
-        let fresh_input = fresh_input_sql("");
+        let fresh_input = fresh_input_sql("l");
 
         let end_ts = end_date.unwrap_or_else(|| Local::now().timestamp());
         let mut start_ts = start_date.unwrap_or(end_ts - DAY_SECONDS);
@@ -705,18 +753,20 @@ impl Database {
             ((duration as f64) / bucket_seconds as f64).ceil().max(1.0) as i64
         };
 
+        let (where_clause, filter_params) = stats_where("l", Some(start_ts), Some(end_ts), filters);
         let trends_sql = format!(
                 "SELECT
-                    CAST((created_at - ?1) / ?3 AS INTEGER) AS bucket_idx,
+                    CAST((l.created_at - ?) / ? AS INTEGER) AS bucket_idx,
                     COUNT(*),
-                    COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0),
-                    COALESCE(SUM({fresh_input} + output_tokens), 0),
+                    COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0),
+                    COALESCE(SUM({fresh_input} + l.output_tokens), 0),
                     COALESCE(SUM({fresh_input}), 0),
-                    COALESCE(SUM(output_tokens), 0),
-                    COALESCE(SUM(cache_creation_tokens), 0),
-                    COALESCE(SUM(cache_read_tokens), 0)
-                 FROM proxy_request_logs
-                 WHERE created_at >= ?1 AND created_at <= ?2
+                    COALESCE(SUM(l.output_tokens), 0),
+                    COALESCE(SUM(l.cache_creation_tokens), 0),
+                    COALESCE(SUM(l.cache_read_tokens), 0)
+                 FROM proxy_request_logs l
+                 LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
+                 {where_clause}
                  GROUP BY bucket_idx
                  ORDER BY bucket_idx ASC"
         );
@@ -724,8 +774,14 @@ impl Database {
             .prepare(&trends_sql)
             .map_err(|e| format!("Failed to prepare trends query: {e}"))?;
 
+        // 占位符顺序：桶基准、桶宽度、窗口起、窗口止、筛选
+        let mut trend_params: Vec<Box<dyn ToSql>> =
+            vec![Box::new(start_ts), Box::new(bucket_seconds)];
+        trend_params.extend(filter_params);
+        let trend_refs: Vec<&dyn ToSql> = trend_params.iter().map(|p| p.as_ref()).collect();
+
         let rows = stmt
-            .query_map(rusqlite::params![start_ts, end_ts, bucket_seconds], |row| {
+            .query_map(trend_refs.as_slice(), |row| {
                 let cost: f64 = row.get(2)?;
                 Ok((
                     row.get::<_, i64>(0)?,
@@ -790,10 +846,11 @@ impl Database {
         &self,
         start_date: Option<i64>,
         end_date: Option<i64>,
+        filters: &StatsFilters,
     ) -> Result<Vec<ProviderStats>, String> {
         let conn = lock_conn!(self.conn);
 
-        let (time_clause, time_params) = time_where("l", start_date, end_date);
+        let (where_clause, params) = stats_where("l", start_date, end_date, filters);
         let pname = provider_name_coalesce("l", "p");
         let real_total = real_total_tokens_sql("l");
         let speed_ok = speed_eligible_sql("l");
@@ -815,7 +872,7 @@ impl Database {
                     COALESCE(SUM(CASE WHEN {est_ok} THEN l.latency_ms ELSE 0 END), 0)
              FROM proxy_request_logs l
              LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
-             {time_clause}
+             {where_clause}
              GROUP BY l.provider_id, l.app_type
              ORDER BY 4 DESC, 8 DESC"
         );
@@ -824,8 +881,9 @@ impl Database {
             .prepare(&sql)
             .map_err(|e| format!("Failed to prepare provider stats query: {e}"))?;
 
+        let refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(time_params.iter()), |row| {
+            .query_map(refs.as_slice(), |row| {
                 let request_count: i64 = row.get(3)?;
                 let total_cost: f64 = row.get(7)?;
                 let success_count: i64 = row.get(8)?;
@@ -866,20 +924,22 @@ impl Database {
         &self,
         start_date: Option<i64>,
         end_date: Option<i64>,
+        filters: &StatsFilters,
     ) -> Result<Vec<ModelStats>, String> {
         let conn = lock_conn!(self.conn);
-        let real_total = real_total_tokens_sql("");
+        let real_total = real_total_tokens_sql("l");
 
-        let (time_clause, time_params) = time_where("", start_date, end_date);
+        let (where_clause, params) = stats_where("l", start_date, end_date, filters);
         let sql = format!(
-            "SELECT model, COUNT(*),
+            "SELECT l.model, COUNT(*),
                     COALESCE(SUM({real_total}), 0),
-                    COALESCE(SUM(cache_read_tokens), 0),
-                    COALESCE(SUM(cache_creation_tokens), 0),
-                    COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0)
-             FROM proxy_request_logs
-             {time_clause}
-             GROUP BY model
+                    COALESCE(SUM(l.cache_read_tokens), 0),
+                    COALESCE(SUM(l.cache_creation_tokens), 0),
+                    COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0)
+             FROM proxy_request_logs l
+             LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
+             {where_clause}
+             GROUP BY l.model
              ORDER BY 6 DESC"
         );
 
@@ -887,8 +947,9 @@ impl Database {
             .prepare(&sql)
             .map_err(|e| format!("Failed to prepare model stats query: {e}"))?;
 
+        let refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(time_params.iter()), |row| {
+            .query_map(refs.as_slice(), |row| {
                 let request_count: i64 = row.get(1)?;
                 let total_cost: f64 = row.get(5)?;
                 let avg = if request_count > 0 {
@@ -1070,12 +1131,14 @@ impl Database {
             params.push(Box::new(app_type.clone()));
         }
         if let Some(name) = &filters.provider_name {
-            conditions.push("COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' ELSE l.provider_id END) LIKE ?");
-            params.push(Box::new(format!("%{name}%")));
+            // 供应商 / 模型都来自顶部下拉的精确值，不做模糊匹配 ——
+            // 模糊匹配会让「gpt-5」把「gpt-5-mini」也算进来，与下拉里显示的计数对不上。
+            conditions.push("COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' ELSE l.provider_id END) = ?");
+            params.push(Box::new(name.clone()));
         }
         if let Some(model) = &filters.model {
-            conditions.push("l.model LIKE ?");
-            params.push(Box::new(format!("%{model}%")));
+            conditions.push("l.model = ?");
+            params.push(Box::new(model.clone()));
         }
         if let Some(status) = filters.status_code {
             conditions.push("l.status_code = ?");
@@ -1534,7 +1597,7 @@ mod tests {
         db.insert_request_log(&log_at("r2", 2000, "0.25", 200)).unwrap();
         db.insert_request_log(&log_at("r3", 3000, "0", 500)).unwrap();
 
-        let s = db.get_usage_summary(None, None).unwrap();
+        let s = db.get_usage_summary(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(s.total_requests, 3);
         assert_eq!(s.total_cost, "0.750000");
         assert_eq!(s.total_input_tokens, 300);
@@ -1551,7 +1614,7 @@ mod tests {
         db.insert_request_log(&log_at("old", 1_000, "1", 200)).unwrap();
         db.insert_request_log(&log_at("new", 100_000, "2", 200)).unwrap();
 
-        let s = db.get_usage_summary(Some(50_000), Some(200_000)).unwrap();
+        let s = db.get_usage_summary(Some(50_000), Some(200_000), &StatsFilters::default()).unwrap();
         assert_eq!(s.total_requests, 1, "窗口外的记录不能计入");
         assert_eq!(s.total_cost, "2.000000");
     }
@@ -1559,7 +1622,7 @@ mod tests {
     #[test]
     fn summary_of_empty_table_is_all_zero() {
         let db = Database::in_memory().unwrap();
-        let s = db.get_usage_summary(None, None).unwrap();
+        let s = db.get_usage_summary(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(s.total_requests, 0);
         assert_eq!(s.total_cost, "0.000000");
         assert_eq!(s.success_rate, 0.0, "空表不能除零");
@@ -1571,7 +1634,7 @@ mod tests {
         let end = 1_700_000_000i64;
         let start = end - 86_400;
 
-        let trends = db.get_daily_trends(Some(start), Some(end)).unwrap();
+        let trends = db.get_daily_trends(Some(start), Some(end), &StatsFilters::default()).unwrap();
         assert_eq!(trends.len(), 24, "≤24h 窗口固定 24 个小时桶");
     }
 
@@ -1581,7 +1644,7 @@ mod tests {
         let end = 1_700_000_000i64;
         let start = end - 7 * 86_400;
 
-        let trends = db.get_daily_trends(Some(start), Some(end)).unwrap();
+        let trends = db.get_daily_trends(Some(start), Some(end), &StatsFilters::default()).unwrap();
         assert_eq!(trends.len(), 7, "7 天窗口 7 个天桶");
     }
 
@@ -1594,7 +1657,7 @@ mod tests {
         db.insert_request_log(&log_at("r1", start + 60, "1.5", 200))
             .unwrap();
 
-        let trends = db.get_daily_trends(Some(start), Some(end)).unwrap();
+        let trends = db.get_daily_trends(Some(start), Some(end), &StatsFilters::default()).unwrap();
         assert_eq!(trends.len(), 24);
         assert_eq!(trends[0].request_count, 1);
         assert_eq!(trends[0].total_cost, "1.500000");
@@ -1609,7 +1672,7 @@ mod tests {
     fn trends_buckets_are_chronologically_ordered() {
         let db = Database::in_memory().unwrap();
         let end = 1_700_000_000i64;
-        let trends = db.get_daily_trends(Some(end - 86_400), Some(end)).unwrap();
+        let trends = db.get_daily_trends(Some(end - 86_400), Some(end), &StatsFilters::default()).unwrap();
 
         let dates: Vec<&str> = trends.iter().map(|t| t.date.as_str()).collect();
         let mut sorted = dates.clone();
@@ -1621,7 +1684,7 @@ mod tests {
     fn trends_handles_inverted_window_by_falling_back() {
         let db = Database::in_memory().unwrap();
         // start > end：应回退成 end 前 24h，而不是 panic 或返回空
-        let trends = db.get_daily_trends(Some(2_000_000), Some(1_000_000)).unwrap();
+        let trends = db.get_daily_trends(Some(2_000_000), Some(1_000_000), &StatsFilters::default()).unwrap();
         assert_eq!(trends.len(), 24);
     }
 
@@ -1633,7 +1696,7 @@ mod tests {
         // created_at == end 会算出 bucket_idx == 24（越界），必须归并到末桶
         db.insert_request_log(&log_at("edge", end, "1", 200)).unwrap();
 
-        let trends = db.get_daily_trends(Some(start), Some(end)).unwrap();
+        let trends = db.get_daily_trends(Some(start), Some(end), &StatsFilters::default()).unwrap();
         assert_eq!(trends.len(), 24);
         assert_eq!(
             trends[23].request_count, 1,
@@ -1647,7 +1710,7 @@ mod tests {
         db.insert_request_log(&log_at("r1", 1000, "1", 200)).unwrap();
         db.insert_request_log(&log_at("r2", 2000, "1", 500)).unwrap();
 
-        let stats = db.get_provider_stats(None, None).unwrap();
+        let stats = db.get_provider_stats(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].provider_id, "prov-1");
         // provider 表里没有这条记录 → 回落到 provider_id，历史记录仍可辨认
@@ -1669,16 +1732,87 @@ mod tests {
         db.insert_request_log(&log_at("old", 1000, "1", 200)).unwrap();
         db.insert_request_log(&log_at("new", 5000, "1", 200)).unwrap();
 
-        let windowed = db.get_provider_stats(Some(4000), Some(6000)).unwrap();
+        let windowed = db.get_provider_stats(Some(4000), Some(6000), &StatsFilters::default()).unwrap();
         assert_eq!(windowed.len(), 1);
         assert_eq!(windowed[0].request_count, 1, "窗口外的记录必须被过滤");
 
-        let all = db.get_provider_stats(None, None).unwrap();
+        let all = db.get_provider_stats(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(all[0].request_count, 2, "不限窗口时应返回全部");
 
-        let models = db.get_model_stats(Some(4000), Some(6000)).unwrap();
+        let models = db.get_model_stats(Some(4000), Some(6000), &StatsFilters::default()).unwrap();
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].request_count, 1);
+    }
+
+    /// 顶部筛选行：应用 / 供应商 / 模型三个筛选必须同时作用于汇总、趋势与两张统计表
+    #[test]
+    fn stats_respect_app_provider_and_model_filters() {
+        let db = Database::in_memory().unwrap();
+        // claude / prov-1 / claude-sonnet-4-5-20250929
+        db.insert_request_log(&log_at("c1", 1000, "1", 200)).unwrap();
+        // codex / prov-2 / gpt-5.2
+        let mut codex = log_at("x1", 1000, "1", 200);
+        codex.provider_id = "prov-2".into();
+        codex.app_type = "codex".into();
+        codex.model = "gpt-5.2".into();
+        db.insert_request_log(&codex).unwrap();
+
+        // 应用筛选
+        let by_app = db
+            .get_provider_stats(
+                None,
+                None,
+                &StatsFilters {
+                    app_type: Some("codex".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(by_app.len(), 1);
+        assert_eq!(by_app[0].app_type, "codex");
+        assert_eq!(by_app[0].request_count, 1);
+
+        // 供应商筛选：没有 providers 记录时按 provider_id 回落匹配
+        let by_provider = db
+            .get_model_stats(
+                None,
+                None,
+                &StatsFilters {
+                    provider_name: Some("prov-1".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(by_provider.len(), 1);
+        assert_eq!(by_provider[0].model, "claude-sonnet-4-5-20250929");
+
+        // 模型筛选（汇总卡也要跟随）
+        let by_model = db
+            .get_usage_summary(
+                None,
+                None,
+                &StatsFilters {
+                    model: Some("gpt-5.2".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(by_model.total_requests, 1);
+        assert_eq!(by_model.total_output_tokens, 50);
+
+        // 趋势同样吃筛选：窗口内两条记录，按应用筛选后只剩 claude 那条
+        let trends = db
+            .get_daily_trends(
+                Some(0),
+                Some(10_000),
+                &StatsFilters {
+                    app_type: Some("claude".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let total: u64 = trends.iter().map(|t| t.request_count).sum();
+        assert_eq!(total, 1, "趋势图也要跟随筛选");
     }
 
     /// 供应商的 total_tokens 是真实消耗，各行之和必须等于汇总卡的真实消耗
@@ -1688,12 +1822,12 @@ mod tests {
         // log_at 默认 input=100 / output=50 / cache_read=20 / cache_creation=10
         db.insert_request_log(&log_at("r1", 1000, "1", 200)).unwrap();
 
-        let stats = db.get_provider_stats(None, None).unwrap();
+        let stats = db.get_provider_stats(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(stats[0].total_tokens, 180);
         assert_eq!(stats[0].cache_read_tokens, 20);
         assert_eq!(stats[0].cache_creation_tokens, 10);
 
-        let summary = db.get_usage_summary(None, None).unwrap();
+        let summary = db.get_usage_summary(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(summary.real_total_tokens, 180);
     }
 
@@ -1711,7 +1845,7 @@ mod tests {
         codex.cache_creation_tokens = 0;
         db.insert_request_log(&codex).unwrap();
 
-        let s = db.get_usage_summary(None, None).unwrap();
+        let s = db.get_usage_summary(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(s.total_input_tokens, 100 + 400, "Codex 的命中不能再算进输入");
         // 命中 620 ÷（新鲜 500 + 写入 10 + 命中 620）
         let expected = 620.0 / 1130.0;
@@ -1732,7 +1866,7 @@ mod tests {
         db.insert_request_log(&codex).unwrap();
 
         let names: Vec<String> = db
-            .get_provider_stats(None, None)
+            .get_provider_stats(None, None, &StatsFilters::default())
             .unwrap()
             .into_iter()
             .map(|s| s.provider_name)
@@ -1837,7 +1971,7 @@ mod tests {
         plain.first_token_ms = None;
         db.insert_request_log(&plain).unwrap();
 
-        let s = &db.get_provider_stats(None, None).unwrap()[0];
+        let s = &db.get_provider_stats(None, None, &StatsFilters::default()).unwrap()[0];
         assert_eq!(s.speed_output_tokens, 500);
         assert_eq!(s.speed_generation_ms, 5000);
     }
@@ -1867,7 +2001,7 @@ mod tests {
         // 不计：路由服务记的行（data_source = proxy）
         insert("proxy-row", 2_000, 20_000, "proxy");
 
-        let s = &db.get_provider_stats(None, None).unwrap()[0];
+        let s = &db.get_provider_stats(None, None, &StatsFilters::default()).unwrap()[0];
         assert_eq!(s.est_speed_output_tokens, 2_200);
         assert_eq!(s.est_speed_duration_ms, 25_000);
         // 估算的不混进精确口径
@@ -1881,7 +2015,7 @@ mod tests {
         db.insert_request_log(&log_at("r1", 1000, "1", 200)).unwrap();
         db.insert_request_log(&log_at("r2", 2000, "3", 200)).unwrap();
 
-        let stats = db.get_model_stats(None, None).unwrap();
+        let stats = db.get_model_stats(None, None, &StatsFilters::default()).unwrap();
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].total_cost, "4.000000");
         assert_eq!(stats[0].avg_cost_per_request, "2.000000");
@@ -1947,20 +2081,22 @@ mod tests {
     }
 
     #[test]
-    fn request_logs_filter_by_model_substring() {
+    fn request_logs_filter_by_model_exact() {
         let db = Database::in_memory().unwrap();
         db.insert_request_log(&log_at("r1", 1000, "1", 200)).unwrap();
         let mut other = log_at("r2", 2000, "1", 200);
-        other.model = "gpt-5.2".into();
+        other.model = "claude-sonnet-4-5-20250929-mini".into();
         db.insert_request_log(&other).unwrap();
 
+        // 顶部下拉给的是精确模型名：前缀相同的另一个模型不能被算进来
+        // （旧的模糊匹配会把 -mini 也算上，和下拉里显示的计数对不上）
         let filters = LogFilters {
-            model: Some("sonnet".into()),
+            model: Some("claude-sonnet-4-5-20250929".into()),
             ..Default::default()
         };
         let result = db.get_request_logs(&filters, 0, 20).unwrap();
         assert_eq!(result.total, 1);
-        assert_eq!(result.data[0].model, "claude-sonnet-4-5-20250929");
+        assert_eq!(result.data[0].request_id, "r1");
     }
 
     #[test]

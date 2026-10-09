@@ -44,7 +44,6 @@
     "rollingWindow": "最近 24 小时",
     "thisDay": "今天",
     "rangeThisDay": "今天 (按小时)",
-    "followRange": "跟随：{{range}}",
     "reasoningEffort": "思考强度",
     "effortLevel": {
       "none": "关闭",
@@ -77,11 +76,11 @@
       "label": "{{app}} · 会话日志",
       "hint": "没走代理时从客户端的会话日志读取，分不出具体是哪家供应商"
     },
-    "fixedRange": "固定区间",
+    "customRange": "日历筛选",
+    "liveEndTime": "结束时间跟随当前时刻",
     "timeRange": "时间范围",
     "statusCode": "状态码",
     "pageOf": "第 {{page}} / {{pages}} 页",
-    "invalidTimeRange": "请选择完整的开始和结束时间",
     "invalidTimeRangeOrder": "开始时间不能晚于结束时间",
     "timeRangeTooLarge": "时间范围过大，最多支持 30 天",
     "totalRequests": "总请求数",
@@ -116,8 +115,19 @@
     "totalRecords": "共 {{total}} 条记录",
     "appType": "应用类型",
     "allApps": "全部应用",
-    "searchProviderPlaceholder": "搜索供应商...",
-    "searchModelPlaceholder": "搜索模型...",
+    "providerFilter": {
+      "label": "供应商",
+      "all": "全部供应商",
+      "title": "按供应商筛选"
+    },
+    "modelFilter": {
+      "label": "模型",
+      "title": "按模型筛选（随供应商级联）"
+    },
+    "allModels": "全部模型",
+    "statusFilter": {
+      "all": "全部状态码"
+    },
     "input": "Input",
     "output": "Output",
     "cacheWrite": "创建",

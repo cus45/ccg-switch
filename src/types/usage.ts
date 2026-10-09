@@ -77,15 +77,44 @@ export interface ModelStats {
 /** 请求日志过滤条件 */
 export interface LogFilters {
     appType?: string;
-    /** provider 名模糊匹配 */
+    /** provider 展示名精确匹配（顶部下拉的取值） */
     providerName?: string;
-    /** 模型名模糊匹配 */
+    /** 模型名精确匹配（顶部下拉的取值） */
     model?: string;
     statusCode?: number;
     /** Unix 秒 */
     startDate?: number;
     /** Unix 秒 */
     endDate?: number;
+}
+
+/**
+ * 顶部筛选行的筛选条件（应用 / 供应商 / 模型）
+ *
+ * 全局生效：同时驱动汇总卡、趋势图与三张明细表（请求日志 / 供应商 / 模型）。
+ */
+export interface StatsFilters {
+    appType?: string;
+    providerName?: string;
+    model?: string;
+}
+
+/** 时间范围预设（含自定义区间） */
+export type UsageRangePreset = TimeRange | 'custom';
+
+/**
+ * 顶部筛选行的时间范围选择
+ *
+ * `custom` 用显式起止；`liveEndTime` 让终点跟随当前时刻（即旧的「跟随」模式）。
+ */
+export interface UsageRangeSelection {
+    preset: UsageRangePreset;
+    /** preset = 'custom' 时的起始时刻（Unix 秒） */
+    customStartDate?: number;
+    /** preset = 'custom' 时的结束时刻（Unix 秒）；liveEndTime 为真时忽略 */
+    customEndDate?: number;
+    /** custom 模式下结束时间跟随当前时刻 */
+    liveEndTime?: boolean;
 }
 
 /** 单条请求日志 */

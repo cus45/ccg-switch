@@ -2,18 +2,20 @@ import { useTranslation } from 'react-i18next';
 import { Inbox } from 'lucide-react';
 import { useModelStats } from '../../hooks/useUsageQueries';
 import { formatCost, getLocaleFromLanguage } from '../../utils/format';
-import type { TimeRange } from '../../types/usage';
+import type { StatsFilters, UsageRangeSelection } from '../../types/usage';
 import { cn } from '../../utils/cn';
 import { card, emptyState, row, tableWrap, thead } from './styles';
 
 interface ModelStatsTableProps {
-    range: TimeRange;
+    range: UsageRangeSelection;
+    /** 顶部筛选行下发的全局筛选（应用 / 供应商 / 模型） */
+    filters: StatsFilters;
     refreshMs: number;
 }
 
-export function ModelStatsTable({ range, refreshMs }: ModelStatsTableProps) {
+export function ModelStatsTable({ range, filters, refreshMs }: ModelStatsTableProps) {
     const { t, i18n } = useTranslation();
-    const { data: stats, isLoading, isPlaceholderData } = useModelStats(range, refreshMs);
+    const { data: stats, isLoading, isPlaceholderData } = useModelStats(range, filters, refreshMs);
     const locale = getLocaleFromLanguage(i18n.resolvedLanguage || i18n.language);
 
     if (isLoading) {
