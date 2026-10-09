@@ -198,7 +198,9 @@
       "button": "Scan sessions",
       "imported": "Imported {{count}} session usage records",
       "nothingNew": "Scanned {{files}} session files, nothing new"
-    }
+    },
+    "viewProxy": "Proxy requests",
+    "viewSession": "Local sessions"
   },
   "chat": {
     "ready": "Ready",
@@ -1003,6 +1005,20 @@
       "export_no_accounts": "No accounts to export",
       "export_success": "Export successful! File saved to: {{path}}",
       "export_error": "Export failed"
+    },
+    "kpi": {
+      "title": "Usage overview",
+      "window": "Last 7 days",
+      "requests": "Requests",
+      "cost": "Cost",
+      "tokens": "Tokens",
+      "prompts": "Prompts",
+      "sessions": "Total sessions",
+      "projectsCount": "{{count}} projects",
+      "sourceProxy": "Proxy",
+      "sourceLocal": "Local",
+      "sourceProxyHint": "Requests forwarded and logged by the local proxy",
+      "sourceLocalHint": "Scanned from local ~/.claude session and history files"
     }
   },
   "prompts": {

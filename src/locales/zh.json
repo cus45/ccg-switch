@@ -187,7 +187,9 @@
       "button": "扫描会话",
       "imported": "已导入 {{count}} 条会话用量",
       "nothingNew": "扫描了 {{files}} 个会话文件，没有新记录"
-    }
+    },
+    "viewProxy": "代理请求",
+    "viewSession": "本地会话"
   },
   "chat": {
     "ready": "就绪",
@@ -961,7 +963,21 @@
     "token_summary_detail": "查看详情",
     "token_usage_desc": "查看 Token 消耗与费用分析",
     "project_token_title": "项目 Token 使用排行",
-    "project_token_empty": "暂无项目 Token 数据"
+    "project_token_empty": "暂无项目 Token 数据",
+    "kpi": {
+      "title": "使用概览",
+      "window": "近 7 天",
+      "requests": "请求数",
+      "cost": "费用",
+      "tokens": "Token",
+      "prompts": "提问数",
+      "sessions": "会话总数",
+      "projectsCount": "共 {{count}} 个项目",
+      "sourceProxy": "代理",
+      "sourceLocal": "本地",
+      "sourceProxyHint": "经本地代理转发并记录的请求",
+      "sourceLocalHint": "扫描本机 ~/.claude 会话与历史文件得出"
+    }
   },
   "prompts": {
     "title": "Prompt 预设管理",

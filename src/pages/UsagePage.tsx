@@ -1,12 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
     Activity,
     AlertCircle,
     BarChart3,
     Coins,
+    HardDrive,
     ListFilter,
+    Network,
     RefreshCw,
     ScanLine,
     type LucideIcon,
@@ -24,6 +27,7 @@ import { RequestLogTable } from '../components/usage/RequestLogTable';
 import { ProviderStatsTable } from '../components/usage/ProviderStatsTable';
 import { ModelStatsTable } from '../components/usage/ModelStatsTable';
 import { PricingConfigPanel } from '../components/usage/PricingConfigPanel';
+import SessionStatsSection from '../components/usage/session/SessionStatsSection';
 import { getUsageProviderLabel } from '../components/usage/providerLabel';
 import { showToast } from '../components/common/ToastContainer';
 import {
@@ -83,6 +87,12 @@ const TABS: { key: Tab; icon: LucideIcon; labelKey: string }[] = [
     { key: 'models', icon: BarChart3, labelKey: 'usage.modelStats' },
 ];
 
+type View = 'proxy' | 'session';
+const VIEWS: { key: View; icon: LucideIcon; labelKey: string }[] = [
+    { key: 'proxy', icon: Network, labelKey: 'usage.viewProxy' },
+    { key: 'session', icon: HardDrive, labelKey: 'usage.viewSession' },
+];
+
 /** 供应商下拉选项：名字 + 请求数 */
 interface Option {
     name: string;
@@ -120,6 +130,12 @@ export default function UsagePage() {
     const [activeTab, setActiveTab] = useState<Tab>('logs');
     const [refreshMs, setRefreshMs] = useState<RefreshInterval>(30000);
     const [pricingOpen, setPricingOpen] = useState(false);
+
+    // 视图记在 query 里：主页 / 其它入口可用 /usage?tab=session 直达本地会话
+    const [searchParams, setSearchParams] = useSearchParams();
+    const view: View = searchParams.get('tab') === 'session' ? 'session' : 'proxy';
+    const switchView = (next: View) =>
+        setSearchParams(next === 'session' ? { tab: 'session' } : {}, { replace: true });
 
     const scanSession = useScanSessionUsage();
 
@@ -267,6 +283,7 @@ export default function UsagePage() {
                         </div>
                     </div>
 
+                    {view === 'proxy' && (
                     <div className="flex flex-wrap items-center gap-2">
                         <button
                             type="button"
@@ -296,8 +313,28 @@ export default function UsagePage() {
                             </span>
                         </button>
                     </div>
+                    )}
                 </div>
 
+                {/* 数据源切换：代理请求（落库日志）/ 本地会话（扫描 ~/.claude），口径不同分开看 */}
+                <div className={cn(segment, 'w-fit')} role="tablist">
+                    {VIEWS.map((v) => (
+                        <button
+                            key={v.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={view === v.key}
+                            className={segmentItem(view === v.key, true)}
+                            onClick={() => switchView(v.key)}
+                        >
+                            <v.icon className="h-4 w-4" />
+                            {t(v.labelKey)}
+                        </button>
+                    ))}
+                </div>
+
+                {view === 'proxy' ? (
+                <>
                 {/* 顶部全局筛选行：作用范围是整页 —— 汇总、趋势与三张明细表 */}
                 <div className={cn(card, 'p-4')}>
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -501,6 +538,10 @@ export default function UsagePage() {
                     </div>
                     <div className="collapse-content">{pricingOpen && <PricingConfigPanel />}</div>
                 </div>
+                </>
+                ) : (
+                    <SessionStatsSection />
+                )}
             </div>
         </div>
     );

@@ -1,0 +1,29 @@
+{
+  "id": "app-config-extension",
+  "name": "app-config-extension",
+  "title": "扩展 OpenCode 与 Claude Desktop(Code) 配置方式",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "guoqing",
+  "assignee": "guoqing",
+  "createdAt": "2026-10-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-09-opencode-provider-mcp",
+    "10-09-claude-desktop-code-config"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

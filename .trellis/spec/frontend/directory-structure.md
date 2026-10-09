@@ -35,8 +35,9 @@ src/
 │   ├── providers/          # Provider feature components
 │   ├── mcp/                # MCP feature components
 │   ├── proxy/              # Proxy feature components
-│   ├── dashboard/          # Dashboard cards
-│   ├── usage/              # Usage charts/tables
+│   ├── dashboard/          # Dashboard cards (home shows only OverviewKpiRow)
+│   ├── usage/              # Usage charts/tables (proxy logs)
+│   │   └── session/        # Local-session stats (/usage?tab=session), moved from Dashboard
 │   └── settings/           # Settings panels (+ settings/about/ subfolder)
 ├── stores/                 # Zustand state stores (useXStore.ts)
 ├── services/               # Thin wrappers over Tauri invoke (xService.ts)
