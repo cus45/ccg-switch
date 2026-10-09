@@ -1,0 +1,14 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "S1 新建 proxy_request_logs / model_pricing 两张表与 dao/usage_logs.rs，需遵循本仓 schema 与 DAO 落位约定"}
+{"file": ".trellis/spec/backend/module-organization.md", "reason": "S2/S3 新增 proxy/response_processor.rs 与重写 proxy/usage/* 三个模块，需遵循模块拆分与可见性约定"}
+{"file": ".trellis/spec/backend/service-guidelines.md", "reason": "S4 重写 services/usage_stats.rs，SQL 收在 DAO、service 只做编排"}
+{"file": ".trellis/spec/backend/tauri-commands.md", "reason": "S4 新增 9 个 Tauri 命令并在 lib.rs 注册，需遵循命令签名与错误处理约定"}
+{"file": ".trellis/spec/backend/async-patterns.md", "reason": "S3 的 SSE tee 流与 tokio::spawn 旁路落库是本任务最高风险点，需遵循 tokio 使用约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "采集失败只能 warn 不能影响响应；Result 传播与日志规范"}
+{"file": ".trellis/spec/backend/cross-layer-protocol.md", "reason": "usage 类型全部 camelCase 跨层传输，需对齐 serde 命名约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "S6 移植 6 个 usage 组件（shadcn → DaisyUI 皮肤替换）"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "S5 新增 hooks/query/usage.ts，react-query 数据获取模式"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "D1 决策引入 react-query 与现有 Zustand 并存，需明确边界"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "S5 新增 types/usage.ts，需对齐类型约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "S5/S6 新增 services/usage.ts、hooks/query/、components/usage/ 的落位"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "S7 要求 UsagePage 与 Dashboard 共用组件不重复实现；会话统计整段移动不重写"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "采集 → 存储 → 查询 → 命令 → 前端全链路贯通，跨层一致性检查"}

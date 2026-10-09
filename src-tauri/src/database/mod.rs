@@ -6,6 +6,10 @@ pub mod backup;
 pub mod dao;
 mod schema;
 
+/// 供 DAO 测试验证 seed 幂等性
+#[cfg(test)]
+pub(crate) use schema::seed_model_pricing as schema_seed_for_test;
+
 pub struct Database {
     pub(crate) conn: Mutex<Connection>,
 }
@@ -33,6 +37,21 @@ impl Database {
 
         conn.execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(|e| format!("Failed to enable foreign keys: {e}"))?;
+
+        // WAL：提交不再每次都 fsync 主库文件（会话扫描一次可能写入数万行），读写互不阻塞；
+        // synchronous=NORMAL 在 WAL 下仍保证崩溃一致性，只是最近的提交可能回滚；
+        // busy_timeout 让偶发的锁竞争等一等，而不是直接报 database is locked。
+        // 备份走 VACUUM INTO，读的是一致快照，与 WAL 无冲突。
+        conn.pragma_update_and_check(None, "journal_mode", "WAL", |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|e| format!("Failed to enable WAL: {e}"))?;
+        conn.pragma_update(None, "synchronous", "NORMAL")
+            .map_err(|e| format!("Failed to set synchronous: {e}"))?;
+        conn.pragma_update(None, "busy_timeout", 5000)
+            .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+        conn.pragma_update(None, "temp_store", "MEMORY")
+            .map_err(|e| format!("Failed to set temp_store: {e}"))?;
 
         let db = Self {
             conn: Mutex::new(conn),

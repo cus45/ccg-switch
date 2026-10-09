@@ -3,12 +3,25 @@ import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {Provider} from '../types/provider';
 import ProvidersPage from './ProvidersPage';
 
 (
     globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT?: boolean}
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** UsageFooter 用 react-query 查限额，渲染 ProvidersPage 需要 Provider 包裹 */
+function renderProvidersPage() {
+    const client = new QueryClient({
+        defaultOptions: {queries: {retry: false}},
+    });
+    return (
+        <QueryClientProvider client={client}>
+            <ProvidersPage />
+        </QueryClientProvider>
+    );
+}
 
 const providerState = vi.hoisted(() => ({
     providers: [] as Provider[],
@@ -113,7 +126,7 @@ describe('ProvidersPage', () => {
             createProvider('gemini-1', 'gemini'),
         ];
 
-        const html = renderToStaticMarkup(<ProvidersPage />);
+        const html = renderToStaticMarkup(renderProvidersPage());
 
         expect(html).toContain('provider-filter-dropdown');
         expect(html).not.toContain('<select');
@@ -141,7 +154,7 @@ describe('ProvidersPage', () => {
         providerState.providers = [claudeProvider, codexProvider];
 
         const wrapper = document.createElement('div');
-        wrapper.innerHTML = renderToStaticMarkup(<ProvidersPage />);
+        wrapper.innerHTML = renderToStaticMarkup(renderProvidersPage());
         const claudeModels = wrapper.querySelector('[data-provider-model-config="claude"]');
         const codexModels = wrapper.querySelector('[data-provider-model-config="codex"]');
 
@@ -168,7 +181,7 @@ describe('ProvidersPage', () => {
         root = createRoot(container);
 
         await act(async () => {
-            root?.render(<ProvidersPage />);
+            root?.render(renderProvidersPage());
         });
 
         const tableButton = container.querySelector<HTMLButtonElement>('button[title="Table view"]');
@@ -199,7 +212,7 @@ describe('ProvidersPage', () => {
         root = createRoot(container);
 
         await act(async () => {
-            root?.render(<ProvidersPage />);
+            root?.render(renderProvidersPage());
         });
 
         const filterDropdown = container.querySelector<HTMLDetailsElement>('.provider-filter-dropdown');

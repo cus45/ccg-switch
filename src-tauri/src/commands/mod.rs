@@ -9,4 +9,5 @@ pub mod provider_commands;
 pub mod proxy_commands;
 pub mod session_commands;
 pub mod skill_commands;
+pub mod usage_commands;
 pub mod utility_commands;

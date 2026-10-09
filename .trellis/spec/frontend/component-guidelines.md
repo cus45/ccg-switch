@@ -1678,6 +1678,46 @@ See `src/components/providers/ProviderCard.tsx` and
 - Icons come from `lucide-react`, sized with `w-*/h-*` (commonly `w-4 h-4`,
   `w-3.5 h-3.5`); spinners use `<Loader2 className="animate-spin" />`.
 
+## Usage Stats Module (`/usage`, react-query + recharts)
+
+- **Server state lives in react-query** (this page only; everything else is
+  Zustand). Queries are namespaced under `usageKeys.all = ['usage', ...]`;
+  manual refresh invalidates the whole namespace. Polling is opt-in per query
+  via `refetchInterval` (`0` -> `false`) and always sets
+  `refetchIntervalInBackground: false`.
+- Aggregations pass `placeholderData: keepPreviousData` plus a short
+  `staleTime` (5s) so switching 1d/7d/30d or tabs never flashes a spinner;
+  placeholder data is dimmed via `isPlaceholderData` instead of unmounting.
+- **recharts is lazy-loaded** (`React.lazy` + `Suspense` with
+  `UsageChartSkeleton`) so the ~350 kB chart chunk stays out of the initial
+  `/usage` payload. Keep the skeleton at the chart's fixed height (`h-[350px]`)
+  to avoid layout jumps.
+- **Chart theming (dark mode)**: recharts defaults (`#ccc` grid, `#666` tick
+  text) are unreadable on dark themes. Pass `stroke="currentColor"` for the
+  grid/cursor and `tick={{ fill: 'currentColor', fontSize: 12 }}` on axes,
+  with a semantic text class (`text-base-content/60`) on the axis element, so
+  both themes adapt through DaisyUI tokens. Series colors stay literal hex
+  (they read on both themes and match the reference project).
+- A custom `<Tooltip content={...}>` component must be defined at module
+  scope, never inline in the render body: an inline component type is
+  re-created on every poll, which remounts the tooltip and makes hover flicker.
+- **Shared visual primitives live in `components/usage/styles.ts`** (`card`,
+  `tableWrap`, `thead`, `row`, `chip(tone)`, `segment` + `segmentItem`,
+  `primaryBtn` / `ghostBtn` / `iconBtn`, `pageBtn`). Borders follow the app rule
+  `border-gray-100 dark:border-base-200`: in the dark theme `base-300` is the page
+  background, so a `border-base-300` box is invisible. Status/timing use soft chips
+  (10% tinted background + same-hue text) instead of solid DaisyUI `badge-*`;
+  segmented controls replace the default `btn-group` / `tabs-boxed`; numbers in
+  tables use `tabular-nums` so polling refreshes do not shift columns.
+- **Token semantics differ per app.** Claude `input_tokens` is fresh input; Codex
+  and Gemini include cache reads. Backend aggregations normalize via
+  `fresh_input_sql` and billing uses `CostCalculator::calculate_for_app`; both
+  read `calculator::CACHE_INCLUSIVE_APP_TYPES` (single source). The frontend must
+  not re-derive hit rate or totals from raw counters — use `cacheHitRate` /
+  `realTotalTokens` from the summary. Session-imported rows carry placeholder
+  provider names (`Claude (Session)`); render them through
+  `components/usage/providerLabel.ts`, never compare against translated text.
+
 ---
 
 ## Modals, Toasts, and Portals
@@ -1875,6 +1915,12 @@ state summary and the disclosure action remain distinct.
 
 ## Common Mistakes
 
+- **Shipping a backend command with no UI consumer.** A Tauri command or
+  react-query hook that nothing renders is dead code — the usage module's
+  collection pipeline once wrote data no page displayed, and the request-detail
+  command sat unused until the detail panel was wired. Wire every ported or
+  migrated command to a visible surface in the same change, and verify by
+  clicking through the UI, not only by tests.
 - **Hardcoded Chinese strings.** Some `title`/toast text is a literal Chinese
   string instead of a `t('...')` key (e.g. `title="拖拽排序"`, `'启动终端失败'`).
   New user-facing text must go through i18n and be added to both `en.json` and

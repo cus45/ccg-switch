@@ -1,6 +1,7 @@
 import {Link, useLocation} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {
+    BarChart3,
     Bot,
     FileText,
     Globe,
@@ -25,6 +26,7 @@ const mainNavItems = [
     { path: '/chat', icon: MessageSquare, labelKey: 'nav.chat' },
     { path: '/providers', icon: Key, labelKey: 'nav.providers' },
     { path: '/proxy', icon: Server, labelKey: 'nav.proxy' },
+    { path: '/usage', icon: BarChart3, labelKey: 'nav.usage' },
     { path: '/mcp', icon: Globe, labelKey: 'nav.mcp' },
     { path: '/prompts', icon: FileText, labelKey: 'nav.prompts' },
     { path: '/skills', icon: Zap, labelKey: 'nav.skills' },

@@ -1,7 +1,10 @@
 import {useTranslation} from 'react-i18next';
 import {
     Activity,
+    ArrowRight,
     BarChart3,
+    ChevronDown,
+    ChevronUp,
     Clock,
     Coins,
     FolderOpen,
@@ -11,8 +14,11 @@ import {
     RefreshCw,
     TrendingUp
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { UsageSummaryCards } from '../components/usage/UsageSummaryCards';
 import {type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState} from 'react';
 import {useDashboardStore} from '../stores/useDashboardStore';
+import type {TimeRange} from '../types/usage';
 
 interface PieShareItem {
     name: string;
@@ -29,6 +35,10 @@ function Dashboard() {
     const { t } = useTranslation();
     const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData, refreshStatsCache, refreshingStats } = useDashboardStore();
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
+    const [sessionStatsExpanded, setSessionStatsExpanded] = useState(false);
+    // 概览固定 7 天窗口；时间范围切换在 /usage 页面
+    const usageTimeRange: TimeRange = '7d';
+    const usageRefreshMs = 0;
 
     useEffect(() => {
         if (!hasLoaded) {
@@ -185,64 +195,98 @@ function Dashboard() {
                     </button>
                 </div>
 
-                {stats && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <StatCard icon={Activity} label={t('dashboard.stats_startups')} value={stats.num_startups} color="text-blue-500" />
-                        <StatCard icon={Coins} label={t('token_usage.total_tokens')} value={totalTokens} color="text-emerald-500" />
-                        <StatCard icon={Hash} label={t('dashboard.stats_sessions')} value={stats.total_sessions} color="text-purple-500" />
-                        <StatCard icon={MessageSquare} label={t('token_usage.total_messages')} value={tokenStats?.totalMessages || 0} color="text-pink-500" />
-                        <StatCard icon={FolderOpen} label={t('dashboard.stats_projects')} value={stats.total_projects} color="text-cyan-500" />
-                        <StatCard icon={BarChart3} label={t('dashboard.stats_history')} value={stats.total_history} color="text-amber-500" />
+                {/* Proxy Usage Section —— 概览：只放汇总卡，明细在 /usage */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-base-content">
+                            {t('usage.title')}
+                        </h2>
+                        <Link
+                            to="/usage"
+                            className="btn btn-ghost btn-sm gap-1 text-sm font-normal opacity-70 hover:opacity-100"
+                        >
+                            {t('usage.viewDetails')}
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
                     </div>
-                )}
 
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    {recentActivity.length > 0 && (
-                        <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 pb-3 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
-                            <div className="flex items-center gap-2 mb-2">
-                                <BarChart3 className="w-5 h-5 text-gray-500" />
-                                <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                                    {t('dashboard.activity_title')}
-                                </h2>
-                            </div>
-                            <div className="flex flex-1 min-h-[14rem]">
-                                <div className="flex flex-col justify-between pr-2 text-xs text-gray-400 shrink-0">
-                                    <span>{maxCount}</span>
-                                    <span>{Math.round(maxCount / 2)}</span>
-                                    <span>0</span>
-                                </div>
-                                <div className="flex-1 flex flex-col">
-                                    <div className="flex items-end gap-1 flex-1 min-h-[14rem]">
-                                        {recentActivity.map((entry, i) => {
-                                            const height = Math.max((entry.count / maxCount) * 100, 4);
-                                            return (
-                                                <div key={i} className="flex-1 h-full flex flex-col items-center justify-end">
-                                                    <div
-                                                        className="w-full rounded-t bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-600 dark:to-blue-400 transition-all duration-200 min-w-[4px]"
-                                                        style={{ height: `${height}%` }}
-                                                    />
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="flex gap-1 mt-1">
-                                        {recentActivity.map((entry, i) => (
-                                            <div key={i} className="flex-1 text-center">
-                                                <span className="text-[10px] text-gray-400">{formatDateLabel(entry.date)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <HourlyClockChart hourData={hourData} maxHourCount={maxHourCount} />
+                    <UsageSummaryCards range={usageTimeRange} refreshMs={usageRefreshMs} />
                 </div>
 
-                {/* Token 每日趋势 + 模型占比 */}
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                    {dailyTotals.length > 0 && (
+                {/* Session Stats Section (Collapsible) */}
+                <div className="space-y-4">
+                    <button
+                        onClick={() => setSessionStatsExpanded(!sessionStatsExpanded)}
+                        className="flex w-full items-center justify-between rounded-lg border border-gray-200 dark:border-base-300 bg-white dark:bg-base-100 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-base-200 transition-colors"
+                    >
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-base-content">
+                            {t('dashboard.session_stats', '会话统计')}
+                        </h2>
+                        {sessionStatsExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-gray-500" />
+                        ) : (
+                            <ChevronDown className="h-5 w-5 text-gray-500" />
+                        )}
+                    </button>
+
+                    {sessionStatsExpanded && stats && (
+                        <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                <StatCard icon={Activity} label={t('dashboard.stats_startups')} value={stats.num_startups} color="text-blue-500" />
+                                <StatCard icon={Coins} label={t('token_usage.total_tokens')} value={totalTokens} color="text-emerald-500" />
+                                <StatCard icon={Hash} label={t('dashboard.stats_sessions')} value={stats.total_sessions} color="text-purple-500" />
+                                <StatCard icon={MessageSquare} label={t('token_usage.total_messages')} value={tokenStats?.totalMessages || 0} color="text-pink-500" />
+                                <StatCard icon={FolderOpen} label={t('dashboard.stats_projects')} value={stats.total_projects} color="text-cyan-500" />
+                                <StatCard icon={BarChart3} label={t('dashboard.stats_history')} value={stats.total_history} color="text-amber-500" />
+                            </div>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                {recentActivity.length > 0 && (
+                                    <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 pb-3 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <BarChart3 className="w-5 h-5 text-gray-500" />
+                                            <h2 className="font-semibold text-gray-900 dark:text-base-content">
+                                                {t('dashboard.activity_title')}
+                                            </h2>
+                                        </div>
+                                        <div className="flex flex-1 min-h-[14rem]">
+                                            <div className="flex flex-col justify-between pr-2 text-xs text-gray-400 shrink-0">
+                                                <span>{maxCount}</span>
+                                                <span>{Math.round(maxCount / 2)}</span>
+                                                <span>0</span>
+                                            </div>
+                                            <div className="flex-1 flex flex-col">
+                                                <div className="flex items-end gap-1 flex-1 min-h-[14rem]">
+                                                    {recentActivity.map((entry, i) => {
+                                                        const height = Math.max((entry.count / maxCount) * 100, 4);
+                                                        return (
+                                                            <div key={i} className="flex-1 h-full flex flex-col items-center justify-end">
+                                                                <div
+                                                                    className="w-full rounded-t bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-600 dark:to-blue-400 transition-all duration-200 min-w-[4px]"
+                                                                    style={{ height: `${height}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="flex gap-1 mt-1">
+                                                    {recentActivity.map((entry, i) => (
+                                                        <div key={i} className="flex-1 text-center">
+                                                            <span className="text-[10px] text-gray-400">{formatDateLabel(entry.date)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <HourlyClockChart hourData={hourData} maxHourCount={maxHourCount} />
+                            </div>
+
+                            {/* Token 每日趋势 + 模型占比 */}
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                {dailyTotals.length > 0 && (
                         <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col overflow-hidden">
                             <div className="flex items-center gap-2 mb-4">
                                 <TrendingUp className="w-5 h-5 text-emerald-500" />
@@ -366,7 +410,7 @@ function Dashboard() {
                         </div>
                     )}
 
-                    <div className={`bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${dailyTotals.length === 0 ? 'xl:col-span-3' : ''}`}>
+                                <div className={`bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${dailyTotals.length === 0 ? 'xl:col-span-3' : ''}`}>
                         <div className="flex items-center gap-2 mb-4">
                             <PieChart className="w-5 h-5 text-teal-500" />
                             <h2 className="font-semibold text-gray-900 dark:text-base-content">{t('token_usage.model_share_title')}</h2>
@@ -461,8 +505,8 @@ function Dashboard() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
                         <div className="flex items-center gap-2 mb-4">
                             <Coins className="w-5 h-5 text-amber-500" />
                             <h2 className="font-semibold text-gray-900 dark:text-base-content">
@@ -497,7 +541,7 @@ function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+                                <div className="bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
                         <div className="flex items-center gap-2 mb-4">
                             <FolderOpen className="w-5 h-5 text-cyan-500" />
                             <h2 className="font-semibold text-gray-900 dark:text-base-content">
@@ -537,6 +581,9 @@ function Dashboard() {
                             </div>
                         )}
                     </div>
+                </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

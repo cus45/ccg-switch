@@ -11,6 +11,7 @@ pub mod http_client;
 pub mod log_codes;
 pub mod model_mapper;
 pub mod provider_router;
+pub mod response_processor;
 pub mod providers;
 pub mod server;
 pub mod session;

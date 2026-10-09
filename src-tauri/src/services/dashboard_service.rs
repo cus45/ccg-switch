@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectInfo {
@@ -333,7 +336,7 @@ pub fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, io::Error> {
         let (jsonl_files, _) = scan_jsonl_files(&entry.path());
         for file_path in &jsonl_files {
             session_count += 1;
-            if let Ok((input, output)) = sum_session_tokens(file_path) {
+            if let Some((input, output)) = cached_session_tokens(file_path) {
                 input_tokens = input_tokens.saturating_add(input);
                 output_tokens = output_tokens.saturating_add(output);
             }
@@ -353,6 +356,54 @@ pub fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, io::Error> {
     Ok(stats)
 }
 
+/// 单个会话文件的 token 合计缓存项
+struct TokenSumEntry {
+    size: u64,
+    mtime_ms: i64,
+    input: u64,
+    output: u64,
+}
+
+/// 按文件 (size, mtime) 记忆化的 token 合计
+///
+/// 首页每次加载都要把所有会话文件过一遍；会话文件只增不改，
+/// size + mtime 没变就直接复用上次结果，刷新时只重解析有变化的文件。
+static TOKEN_SUM_CACHE: OnceLock<Mutex<HashMap<PathBuf, TokenSumEntry>>> = OnceLock::new();
+
+fn cached_session_tokens(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let size = meta.len();
+    let mtime_ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    let cache = TOKEN_SUM_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(map) = cache.lock() {
+        if let Some(e) = map.get(path) {
+            if e.size == size && e.mtime_ms == mtime_ms {
+                return Some((e.input, e.output));
+            }
+        }
+    }
+
+    let (input, output) = sum_session_tokens(path).ok()?;
+    if let Ok(mut map) = cache.lock() {
+        map.insert(
+            path.to_path_buf(),
+            TokenSumEntry {
+                size,
+                mtime_ms,
+                input,
+                output,
+            },
+        );
+    }
+    Some((input, output))
+}
+
 fn sum_session_tokens(path: &std::path::Path) -> Result<(u64, u64), io::Error> {
     let file = fs::File::open(path)?;
     let reader = BufReader::new(file);
@@ -363,6 +414,11 @@ fn sum_session_tokens(path: &std::path::Path) -> Result<(u64, u64), io::Error> {
     for line in reader.lines().flatten() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
+            continue;
+        }
+        // 只有 assistant 消息带 usage；两个字面量缺一个就不可能计入，连 JSON 都不用解。
+        // 绝大多数行是用户消息 / 工具结果（往往很长），这一步省掉了大部分解析开销。
+        if !trimmed.contains("\"usage\"") || !trimmed.contains("\"assistant\"") {
             continue;
         }
 

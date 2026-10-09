@@ -1,5 +1,4 @@
-use crate::models::usage::UsageDailySummary;
-use crate::services::{auto_launch_service, usage_service, webdav_service};
+use crate::services::{auto_launch_service, webdav_service};
 
 #[tauri::command]
 pub fn get_webdav_config() -> Result<webdav_service::WebDavConfig, String> {
@@ -25,10 +24,3 @@ pub async fn set_auto_launch(enabled: bool) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn get_usage_summaries(days: u32) -> Result<Vec<UsageDailySummary>, String> {
-    if days == 0 || days > 365 {
-        return Err("days must be between 1 and 365".to_string());
-    }
-    usage_service::get_recent_summaries(days).map_err(|e| e.to_string())
-}

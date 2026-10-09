@@ -22,6 +22,7 @@ use commands::provider_commands;
 use commands::proxy_commands;
 use commands::session_commands;
 use commands::skill_commands;
+use commands::usage_commands;
 use commands::utility_commands;
 use store::AppState;
 use tauri::Emitter;
@@ -142,25 +143,40 @@ fn get_tokens() -> Result<Vec<ApiToken>, String> {
     token_service::list_tokens().map_err(|e| e.to_string())
 }
 
-// Dashboard 数据命令
+/// 把阻塞的文件系统调用丢到阻塞线程池
+///
+/// 同步 command 在 Tauri 里跑在主线程上：首页一启动就要遍历 ~/.claude/projects
+/// 下全部会话文件，放在主线程会让整个窗口卡住直到解析完。
+async fn run_fs_blocking<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("后台任务执行失败: {e}"))?
+}
+
+// Dashboard 数据命令（全部走阻塞线程池，见 run_fs_blocking）
 #[tauri::command]
-fn get_dashboard_stats() -> Result<DashboardStats, String> {
-    dashboard_service::get_stats().map_err(|e| e.to_string())
+async fn get_dashboard_stats() -> Result<DashboardStats, String> {
+    run_fs_blocking(|| dashboard_service::get_stats().map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
-fn get_dashboard_projects() -> Result<Vec<ProjectInfo>, String> {
-    dashboard_service::list_projects().map_err(|e| e.to_string())
+async fn get_dashboard_projects() -> Result<Vec<ProjectInfo>, String> {
+    run_fs_blocking(|| dashboard_service::list_projects().map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
-fn get_activity_history() -> Result<Vec<HistoryEntry>, String> {
-    dashboard_service::get_activity_history().map_err(|e| e.to_string())
+async fn get_activity_history() -> Result<Vec<HistoryEntry>, String> {
+    run_fs_blocking(|| dashboard_service::get_activity_history().map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
-fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, String> {
-    dashboard_service::get_project_token_stats().map_err(|e| e.to_string())
+async fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, String> {
+    run_fs_blocking(|| dashboard_service::get_project_token_stats().map_err(|e| e.to_string()))
+        .await
 }
 
 #[tauri::command]
@@ -193,15 +209,15 @@ async fn fetch_available_models(base_url: String, api_key: String) -> Result<Vec
     token_service::fetch_models(base_url, api_key).await
 }
 
-// Stats Cache 命令
+// Stats Cache 命令（refresh 要全量遍历会话文件，必须离开主线程）
 #[tauri::command]
-fn get_stats_cache_data() -> Result<StatsCache, String> {
-    stats_service::get_stats_cache().map_err(|e| e.to_string())
+async fn get_stats_cache_data() -> Result<StatsCache, String> {
+    run_fs_blocking(|| stats_service::get_stats_cache().map_err(|e| e.to_string())).await
 }
 
 #[tauri::command]
-fn refresh_stats_cache() -> Result<StatsCache, String> {
-    stats_service::refresh_stats_cache().map_err(|e| e.to_string())
+async fn refresh_stats_cache() -> Result<StatsCache, String> {
+    run_fs_blocking(|| stats_service::refresh_stats_cache().map_err(|e| e.to_string())).await
 }
 
 // 在终端中打开目录
@@ -860,7 +876,27 @@ pub fn run() {
             advanced_commands::save_webdav_config,
             advanced_commands::get_auto_launch_status,
             advanced_commands::set_auto_launch,
-            advanced_commands::get_usage_summaries,
+            // 用量统计（代理请求日志聚合）
+            usage_commands::get_usage_summary,
+            usage_commands::get_usage_trends,
+            usage_commands::get_provider_stats,
+            usage_commands::get_model_stats,
+            usage_commands::get_request_logs,
+            usage_commands::get_request_detail,
+            usage_commands::get_model_pricing,
+            usage_commands::update_model_pricing,
+            usage_commands::delete_model_pricing,
+            usage_commands::get_default_cost_multiplier,
+            usage_commands::set_default_cost_multiplier,
+            usage_commands::get_pricing_model_source,
+            usage_commands::set_pricing_model_source,
+            usage_commands::check_provider_limits,
+            usage_commands::get_usage_retention_days,
+            usage_commands::set_usage_retention_days,
+            usage_commands::cleanup_usage_logs,
+            usage_commands::get_usage_logging_enabled,
+            usage_commands::set_usage_logging_enabled,
+            usage_commands::scan_session_usage,
             // MCP v2 (数据库版)
             mcp_commands::get_mcp_servers,
             mcp_commands::upsert_mcp_server,

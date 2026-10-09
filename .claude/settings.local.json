@@ -87,7 +87,11 @@
       "Read(//c/guodevelop/demo/cc-switch/**)",
       "Read(//c/guodevelop/demo/cc-switch/src-tauri/src/**)",
       "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-test2.bat\")",
-      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-t.bat\")"
+      "Bash(cmd.exe //c \"C:\\\\guodevelop\\\\ccg-switch\\\\.cargo-t.bat\")",
+      "Bash(cp /tmp/rp_backup.rs src/proxy/response_processor.rs)",
+      "Bash(mv -f src/pages/UsagePage.new.tsx src/pages/UsagePage.tsx)",
+      "Bash(sed -n '990,1002p' src/locales/zh.json)",
+      "Bash(grep -c \"TimeRange = 'today'\" src/types/usage.ts)"
     ]
   }
 }

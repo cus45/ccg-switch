@@ -7,3 +7,4 @@ pub mod provider_health;
 pub mod providers;
 pub mod proxy_config;
 pub mod skills;
+pub mod usage_logs;

@@ -54,3 +54,7 @@ once_cell = "1"
 url = "2"
 rquickjs = { version = "0.8", features = ["array-buffer", "classes"] }
 auto-launch = "0.5"
+# 用量成本按定点十进制计算，避免 f64 长期累加的精度漂移
+rust_decimal = "1.36"
+# SSE tee 流：边转发字节边解析 usage
+async-stream = "0.3"

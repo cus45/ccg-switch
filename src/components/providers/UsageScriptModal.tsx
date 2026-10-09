@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {invoke} from '@tauri-apps/api/core';
+import {useQueryClient} from '@tanstack/react-query';
 import {FlaskConical, Loader2, X} from 'lucide-react';
 import {getUsageScriptConfig, Provider, UsageResult, UsageScriptConfig} from '../../types/provider';
 
@@ -73,6 +74,7 @@ interface UsageScriptModalProps {
 
 export default function UsageScriptModal({ isOpen, provider, onClose, onSave }: UsageScriptModalProps) {
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
     const [config, setConfig] = useState<UsageScriptConfig>(DEFAULT_CONFIG);
     const [testing, setTesting] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -102,6 +104,11 @@ export default function UsageScriptModal({ isOpen, provider, onClose, onSave }: 
                 config,
             });
             setTestResult(result);
+            // 测试成功就把结果写进缓存，省掉一次轮询等待 ——
+            // 用户点完测试就能在卡片上直接看到结果
+            if (result.success) {
+                queryClient.setQueryData(['usage', provider.id, provider.appType], result);
+            }
         } catch (error) {
             setTestResult({ success: false, error: String(error) });
         } finally {

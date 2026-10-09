@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核查建表幂等（IF NOT EXISTS / INSERT OR IGNORE）、索引是否齐全、老库升级不丢数据"}
+{"file": ".trellis/spec/backend/async-patterns.md", "reason": "核查 SSE tee 是否零阻塞转发、落库是否全在 tokio::spawn、collector.finish 是否幂等"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核查采集失败只 warn 不影响响应；未命中定价不阻断请求"}
+{"file": ".trellis/spec/backend/tauri-commands.md", "reason": "核查 9 个命令均已在 generate_handler! 注册、参数 serde 命名正确"}
+{"file": ".trellis/spec/backend/cross-layer-protocol.md", "reason": "核查后端 camelCase 与前端 types/usage.ts 字段逐一对齐"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "核查禁止模式；无数据显示 -- 而非 $0.00；轮询关闭后无周期 invoke"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核查 react-query 仅用于 usage、未渗透到其他模块"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "核查全链路：代理发请求 → 落库 → 聚合 → 命令 → UI 数字一致（AC2/AC5）"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "核查 Dashboard 会话统计是纯移动非重写（AC9）、UsagePage 与 Dashboard 复用同组件"}

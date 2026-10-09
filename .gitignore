@@ -10,7 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-chk2/
+dist-verify/
+src-tauri/target-check/
 *.local
+
+# WorkBuddy 项目工作数据
+.workbuddy/
 
 # Editor directories and files
 .vscode/*

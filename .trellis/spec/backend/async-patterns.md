@@ -19,6 +19,8 @@ CC Switch 后端使用 **tokio** 异步运行时。Tauri 2 自动集成 tokio，
 - 子进程管理（启动、通信、等待）
 - tokio 工具（`sleep`、`spawn`、`select!`）
 - 调用其他 async 函数
+- SQLite 查询 / 写入（rusqlite 是阻塞的，哪怕只是一条聚合 SQL）
+- 遍历会话目录（`~/.claude/projects`、`~/.codex/sessions` 可达数百文件、近 GB）
 
 ### 可用同步的场景
 
@@ -27,6 +29,43 @@ CC Switch 后端使用 **tokio** 异步运行时。Tauri 2 自动集成 tokio，
 - 纯计算/数据转换
 
 **原则**：有疑问时用 async，避免阻塞。
+
+### 同步 command 跑在主线程上
+
+Tauri 里非 `async` 的 `#[tauri::command]` 在主线程执行：命令没返回，窗口就不响应。
+用量统计曾全部是同步 command，进页面触发的会话文件扫描把整个应用卡住数秒；
+首页的 `get_project_token_stats` 同样在启动时阻塞主线程。规则：
+
+- 凡是碰数据库或文件系统的 command 一律 `async fn`，函数体丢进
+  `tauri::async_runtime::spawn_blocking`（阻塞线程池）。不要直接在 async fn 里调阻塞 I/O，
+  那会占住 tokio worker。
+- `State<'_, AppState>` 不能跨线程，先 `let db = state.db.clone()`（`Arc`）再 move 进闭包。
+- 统一写法见 `commands/usage_commands.rs::run_blocking` 与 `lib.rs::run_fs_blocking`：
+
+```rust
+#[tauri::command]
+pub async fn get_usage_summary(
+    state: State<'_, AppState>,
+    start: Option<i64>,
+    end: Option<i64>,
+) -> Result<UsageSummary, String> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || db.get_usage_summary(start, end))
+        .await
+        .map_err(|e| format!("后台任务执行失败: {e}"))?
+}
+```
+
+### 反复扫描外部日志要做文件级增量
+
+会话 JSONL 是追加写的。扫描器按文件记录 `(size, mtime, offset)`（表 `session_scan_files`）：
+两者没变整文件跳过、不打开；变了只从 offset 续读完整行；`size < offset` 视为截断，从头重扫，
+重复行靠主键 `INSERT OR IGNORE` 兜底。再加行级字面量预筛选（不含 `"usage"` 的行连 JSON 都不解）
+与一文件一事务批量写入（日志行 + 扫描进度原子提交）。
+本机 793 个文件 / 923 MB：全量 1.2 s，稳态增量 33 ms（release）。
+数据库开 `journal_mode=WAL` + `synchronous=NORMAL`，否则每行提交一次 fsync。
+同类场景（首页 `sum_session_tokens`）至少做字面量预筛选 + 按 (size, mtime) 记忆化。
+
 
 ---
 
