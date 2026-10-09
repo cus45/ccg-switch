@@ -74,10 +74,19 @@ export function ProviderStatsTable({ range, refreshMs }: ProviderStatsTableProps
                     ) : (
                         stats.map((stat) => {
                             const provider = getUsageProviderLabel(stat.providerName, t);
-                            const speed = formatTokensPerSecond(
+                            const exactSpeed = formatTokensPerSecond(
                                 stat.speedOutputTokens,
                                 stat.speedGenerationMs
                             );
+                            // 会话日志导入的请求没有精确速度时，退回按日志时间戳估的速度（≈）
+                            const estimatedSpeed =
+                                exactSpeed == null
+                                    ? formatTokensPerSecond(
+                                          stat.estSpeedOutputTokens,
+                                          stat.estSpeedDurationMs
+                                      )
+                                    : null;
+                            const speed = exactSpeed ?? estimatedSpeed;
                             return (
                                 <tr key={`${stat.providerId}-${stat.appType}`} className={row}>
                                     <td>
@@ -134,6 +143,7 @@ export function ProviderStatsTable({ range, refreshMs }: ProviderStatsTableProps
                                             '—'
                                         ) : (
                                             <>
+                                                {estimatedSpeed != null && '≈'}
                                                 {speed}
                                                 <span className="ms-0.5 text-[11px] font-normal text-gray-400">
                                                     tok/s

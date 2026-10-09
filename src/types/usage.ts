@@ -56,6 +56,10 @@ export interface ProviderStats {
     speedOutputTokens: number;
     /** 速度分母：同一批请求的生成时间之和（毫秒） */
     speedGenerationMs: number;
+    /** 估算速度分子：会话日志导入、有估算耗时、输出 ≥ 200 token 的请求的输出之和 */
+    estSpeedOutputTokens: number;
+    /** 估算速度分母：同一批请求的估算耗时之和（毫秒） */
+    estSpeedDurationMs: number;
 }
 
 /** 按模型聚合 */
@@ -112,6 +116,8 @@ export interface RequestLogDetail {
     createdAt: number;
     /** 思考强度（客户端原值，如 low / medium / high / xhigh / max）；没有时为 null */
     reasoningEffort?: string | null;
+    /** 数据来源：proxy / session_log / codex_session；没有时为 null（按 proxy 处理） */
+    dataSource?: string | null;
 }
 
 /** 分页结果 */

@@ -74,7 +74,12 @@
     "requests": "Requests",
     "tokens": "Tokens",
     "speed": "Speed",
-    "speedHelp": "Total output tokens divided by total generation time, not a per-request average. Only streaming requests through the proxy with at least 100 output tokens count; session logs have no timing data and show —",
+    "speedHelp": "Total output tokens divided by total generation time, not a per-request average. Only routed requests with at least 100 output tokens count. A value marked with ≈ is estimated from session-log timestamps (it includes the first-token wait and only counts requests with at least 200 output tokens), shown only when a row has no routed data.",
+    "speedEstimatedValue": "≈ {{value}} tok/s",
+    "speedTooFew": "Fewer than 100 output tokens, speed not counted",
+    "speedEstimateTooFew": "Fewer than 200 output tokens, speed not estimated",
+    "noTimingSession": "Session logs have no timing data",
+    "noFirstToken": "No first-token timing, speed not counted",
     "sessionProvider": {
       "label": "{{app}} · Session logs",
       "hint": "Read from the client's session logs when not routed through the proxy, so the provider can't be told apart"

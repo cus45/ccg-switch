@@ -4,9 +4,13 @@ import { FileText, X } from 'lucide-react';
 import { useRequestDetail } from '../../hooks/useUsageQueries';
 import {
     formatCost,
+    formatEstimatedTokensPerSecond,
     formatNumber,
+    formatOutputTokensPerSecond,
     getLocaleFromLanguage,
+    isSessionLogRequest,
     parseFiniteNumber,
+    SPEED_ESTIMATE_MIN_OUTPUT_TOKENS,
 } from '../../utils/format';
 import { cn } from '../../utils/cn';
 import { chip, emptyState, iconBtn, muted } from './styles';
@@ -95,6 +99,11 @@ export function RequestDetailPanel({ requestId, onClose }: RequestDetailPanelPro
     const multiplier = parseFiniteNumber(log?.costMultiplier) ?? 1;
     const totalTokens = (log?.inputTokens ?? 0) + (log?.outputTokens ?? 0);
     const ok = !!log && log.statusCode >= 200 && log.statusCode < 300;
+
+    const exactTps = log ? formatOutputTokensPerSecond(log) : null;
+    // 会话日志没有首字计时，速度是按日志时间戳估的，前面带 ≈
+    const estimatedTps = exactTps == null && log ? formatEstimatedTokensPerSecond(log) : null;
+    const isSession = !!log && isSessionLogRequest(log);
 
     return (
         <div
@@ -220,6 +229,23 @@ export function RequestDetailPanel({ requestId, onClose }: RequestDetailPanelPro
                             </Section>
 
                             <Section title={t('usage.performance')}>
+                                <Field label={t('usage.speed')}>
+                                    {exactTps != null ? (
+                                        `${exactTps} tok/s`
+                                    ) : estimatedTps != null ? (
+                                        `${t('usage.speedEstimatedValue', { value: estimatedTps })}`
+                                    ) : (
+                                        <span className={muted}>
+                                            {isSession
+                                                ? log.outputTokens < SPEED_ESTIMATE_MIN_OUTPUT_TOKENS
+                                                    ? t('usage.speedEstimateTooFew')
+                                                    : t('usage.noTimingSession')
+                                                : log.outputTokens < 100
+                                                  ? t('usage.speedTooFew')
+                                                  : t('usage.noFirstToken')}
+                                        </span>
+                                    )}
+                                </Field>
                                 <Field label={t('usage.latency')}>
                                     {formatNumber(log.latencyMs, locale)} ms
                                 </Field>

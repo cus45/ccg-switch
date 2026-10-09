@@ -71,6 +71,78 @@ export function formatTokensPerSecond(
     return tps >= 100 ? Math.round(tps).toString() : tps.toFixed(1);
 }
 
+/** 单条请求的速度输入（精确与估算共用） */
+export interface SpeedInput {
+    outputTokens: number;
+    latencyMs: number;
+    firstTokenMs?: number | null;
+    dataSource?: string | null;
+}
+
+/** 估算速度的输出门槛：会话日志导入的请求没有首字计时，耗时是按日志时间戳估的、
+ * 含首字等待；输出越少首字占比越大、算出来越偏低，所以门槛比精确口径高。 */
+export const SPEED_ESTIMATE_MIN_OUTPUT_TOKENS = 200;
+
+/** 估算耗时短于此值时不估速度：输出 200 token 以上却不到 1 秒，多半是起点取晚了。 */
+export const SPEED_ESTIMATE_MIN_DURATION_MS = 1000;
+
+/** 这条请求是不是从会话日志导入的（不是路由服务记的）。 */
+export function isSessionLogRequest(log: { dataSource?: string | null }): boolean {
+    return (
+        typeof log.dataSource === 'string' &&
+        log.dataSource !== '' &&
+        log.dataSource !== 'proxy'
+    );
+}
+
+/** 一条请求的精确生成时间（毫秒）= 耗时 − 首字；缺首字或差值不大于 0 返回 null。 */
+function getGenerationMs(log: SpeedInput): number | null {
+    if (typeof log.firstTokenMs !== 'number') return null;
+    const ms = log.latencyMs - log.firstTokenMs;
+    return ms > 0 ? ms : null;
+}
+
+/** 一条请求的精确速度（tok/s），从首字算到结束；没有首字计时返回 null。 */
+export function getOutputTokensPerSecond(log: SpeedInput): number | null {
+    const ms = getGenerationMs(log);
+    if (ms == null || !log.outputTokens) return null;
+    const tps = log.outputTokens / (ms / 1000);
+    return Number.isFinite(tps) && tps > 0 ? tps : null;
+}
+
+/** 这条请求能不能估速度：会话日志导入、没有首字计时、输出不少于 200 token、估算耗时不短于 1 秒。 */
+export function isSpeedEstimateEligible(log: SpeedInput): boolean {
+    return (
+        isSessionLogRequest(log) &&
+        log.firstTokenMs == null &&
+        log.outputTokens >= SPEED_ESTIMATE_MIN_OUTPUT_TOKENS &&
+        log.latencyMs >= SPEED_ESTIMATE_MIN_DURATION_MS
+    );
+}
+
+/** 单条估算速度（tok/s）= 输出 token ÷（估算耗时 / 1000），含首字等待；不满足条件返回 null。 */
+export function getEstimatedTokensPerSecond(log: SpeedInput): number | null {
+    if (!isSpeedEstimateEligible(log)) return null;
+    const tps = log.outputTokens / (log.latencyMs / 1000);
+    return Number.isFinite(tps) && tps > 0 ? tps : null;
+}
+
+/** 单条速度的数值格式化（精确与估算共用）。 */
+function formatSingleSpeed(tps: number | null): string | null {
+    if (tps == null) return null;
+    return tps >= 100 ? Math.round(tps).toString() : tps.toFixed(1);
+}
+
+/** 单条精确速度的展示文本；没有返回 null。 */
+export function formatOutputTokensPerSecond(log: SpeedInput): string | null {
+    return formatSingleSpeed(getOutputTokensPerSecond(log));
+}
+
+/** 单条估算速度的展示文本；没有返回 null。 */
+export function formatEstimatedTokensPerSecond(log: SpeedInput): string | null {
+    return formatSingleSpeed(getEstimatedTokensPerSecond(log));
+}
+
 /** 解析 ISO 日期为本地短格式（如 "09/01 10:00" 或 "09/01"） */
 export function formatBucketDate(isoDate: string, showTime: boolean = false): string {
     try {

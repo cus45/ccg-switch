@@ -188,7 +188,10 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
             offset INTEGER NOT NULL DEFAULT 0,
             -- Codex 的思考强度写在每轮开头的 turn_context 里，后续用量行沿用；
             -- 增量续读从中途偏移开始，必须记住上次读到的强度
-            last_effort TEXT
+            last_effort TEXT,
+            -- Codex 的模型名同样写在 turn_context 里（token_usage_record 不带 model），
+            -- 增量续读时沿用，否则续读到的用量行 model 为空、成本记 0
+            last_model TEXT
         );
 
         -- 模型定价表（USD per 1M tokens，同样用 TEXT 存 Decimal）
@@ -451,6 +454,183 @@ pub(crate) fn seed_model_pricing(conn: &Connection) -> Result<(), String> {
         ("glm-4.6", "GLM-4.6", "0.60", "2.20", "0.11", "0"),
         ("qwen3-max", "Qwen3 Max", "1.20", "6.00", "0.30", "0"),
         ("qwen3-coder", "Qwen3 Coder", "0.30", "1.20", "0.075", "0"),
+
+        // ---- 2026 新模型（与参考项目 cc-switch 定价表对齐，成本不再落 0）----
+        ("claude-fable-5", "Claude Fable 5", "10", "50", "1.00", "12.50"),
+        ("claude-fable-5-1", "Claude Fable 5.1", "10", "50", "0.25", "12.50"),
+        ("claude-mythos-5", "Claude Mythos 5", "10", "50", "1.00", "12.50"),
+        ("claude-mythos-5-1", "Claude Mythos 5.1", "10", "50", "0.25", "12.50"),
+        ("claude-opus-4-6", "Claude Opus 4.6", "5", "25", "0.50", "6.25"),
+        ("claude-opus-4-7", "Claude Opus 4.7", "5", "25", "0.50", "6.25"),
+        ("claude-opus-4-8", "Claude Opus 4.8", "5", "25", "0.50", "6.25"),
+        ("claude-opus-5", "Claude Opus 5", "5", "25", "0.50", "6.25"),
+        ("claude-opus-5-5", "Claude Opus 5.5", "4", "20", "0.20", "5"),
+        ("claude-sonnet-4-6", "Claude Sonnet 4.6", "3", "15", "0.30", "3.75"),
+        ("claude-sonnet-4-6-20260217", "Claude Sonnet 4.6", "3", "15", "0.30", "3.75"),
+        ("claude-sonnet-5", "Claude Sonnet 5", "2", "10", "0.20", "2.50"),
+        ("codestral-2508", "Codestral", "0.30", "0.90", "0.03", "0"),
+        ("codex-mini", "Codex Mini", "0.75", "3", "0.025", "0"),
+        ("command-a", "Cohere Command A", "2.50", "10", "0", "0"),
+        ("command-r", "Cohere Command R", "0.15", "0.60", "0", "0"),
+        ("command-r-plus", "Cohere Command R+", "2.50", "10", "0", "0"),
+        ("deepseek-chat", "DeepSeek Chat", "0.44", "1.32", "0.014", "0"),
+        ("deepseek-flash", "DeepSeek V4.1 Flash", "0.3", "1.2", "0.006", "0"),
+        ("deepseek-reasoner", "DeepSeek Reasoner", "0.44", "1.32", "0.014", "0"),
+        ("deepseek-v3.1", "DeepSeek V3.1", "0.55", "1.67", "0.055", "0"),
+        ("deepseek-v3.2", "DeepSeek V3.2", "0.28", "0.42", "0.028", "0"),
+        ("deepseek-v4-flash", "DeepSeek V4 Flash", "0.3", "1.2", "0.006", "0"),
+        ("deepseek-v4-flash-0731", "DeepSeek V4 Flash", "0.3", "1.2", "0.006", "0"),
+        ("deepseek-v4-flash-vision-exp", "DeepSeek V4 Flash Vision Exp", "0.3", "1.2", "0.006", "0"),
+        ("deepseek-v4-pro", "DeepSeek V4 Pro", "1.32", "3.96", "0.044", "0"),
+        ("devstral-2-2512", "Devstral 2", "0.40", "2", "0.04", "0"),
+        ("devstral-medium", "Devstral Medium", "0.40", "2", "0.04", "0"),
+        ("devstral-small-1.1", "Devstral Small 1.1", "0.07", "0.28", "0.01", "0"),
+        ("devstral-small-2-2512", "Devstral Small 2", "0.10", "0.30", "0.01", "0"),
+        ("doubao-seed-2-0-code", "Doubao Seed 2.0 Code", "0.47", "2.37", "0.09", "0"),
+        ("doubao-seed-2-0-code-preview-latest", "Doubao Seed 2.0 Code Preview", "0.47", "2.37", "0.09", "0"),
+        ("doubao-seed-2-0-lite", "Doubao Seed 2.0 Lite", "0.08", "0.50", "0.017", "0"),
+        ("doubao-seed-2-0-mini", "Doubao Seed 2.0 Mini", "0.03", "0.31", "0.0056", "0"),
+        ("doubao-seed-2-0-pro", "Doubao Seed 2.0 Pro", "0.47", "2.37", "0.09", "0"),
+        ("doubao-seed-2-1-pro", "Doubao Seed 2.1 Pro", "0.84", "4.2", "0.17", "0"),
+        ("doubao-seed-2-1-turbo", "Doubao Seed 2.1 Turbo", "0.42", "2.1", "0.08", "0"),
+        ("doubao-seed-code", "Doubao Seed Code", "0.17", "1.11", "0.02", "0"),
+        ("gemini-2.0-flash", "Gemini 2.0 Flash", "0.10", "0.40", "0.025", "0"),
+        ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "0.10", "0.40", "0.01", "0"),
+        ("gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite", "0.25", "1.50", "0.025", "0"),
+        ("gemini-3.1-flash-lite-preview", "Gemini 3.1 Flash Lite Preview", "0.25", "1.50", "0.025", "0"),
+        ("gemini-3.1-pro-preview", "Gemini 3.1 Pro Preview", "2", "12", "0.20", "0"),
+        ("gemini-3.5-flash", "Gemini 3.5 Flash", "1.50", "9.00", "0.15", "0"),
+        ("gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite", "0.30", "2.50", "0.03", "0"),
+        ("gemini-3.6-flash", "Gemini 3.6 Flash", "0.75", "3.75", "0.075", "0"),
+        ("gemini-3.7-flash", "Gemini 3.7 Flash", "0.75", "3.75", "0.075", "0"),
+        ("gemini-3.8-flash", "Gemini 3.8 Flash", "0.75", "3.75", "0.075", "0"),
+        ("glm-5", "GLM-5", "1", "3.2", "0.2", "0"),
+        ("glm-5-turbo", "GLM-5-Turbo", "1.2", "4", "0.24", "0"),
+        ("glm-5.1", "GLM-5.1", "1.4", "4.4", "0.26", "0"),
+        ("glm-5.2", "GLM-5.2", "1.4", "4.4", "0.26", "0"),
+        ("glm-5.3", "GLM-5.3", "1.4", "4.4", "0.26", "0"),
+        ("glm-5.3-flash", "GLM-5.3-Flash", "0.15", "0.50", "0.03", "0"),
+        ("glm-5.3-flashx", "GLM-5.3-FlashX", "0.37", "1.25", "0.075", "0"),
+        ("glm-5v-turbo", "GLM-5V-Turbo", "1.2", "4", "0.24", "0"),
+        ("gpt-4.1", "GPT-4.1", "2", "8", "0.50", "0"),
+        ("gpt-4.1-mini", "GPT-4.1 Mini", "0.40", "1.60", "0.10", "0"),
+        ("gpt-4.1-nano", "GPT-4.1 Nano", "0.10", "0.40", "0.025", "0"),
+        ("gpt-5-codex-high", "GPT-5 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5-codex-medium", "GPT-5 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5-codex-mini", "GPT-5 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5-codex-mini-high", "GPT-5 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5-codex-mini-medium", "GPT-5 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5-mini", "GPT-5 Mini", "0.25", "2", "0.025", "0"),
+        ("gpt-5-nano", "GPT-5 Nano", "0.05", "0.40", "0.005", "0"),
+        ("gpt-5.1-codex-max", "GPT-5.1 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5.1-codex-max-high", "GPT-5.1 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5.1-codex-max-xhigh", "GPT-5.1 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5.1-codex-mini", "GPT-5.1 Codex", "1.25", "10", "0.125", "0"),
+        ("gpt-5.2-pro", "GPT-5.2 Pro", "21", "168", "0", "0"),
+        ("gpt-5.3-codex-high", "GPT-5.3 Codex", "1.75", "14", "0.175", "0"),
+        ("gpt-5.3-codex-low", "GPT-5.3 Codex", "1.75", "14", "0.175", "0"),
+        ("gpt-5.3-codex-medium", "GPT-5.3 Codex", "1.75", "14", "0.175", "0"),
+        ("gpt-5.3-codex-spark", "GPT-5.3 Codex Spark", "1.75", "14", "0.175", "0"),
+        ("gpt-5.3-codex-xhigh", "GPT-5.3 Codex", "1.75", "14", "0.175", "0"),
+        ("gpt-5.4", "GPT-5.4", "2.50", "15", "0.25", "0"),
+        ("gpt-5.4-mini", "GPT-5.4 Mini", "0.75", "4.50", "0.075", "0"),
+        ("gpt-5.4-nano", "GPT-5.4 Nano", "0.20", "1.25", "0.02", "0"),
+        ("gpt-5.4-pro", "GPT-5.4 Pro", "30", "180", "0", "0"),
+        ("gpt-5.5", "GPT-5.5", "5", "30", "0.50", "0"),
+        ("gpt-5.5-high", "GPT-5.5", "5", "30", "0.50", "0"),
+        ("gpt-5.5-low", "GPT-5.5", "5", "30", "0.50", "0"),
+        ("gpt-5.5-medium", "GPT-5.5", "5", "30", "0.50", "0"),
+        ("gpt-5.5-minimal", "GPT-5.5", "5", "30", "0.50", "0"),
+        ("gpt-5.5-pro", "GPT-5.5 Pro", "30", "180", "0", "0"),
+        ("gpt-5.5-xhigh", "GPT-5.5", "5", "30", "0.50", "0"),
+        ("gpt-5.6", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-5.6-cyber", "GPT-5.6 Cyber", "12.50", "75", "1.25", "15.625"),
+        ("gpt-5.6-high", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-5.6-low", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-5.6-luna", "GPT-5.6 Luna", "0.20", "1.20", "0.02", "0.25"),
+        ("gpt-5.6-medium", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-5.6-minimal", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-5.6-sol", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-5.6-terra", "GPT-5.6 Terra", "2", "12", "0.20", "2.50"),
+        ("gpt-5.6-xhigh", "GPT-5.6 Sol", "4", "20", "0.40", "5"),
+        ("gpt-6-astra", "GPT-6 Astra", "10", "50", "1", "12.5"),
+        ("gpt-6-luna", "GPT-6 Luna", "0.10", "0.50", "0.01", "0.125"),
+        ("gpt-6-sol", "GPT-6 Sol", "2", "10", "0.20", "2.50"),
+        ("gpt-6.1-sol", "GPT-6.1 Sol", "2", "10", "0.10", "2.50"),
+        ("grok-3", "Grok 3", "3", "15", "0.75", "0"),
+        ("grok-3-mini", "Grok 3 Mini", "0.25", "0.50", "0.075", "0"),
+        ("grok-4", "Grok 4", "3", "15", "0.75", "0"),
+        ("grok-4-1-fast-non-reasoning", "Grok 4.1 Fast", "0.20", "0.50", "0.05", "0"),
+        ("grok-4-1-fast-reasoning", "Grok 4.1 Fast Reasoning", "0.20", "0.50", "0.05", "0"),
+        ("grok-4.20-0309-non-reasoning", "Grok 4.20", "1.25", "2.50", "0.20", "0"),
+        ("grok-4.20-0309-reasoning", "Grok 4.20 Reasoning", "1.25", "2.50", "0.20", "0"),
+        ("grok-4.3", "Grok 4.3", "1.25", "2.50", "0.20", "0"),
+        ("grok-4.5", "Grok 4.5", "2", "6", "0.30", "0"),
+        ("grok-4.5-build", "Grok 4.5 Build", "2", "6", "0.30", "0"),
+        ("grok-4.6", "Grok 4.6", "2", "6", "0.50", "0"),
+        ("grok-4.7", "Grok 4.7", "2", "6", "0.50", "0"),
+        ("grok-build-0.1", "Grok Build 0.1", "1", "2", "0.20", "0"),
+        ("grok-code-fast-1", "Grok Build 0.1 (Code Fast Alias)", "1", "2", "0.20", "0"),
+        ("hunyuan-hy3", "Hunyuan Hy3", "0.14", "0.56", "0.035", "0"),
+        ("hy3", "Hunyuan Hy3", "0.14", "0.56", "0.035", "0"),
+        ("hy4-preview", "Hunyuan Hy4 Preview", "0.84", "2.52", "0.042", "0"),
+        ("k3", "Kimi K3", "3.00", "15.00", "0.30", "0"),
+        ("kimi-k2-thinking", "Kimi K2 Thinking", "0.55", "2.20", "0.10", "0"),
+        ("kimi-k2.5", "Kimi K2.5", "0.60", "3.00", "0.10", "0"),
+        ("kimi-k2.6", "Kimi K2.6", "0.95", "4.00", "0.16", "0"),
+        ("kimi-k2.7-code", "Kimi K2.7 Code", "0.95", "4.00", "0.19", "0"),
+        ("kimi-k2.7-code-highspeed", "Kimi K2.7 Code HighSpeed", "1.90", "8.00", "0.38", "0"),
+        ("kimi-k3", "Kimi K3", "3.00", "15.00", "0.30", "0"),
+        ("magistral-medium", "Magistral Medium", "2", "5", "0", "0"),
+        ("magistral-small", "Magistral Small", "0.50", "1.50", "0", "0"),
+        ("mimo-v2-flash", "MiMo V2 Flash", "0.09", "0.29", "0.009", "0"),
+        ("mimo-v2-pro", "MiMo V2 Pro", "0.435", "0.87", "0.0036", "0"),
+        ("mimo-v2.5", "MiMo V2.5", "0.14", "0.28", "0.0028", "0"),
+        ("mimo-v2.5-pro", "MiMo V2.5 Pro", "0.435", "0.87", "0.0036", "0"),
+        ("mimo-v2.6-flash", "MiMo V2.6 Flash", "0.14", "0.28", "0.0028", "0"),
+        ("mimo-v2.6-pro", "MiMo V2.6 Pro", "0.435", "0.87", "0.0036", "0"),
+        ("mimo-v2.6-pro-ultraspeed", "MiMo V2.6 Pro UltraSpeed", "4.35", "8.7", "0.036", "0"),
+        ("minimax-m2", "MiniMax M2", "0.30", "1.20", "0.03", "0.375"),
+        ("minimax-m2.1", "MiniMax M2.1", "0.30", "1.20", "0.03", "0.375"),
+        ("minimax-m2.1-lightning", "MiniMax M2.1 Lightning", "0.27", "2.33", "0.03", "0"),
+        ("minimax-m2.5", "MiniMax M2.5", "0.30", "1.20", "0.03", "0.375"),
+        ("minimax-m2.5-lightning", "MiniMax M2.5 Lightning", "0.30", "2.40", "0.03", "0"),
+        ("minimax-m2.7", "MiniMax M2.7", "0.30", "1.20", "0.06", "0.375"),
+        ("minimax-m2.7-highspeed", "MiniMax M2.7 Highspeed", "0.60", "2.40", "0.06", "0.375"),
+        ("minimax-m3", "MiniMax M3", "0.30", "1.20", "0.06", "0"),
+        ("mistral-large-3-2512", "Mistral Large 3", "0.50", "1.50", "0.05", "0"),
+        ("mistral-medium-3.1", "Mistral Medium 3.1", "0.40", "2", "0.04", "0"),
+        ("mistral-medium-3.5", "Mistral Medium 3.5", "1.50", "7.50", "0", "0"),
+        ("mistral-small-3.2-24b", "Mistral Small 3.2", "0.075", "0.20", "0.01", "0"),
+        ("mistral-small-4", "Mistral Small 4", "0.10", "0.30", "0.01", "0"),
+        ("o1", "OpenAI o1", "15", "60", "7.50", "0"),
+        ("o1-mini", "OpenAI o1-mini", "0.55", "2.20", "0.55", "0"),
+        ("o3", "OpenAI o3", "2", "8", "0.50", "0"),
+        ("o3-mini", "OpenAI o3-mini", "1.10", "4.40", "0.55", "0"),
+        ("o3-pro", "OpenAI o3-pro", "20", "80", "0", "0"),
+        ("o4-mini", "OpenAI o4-mini", "1.10", "4.40", "0.275", "0"),
+        ("qwen3-235b-a22b", "Qwen3 235B-A22B", "0.70", "8.40", "0", "0"),
+        ("qwen3-32b", "Qwen3 32B", "0.16", "0.64", "0", "0"),
+        ("qwen3-coder-480b", "Qwen3 Coder 480B", "0.65", "3.25", "0", "0"),
+        ("qwen3-coder-480b-a35b-instruct", "Qwen3 Coder 480B-A35B Instruct", "0.65", "3.25", "0", "0"),
+        ("qwen3-coder-flash", "Qwen3 Coder Flash", "0.195", "0.975", "0.039", "0"),
+        ("qwen3-coder-next", "Qwen3 Coder Next", "0.12", "0.75", "0", "0"),
+        ("qwen3-coder-plus", "Qwen3 Coder Plus", "0.65", "3.25", "0.13", "0"),
+        ("qwen3.5-plus", "Qwen3.5 Plus", "0.26", "1.56", "0.052", "0"),
+        ("qwen3.6-flash", "Qwen3.6 Flash", "0.1875", "1.125", "0.0375", "0"),
+        ("qwen3.6-plus", "Qwen3.6 Plus", "0.325", "1.95", "0.065", "0"),
+        ("qwen3.7-max", "Qwen3.7 Max", "2.50", "7.50", "0.25", "0"),
+        ("qwen3.7-plus", "Qwen3.7 Plus", "0.40", "1.60", "0.08", "0"),
+        ("qwen3.8-2.4t-a95b", "Qwen3.8 2.4T A95B", "2", "6", "0.25", "2.50"),
+        ("qwen3.8-27b", "Qwen3.8 27B", "0.50", "3", "0.10", "0.625"),
+        ("qwen3.8-flash", "Qwen3.8 Flash", "0.15", "0.47", "0.016", "0.20"),
+        ("qwen3.8-max", "Qwen3.8 Max", "2", "6", "0.25", "2.50"),
+        ("qwq-32b", "QwQ 32B", "0.20", "0.60", "0", "0"),
+        ("qwq-plus", "QwQ Plus", "0.80", "2.40", "0", "0"),
+        ("step-3.5-flash", "Step 3.5 Flash", "0.10", "0.30", "0.02", "0"),
+        ("step-3.5-flash-2603", "Step 3.5 Flash 2603", "0.10", "0.30", "0.02", "0"),
+        ("step-3.7-flash", "Step 3.7 Flash", "0.19", "1.13", "0.04", "0"),
+        ("step-5-preview", "Step 5 Preview", "0.98", "2.80", "0.05", "0"),
     ];
 
     for (model_id, display_name, input, output, cache_read, cache_creation) in pricing_data {
@@ -543,6 +723,17 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
             .map_err(|e| format!("Failed to add session_scan_files.last_effort: {e}"))?;
     }
 
+    // session_scan_files.last_model —— Codex 增量续读时沿用的模型名
+    //
+    // 补列后清空扫描进度：让 Codex 会话文件重扫一遍，把历史行（model 为空）回填上模型名，
+    // 否则旧库里的 codex_session 行永远 model 为空、成本记 0。
+    if has_scan_table && !column_exists(conn, "session_scan_files", "last_model")? {
+        conn.execute_batch("ALTER TABLE session_scan_files ADD COLUMN last_model TEXT;")
+            .map_err(|e| format!("Failed to add session_scan_files.last_model: {e}"))?;
+        conn.execute_batch("DELETE FROM session_scan_files;")
+            .map_err(|e| format!("Failed to reset session scan state for last_model: {e}"))?;
+    }
+
     // proxy_request_logs.reasoning_effort —— 思考强度
     //
     // 补列后清空扫描进度：会话文件全部重扫一遍，把已入库历史行的思考强度回填上
@@ -620,10 +811,11 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         create_tables(&conn).unwrap();
         migrate(&conn).unwrap();
-        // 退回到「没有这两列」的旧结构
+        // 退回到「没有这三列」的旧结构
         conn.execute_batch(
             "ALTER TABLE proxy_request_logs DROP COLUMN reasoning_effort;
              ALTER TABLE session_scan_files DROP COLUMN last_effort;
+             ALTER TABLE session_scan_files DROP COLUMN last_model;
              INSERT INTO session_scan_files (path, size, mtime_ms, offset) VALUES ('a', 1, 1, 1);",
         )
         .unwrap();
@@ -632,6 +824,7 @@ mod tests {
 
         assert!(column_exists(&conn, "proxy_request_logs", "reasoning_effort").unwrap());
         assert!(column_exists(&conn, "session_scan_files", "last_effort").unwrap());
+        assert!(column_exists(&conn, "session_scan_files", "last_model").unwrap());
         let left: i64 = conn
             .query_row("SELECT COUNT(*) FROM session_scan_files", [], |r| r.get(0))
             .unwrap();

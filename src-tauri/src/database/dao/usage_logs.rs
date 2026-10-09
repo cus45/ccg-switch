@@ -138,16 +138,16 @@ impl Database {
         Ok(())
     }
 
-    /// 读某个会话文件的扫描进度，返回 (size, mtime_ms, offset, last_effort)；从未扫过返回 None
+    /// 读某个会话文件的扫描进度，返回 (size, mtime_ms, offset, last_effort, last_model)；从未扫过返回 None
     pub fn get_session_scan_state(
         &self,
         path: &str,
-    ) -> Result<Option<(i64, i64, i64, Option<String>)>, String> {
+    ) -> Result<Option<(i64, i64, i64, Option<String>, Option<String>)>, String> {
         let conn = lock_conn!(self.conn);
         conn.query_row(
-            "SELECT size, mtime_ms, offset, last_effort FROM session_scan_files WHERE path = ?1",
+            "SELECT size, mtime_ms, offset, last_effort, last_model FROM session_scan_files WHERE path = ?1",
             [path],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
         )
         .optional()
         .map_err(|e| format!("Failed to read session scan state: {e}"))
@@ -167,6 +167,7 @@ impl Database {
         mtime_ms: i64,
         offset: i64,
         last_effort: Option<&str>,
+        last_model: Option<&str>,
     ) -> Result<u32, String> {
         let mut conn = lock_conn!(self.conn);
         let tx = conn
@@ -224,22 +225,51 @@ impl Database {
                     .map_err(|e| format!("Failed to insert request log: {e}"))?;
                 inserted += n as u32;
 
-                // 行已存在（代理先记过，或是升级前导入的）：只回填缺失的思考强度，其余保持原样
-                if n == 0 && log.reasoning_effort.is_some() {
-                    tx.prepare_cached(
-                        "UPDATE proxy_request_logs SET reasoning_effort = ?1
-                         WHERE request_id = ?2 AND reasoning_effort IS NULL",
-                    )
-                    .and_then(|mut up| up.execute(rusqlite::params![log.reasoning_effort, log.request_id]))
-                    .map_err(|e| format!("Failed to backfill reasoning_effort: {e}"))?;
+                // 行已存在（代理先记过，或是升级前导入的）：只回填缺失的字段，其余保持原样
+                if n == 0 {
+                    if log.reasoning_effort.is_some() {
+                        tx.prepare_cached(
+                            "UPDATE proxy_request_logs SET reasoning_effort = ?1
+                             WHERE request_id = ?2 AND reasoning_effort IS NULL",
+                        )
+                        .and_then(|mut up| up.execute(rusqlite::params![log.reasoning_effort, log.request_id]))
+                        .map_err(|e| format!("Failed to backfill reasoning_effort: {e}"))?;
+                    }
+                    // 升级前导入的 Codex 行 model 为空（会话文件的用量行不带 model，
+                    // 需要靠 turn_context 补齐）：回填 model 并重算成本。
+                    // 只在该行 model 仍为空、且新行已解析出非空 model 时回填，
+                    // 不覆盖代理先记下的真实 model。
+                    if !log.model.is_empty() {
+                        tx.prepare_cached(
+                            "UPDATE proxy_request_logs
+                             SET model = ?1, request_model = ?2,
+                                 input_cost_usd = ?3, output_cost_usd = ?4,
+                                 cache_read_cost_usd = ?5, cache_creation_cost_usd = ?6,
+                                 total_cost_usd = ?7
+                             WHERE request_id = ?8 AND (model IS NULL OR model = '')",
+                        )
+                        .and_then(|mut up| {
+                            up.execute(rusqlite::params![
+                                log.model,
+                                log.request_model,
+                                log.input_cost_usd,
+                                log.output_cost_usd,
+                                log.cache_read_cost_usd,
+                                log.cache_creation_cost_usd,
+                                log.total_cost_usd,
+                                log.request_id,
+                            ])
+                        })
+                        .map_err(|e| format!("Failed to backfill model/cost: {e}"))?;
+                    }
                 }
             }
         }
 
         tx.execute(
-            "INSERT OR REPLACE INTO session_scan_files (path, size, mtime_ms, offset, last_effort)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![path, size, mtime_ms, offset, last_effort],
+            "INSERT OR REPLACE INTO session_scan_files (path, size, mtime_ms, offset, last_effort, last_model)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![path, size, mtime_ms, offset, last_effort, last_model],
         )
         .map_err(|e| format!("Failed to update session scan state: {e}"))?;
 
@@ -459,6 +489,24 @@ fn speed_eligible_sql(alias: &str) -> String {
     )
 }
 
+/// 估算速度的输出门槛：估算的耗时含首字等待，输出越少首字占比越大、算出来越偏低，
+/// 所以比精确口径的门槛高。
+pub const SPEED_ESTIMATE_MIN_OUTPUT_TOKENS: i64 = 200;
+
+/// 估算耗时短于这个毫秒数时不估速度：输出 200 token 以上却不到 1 秒，多半是起点取晚了。
+pub const SPEED_ESTIMATE_MIN_DURATION_MS: i64 = 1000;
+
+/// 明细行能不能估速度的 SQL 条件（和前端 `isSpeedEstimateEligible` 同口径）：
+/// 会话日志导入的行（没有首字计时），耗时是导入时按日志时间戳估的。
+fn speed_estimate_eligible_sql(alias: &str) -> String {
+    format!(
+        "COALESCE({alias}.data_source, 'proxy') <> 'proxy' \
+         AND {alias}.first_token_ms IS NULL \
+         AND {alias}.output_tokens >= {SPEED_ESTIMATE_MIN_OUTPUT_TOKENS} \
+         AND {alias}.latency_ms >= {SPEED_ESTIMATE_MIN_DURATION_MS}"
+    )
+}
+
 /// 供应商显示名
 ///
 /// 会话文件导入的行没有对应的 providers 记录，返回固定占位名（前端按名翻译成
@@ -535,6 +583,7 @@ fn map_log_detail(row: &rusqlite::Row<'_>) -> rusqlite::Result<RequestLogDetail>
         error_message: row.get(21)?,
         created_at: row.get(22)?,
         reasoning_effort: row.get(23)?,
+        data_source: row.get(24)?,
     })
 }
 
@@ -551,7 +600,7 @@ const LOG_DETAIL_COLUMNS: &str = "l.request_id, l.provider_id, COALESCE(p.name, 
      l.input_cost_usd, l.output_cost_usd, l.cache_read_cost_usd,
      l.cache_creation_cost_usd, l.total_cost_usd,
      l.is_streaming, l.latency_ms, l.first_token_ms, l.duration_ms,
-     l.status_code, l.error_message, l.created_at, l.reasoning_effort";
+     l.status_code, l.error_message, l.created_at, l.reasoning_effort, l.data_source";
 
 impl Database {
     /// 汇总：请求数、成本、四类 token、成功率
@@ -729,6 +778,7 @@ impl Database {
         let pname = provider_name_coalesce("l", "p");
         let real_total = real_total_tokens_sql("l");
         let speed_ok = speed_eligible_sql("l");
+        let est_ok = speed_estimate_eligible_sql("l");
         let sql = format!(
             "SELECT l.provider_id, {pname}, l.app_type,
                     COUNT(*),
@@ -741,7 +791,9 @@ impl Database {
                     COALESCE(AVG(l.latency_ms), 0),
                     COALESCE(SUM(CASE WHEN {speed_ok} THEN l.output_tokens ELSE 0 END), 0),
                     COALESCE(SUM(CASE WHEN {speed_ok} THEN l.latency_ms - l.first_token_ms
-                                 ELSE 0 END), 0)
+                                 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN {est_ok} THEN l.output_tokens ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN {est_ok} THEN l.latency_ms ELSE 0 END), 0)
              FROM proxy_request_logs l
              LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
              {time_clause}
@@ -777,6 +829,8 @@ impl Database {
                     avg_latency_ms: avg_latency.round() as u64,
                     speed_output_tokens: row.get::<_, i64>(10)?.max(0) as u64,
                     speed_generation_ms: row.get::<_, i64>(11)?.max(0) as u64,
+                    est_speed_output_tokens: row.get::<_, i64>(12)?.max(0) as u64,
+                    est_speed_duration_ms: row.get::<_, i64>(13)?.max(0) as u64,
                 })
             })
             .map_err(|e| format!("Failed to read provider stats: {e}"))?;
@@ -1683,7 +1737,7 @@ mod tests {
         let mut rescanned = legacy.clone();
         rescanned.reasoning_effort = Some("medium".into());
         let inserted = db
-            .commit_session_file(&[rescanned], "f", 1, 1, 1, None)
+            .commit_session_file(&[rescanned], "f", 1, 1, 1, None, None)
             .unwrap();
         assert_eq!(inserted, 0, "已存在的行不算新增");
         let detail = db.get_request_detail("e2").unwrap().unwrap();
@@ -1692,7 +1746,7 @@ mod tests {
         // 已有值的行不被覆盖
         let mut other = row.clone();
         other.reasoning_effort = Some("low".into());
-        db.commit_session_file(&[other], "f", 1, 1, 1, None).unwrap();
+        db.commit_session_file(&[other], "f", 1, 1, 1, None, None).unwrap();
         let detail = db.get_request_detail("e1").unwrap().unwrap();
         assert_eq!(detail.reasoning_effort.as_deref(), Some("xhigh"));
     }
@@ -1731,6 +1785,39 @@ mod tests {
         let s = &db.get_provider_stats(None, None).unwrap()[0];
         assert_eq!(s.speed_output_tokens, 500);
         assert_eq!(s.speed_generation_ms, 5000);
+    }
+
+    /// 估算速度只统计会话日志导入、有估算耗时、输出足够长的请求：Σ输出 ÷ Σ耗时
+    #[test]
+    fn provider_stats_estimated_speed_sums_session_rows() {
+        let db = Database::in_memory().unwrap();
+        let insert = |id: &str, output: i64, latency: i64, source: &str| {
+            let mut row = log_at(id, 1000, "1", 200);
+            row.output_tokens = output as u32;
+            row.latency_ms = latency as u64;
+            row.first_token_ms = None;
+            row.data_source = Some(source.to_string());
+            db.insert_request_log(&row).unwrap();
+        };
+        // 计入：2000 token / 20000 ms
+        insert("ok-a", 2_000, 20_000, "session_log");
+        // 计入：200 token / 5000 ms
+        insert("ok-b", 200, 5_000, "session_log");
+        // 不计：输出不到 200
+        insert("short", 199, 5_000, "session_log");
+        // 不计：没估出耗时（0）
+        insert("no-timing", 3_000, 0, "session_log");
+        // 不计：耗时不到 1 秒
+        insert("too-fast", 800, 900, "session_log");
+        // 不计：路由服务记的行（data_source = proxy）
+        insert("proxy-row", 2_000, 20_000, "proxy");
+
+        let s = &db.get_provider_stats(None, None).unwrap()[0];
+        assert_eq!(s.est_speed_output_tokens, 2_200);
+        assert_eq!(s.est_speed_duration_ms, 25_000);
+        // 估算的不混进精确口径
+        assert_eq!(s.speed_output_tokens, 0);
+        assert_eq!(s.speed_generation_ms, 0);
     }
 
     #[test]

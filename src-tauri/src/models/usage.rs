@@ -58,6 +58,11 @@ pub struct ProviderStats {
     pub speed_output_tokens: u64,
     /// 速度分母：同一批请求的生成时间之和（总耗时 - 首字耗时），毫秒
     pub speed_generation_ms: u64,
+    /// 估算速度分子：会话日志导入、有估算耗时、输出 ≥ 200 token 的请求的输出之和。
+    /// 和上面那组分开累计：估算的耗时含首字等待，口径不同，不能加在一起。
+    pub est_speed_output_tokens: u64,
+    /// 估算速度分母：同一批请求的估算耗时之和，毫秒。
+    pub est_speed_duration_ms: u64,
 }
 
 /// 按模型聚合
@@ -124,6 +129,9 @@ pub struct RequestLogDetail {
     pub created_at: i64,
     /// 思考强度（客户端原值）；会话日志与代理请求体里没有时为 None
     pub reasoning_effort: Option<String>,
+    /// 数据来源：`proxy` / `session_log` / `codex_session`；历史行为 None 时前端按 proxy 处理
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_source: Option<String>,
 }
 
 /// 分页结果

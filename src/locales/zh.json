@@ -63,7 +63,12 @@
     "requests": "请求数",
     "tokens": "Tokens",
     "speed": "速度",
-    "speedHelp": "输出 token 总数除以生成时间总和，不是逐条平均。只算经代理的流式请求、输出不少于 100 token 的；会话日志没有计时数据，显示为 —",
+    "speedHelp": "输出 token 总数除以生成时间总和，不是逐条平均，免得短请求把数字带歪。只算经路由服务、输出不少于 100 token 的请求。带 ≈ 的是按会话日志的时间戳估算的（含首字等待，只估输出不少于 200 token 的请求），这一行没有路由数据时才显示。",
+    "speedEstimatedValue": "≈ {{value}} tok/s",
+    "speedTooFew": "输出不到 100 token，不算速度",
+    "speedEstimateTooFew": "输出不到 200 token，不估速度",
+    "noTimingSession": "会话日志没有计时数据",
+    "noFirstToken": "没有首字计时，不算速度",
     "sessionProvider": {
       "label": "{{app}} · 会话日志",
       "hint": "没走代理时从客户端的会话日志读取，分不出具体是哪家供应商"
