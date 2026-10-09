@@ -1,4 +1,5 @@
 pub mod auto_launch_service;
+pub mod claude_desktop_config;
 pub mod config_service;
 pub mod dashboard_service;
 pub mod env_checker_service;

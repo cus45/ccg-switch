@@ -235,6 +235,14 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             defaultHaikuModel: undefined,
             defaultReasoningModel: undefined,
         }
+        : appType === 'claudedesktop'
+        ? {
+            // Desktop 的 inferenceModels 只认 claude-sonnet/opus/haiku-* 名称，没有推理模型位
+            defaultSonnetModel: defaultSonnetModel.trim() || undefined,
+            defaultOpusModel: defaultOpusModel.trim() || undefined,
+            defaultHaikuModel: defaultHaikuModel.trim() || undefined,
+            defaultReasoningModel: undefined,
+        }
         : appType === 'opencode'
         ? {
             defaultSonnetModel: defaultSonnetModel.trim() || undefined,
@@ -318,7 +326,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                 description: description.trim() || undefined,
                 tags: tags.length > 0 ? tags : undefined,
                 meta: providerMeta,
-                settingsConfig: appType === 'codex' || appType === 'opencode' ? undefined : (() => {
+                settingsConfig: appType === 'codex' || appType === 'opencode' || appType === 'claudedesktop' ? undefined : (() => {
                     // 只保存白名单内的已知字段，排除历史残留
                     const clean: Record<string, any> = {};
                     if (internalSettings) {
@@ -384,7 +392,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             url: url.trim() || undefined,
             ...applicableModelConfig,
             meta: providerMeta,
-            settingsConfig: appType === 'codex' || appType === 'opencode' ? undefined : Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
+            settingsConfig: appType === 'codex' || appType === 'opencode' || appType === 'claudedesktop' ? undefined : Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
             proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
             isActive: false,
             createdAt: editingProvider?.createdAt || new Date().toISOString(),
@@ -645,13 +653,19 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                     onChange={setDefaultHaikuModel}
                                     options={fetchedModels}
                                 />
-                                <ModelComboBox
-                                    label={t('providers.reasoningModel', '推理模型 (Thinking)')}
-                                    placeholder="claude-sonnet-4-..."
-                                    value={defaultReasoningModel}
-                                    onChange={setDefaultReasoningModel}
-                                    options={fetchedModels}
-                                />
+                                {appType === 'claudedesktop' ? (
+                                    <p className="col-span-2 text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                                        {t('providers.claudeDesktopModelHint', 'Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 形式的模型名；留空则使用网关默认模型列表。')}
+                                    </p>
+                                ) : (
+                                    <ModelComboBox
+                                        label={t('providers.reasoningModel', '推理模型 (Thinking)')}
+                                        placeholder="claude-sonnet-4-..."
+                                        value={defaultReasoningModel}
+                                        onChange={setDefaultReasoningModel}
+                                        options={fetchedModels}
+                                    />
+                                )}
                             </div>
                         )}
                     </div>

@@ -113,11 +113,20 @@ pub fn delete_provider_from_db(db: &Arc<Database>, id: &str) -> Result<(), Strin
     let existing = db.get_provider(id)?;
     db.delete_provider(id)?;
 
-    // OpenCode 是累加模式：供应商条目会留在 opencode.json 里，删除时一并清理
-    if existing.is_some_and(|p| p.app_type == AppType::OpenCode) {
-        if let Err(e) = crate::services::opencode_config::remove_provider_from_config(id) {
-            tracing::warn!("[Provider] 从 opencode.json 移除供应商 {id} 失败: {e}");
+    match existing {
+        // OpenCode 是累加模式：供应商条目会留在 opencode.json 里，删除时一并清理
+        Some(p) if p.app_type == AppType::OpenCode => {
+            if let Err(e) = crate::services::opencode_config::remove_provider_from_config(id) {
+                tracing::warn!("[Provider] 从 opencode.json 移除供应商 {id} 失败: {e}");
+            }
         }
+        // 删掉 Claude Desktop 当前生效的供应商：还原接管前的 Desktop 配置，避免网关 Key 残留
+        Some(p) if p.app_type == AppType::ClaudeDesktop && p.is_active => {
+            if let Err(e) = crate::services::claude_desktop_config::restore() {
+                tracing::warn!("[Provider] 还原 Claude Desktop 配置失败: {e}");
+            }
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -615,6 +624,7 @@ pub fn preview_provider_sync(
         AppType::Codex => preview_codex_config(provider),
         AppType::Gemini => preview_gemini_config(provider),
         AppType::OpenCode => crate::services::opencode_config::preview_provider(provider),
+        AppType::ClaudeDesktop => crate::services::claude_desktop_config::preview_provider(provider),
         _ => preview_generic_settings(provider),
     }
 }
@@ -870,6 +880,7 @@ pub(crate) fn sync_provider_to_app_config(provider: &Provider) -> Result<(), io:
         AppType::Codex => sync_to_codex_config(provider),
         AppType::Gemini => sync_to_gemini_config(provider),
         AppType::OpenCode => crate::services::opencode_config::sync_provider(provider),
+        AppType::ClaudeDesktop => crate::services::claude_desktop_config::apply_provider(provider),
         _ => sync_to_generic_settings(provider),
     }
 }

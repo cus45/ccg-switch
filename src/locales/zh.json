@@ -1127,7 +1127,18 @@
     "test_connectivity_failed": "连接失败：{{error}}",
     "opencodeNpm": "SDK 类型 (npm)",
     "opencodeModel": "模型",
-    "opencodeSmallModel": "附加模型（可选）"
+    "opencodeSmallModel": "附加模型（可选）",
+    "claudeDesktopModelHint": "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 形式的模型名；留空则使用网关默认模型列表。",
+    "claudeDesktop": {
+      "notInstalled": "未检测到 Claude Desktop 配置目录，请先安装并启动一次 Claude Desktop。",
+      "applied": "已接管",
+      "notApplied": "未接管：切换一个 Claude Desktop 供应商即可写入配置库",
+      "restartHint": "修改在重启 Claude Desktop 后生效",
+      "restore": "恢复原配置",
+      "restoreTitle": "恢复 Claude Desktop 原配置？",
+      "restoreMessage": "将移除本应用写入的网关条目，还原接管前生效的配置与部署模式，并取消 Claude Desktop 供应商的激活状态。",
+      "restored": "已恢复 Claude Desktop 原配置，重启 Desktop 后生效"
+    }
   },
   "settings": {
     "title": "设置",

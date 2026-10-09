@@ -699,6 +699,27 @@ async fn get_tool_versions(
     )
 }
 
+// Claude Desktop 3P 配置
+#[tauri::command]
+fn get_claude_desktop_status() -> services::claude_desktop_config::ClaudeDesktopStatus {
+    services::claude_desktop_config::get_status()
+}
+
+/// 还原接管前的 Desktop 配置，并把 Desktop 供应商全部置为非激活
+#[tauri::command]
+fn restore_claude_desktop(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    services::claude_desktop_config::restore().map_err(|e| e.to_string())?;
+    let providers = state.db.list_providers()?;
+    for mut p in providers
+        .into_iter()
+        .filter(|p| p.app_type == models::app_type::AppType::ClaudeDesktop && p.is_active)
+    {
+        p.is_active = false;
+        state.db.upsert_provider(&p)?;
+    }
+    Ok(())
+}
+
 // CLI 工具一键安装 / 升级
 #[tauri::command]
 async fn get_tool_install_plan(
@@ -876,6 +897,8 @@ pub fn run() {
             get_prompt_sync_status,
             // 工具版本 & 更新
             get_tool_versions,
+            get_claude_desktop_status,
+            restore_claude_desktop,
             get_tool_install_plan,
             run_tool_install,
             cancel_tool_install,

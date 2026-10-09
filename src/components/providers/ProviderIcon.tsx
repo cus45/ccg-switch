@@ -22,12 +22,14 @@ const brandClassMap: Partial<Record<AppType, string>> = {
     claude: 'bg-orange-50 text-[#d97757] ring-orange-200 dark:bg-orange-500/10 dark:ring-orange-500/30',
     codex: 'bg-white text-neutral-950 ring-neutral-300 dark:bg-neutral-950 dark:text-white dark:ring-neutral-700',
     gemini: 'bg-blue-50 text-blue-600 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/30',
+    claudedesktop: 'bg-orange-50 text-[#d97757] ring-orange-300 dark:bg-orange-500/10 dark:ring-orange-500/40',
 };
 
 const brandGlyphMap: Partial<Record<AppType, BrandGlyph>> = {
     claude: 'claude-lobehub',
     codex: 'chatgpt-openai',
     gemini: 'gemini-google',
+    claudedesktop: 'claude-lobehub',
 };
 
 export default function ProviderIcon({ appType, size = 'md' }: ProviderIconProps) {
@@ -41,14 +43,14 @@ export default function ProviderIcon({ appType, size = 'md' }: ProviderIconProps
         return (
             <div
                 aria-label={`${label} provider`}
-                className={`${sizeMap[size]} ${appType === 'codex' ? 'rounded-md' : 'rounded-full'} flex items-center justify-center shadow-sm shrink-0 ring-1 ${brandClass}`}
+                className={`${sizeMap[size]} ${appType === 'codex' || appType === 'claudedesktop' ? 'rounded-md' : 'rounded-full'} flex items-center justify-center shadow-sm shrink-0 ring-1 ${brandClass}`}
                 data-provider-brand-icon={appType}
                 title={label}
             >
                 <BrandGlyphIcon
                     glyph={brandGlyph}
                     size={glyphSize}
-                    colored={appType === 'claude'}
+                    colored={appType === 'claude' || appType === 'claudedesktop'}
                     providerIcon
                 />
             </div>

@@ -11,6 +11,9 @@ pub enum AppType {
     Gemini,
     OpenCode,
     OpenClaw,
+    /// Claude Desktop（Chat / Code 模式）的第三方网关配置
+    #[serde(rename = "claudedesktop")]
+    ClaudeDesktop,
 }
 
 impl AppType {
@@ -21,6 +24,7 @@ impl AppType {
             AppType::Gemini => "gemini",
             AppType::OpenCode => "opencode",
             AppType::OpenClaw => "openclaw",
+            AppType::ClaudeDesktop => "claudedesktop",
         }
     }
 
@@ -37,6 +41,7 @@ impl AppType {
             AppType::Gemini => "gemini.json",
             AppType::OpenCode => "opencode.json",
             AppType::OpenClaw => "openclaw.json",
+            AppType::ClaudeDesktop => "claude_desktop_config.json",
         }
     }
 
@@ -48,6 +53,7 @@ impl AppType {
             AppType::Gemini => "GEMINI",
             AppType::OpenCode => "OPENCODE",
             AppType::OpenClaw => "OPENCLAW",
+            AppType::ClaudeDesktop => "ANTHROPIC",
         }
     }
 
@@ -59,6 +65,7 @@ impl AppType {
             AppType::Gemini,
             AppType::OpenCode,
             AppType::OpenClaw,
+            AppType::ClaudeDesktop,
         ]
     }
 }
@@ -78,6 +85,7 @@ impl FromStr for AppType {
             "gemini" => Ok(AppType::Gemini),
             "opencode" => Ok(AppType::OpenCode),
             "openclaw" => Ok(AppType::OpenClaw),
+            "claudedesktop" => Ok(AppType::ClaudeDesktop),
             _ => Err(format!("Unknown app type: {}", s)),
         }
     }

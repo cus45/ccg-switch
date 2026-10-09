@@ -34,6 +34,7 @@ import {exportProvidersConfigToFile, importProvidersConfigFromFile} from '../ser
 import ProviderCard from '../components/providers/ProviderCard';
 import ProviderForm from '../components/providers/ProviderForm';
 import ProviderIcon from '../components/providers/ProviderIcon';
+import ClaudeDesktopPanel from '../components/providers/ClaudeDesktopPanel';
 import UsageScriptModal from '../components/providers/UsageScriptModal';
 import {useHealthCheck} from '../hooks/useHealthCheck';
 import HealthStatusBadge from '../components/providers/HealthStatusBadge';
@@ -460,6 +461,16 @@ function ProvidersPage() {
                         </ul>
                     </details>
                 </div>
+
+                {filterApp === 'claudedesktop' && (
+                    <ClaudeDesktopPanel
+                        refreshKey={providers
+                            .filter(p => p.appType === 'claudedesktop')
+                            .map(p => `${p.id}:${p.isActive ? 1 : 0}`)
+                            .join(',')}
+                        onRestored={() => void loadAllProviders(true)}
+                    />
+                )}
 
                 {/* 快捷打开配置文件 + 启动终端 */}
                 <div className="flex items-center gap-4 flex-wrap text-xs">

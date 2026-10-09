@@ -15,6 +15,7 @@ fn display_name(app_type: &AppType) -> &'static str {
         AppType::Gemini => "Gemini",
         AppType::OpenCode => "OpenCode",
         AppType::OpenClaw => "OpenClaw",
+        AppType::ClaudeDesktop => "Claude Desktop",
     }
 }
 

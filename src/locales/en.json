@@ -1240,7 +1240,18 @@
     "test_connectivity_failed": "Failed: {{error}}",
     "opencodeNpm": "SDK type (npm)",
     "opencodeModel": "Model",
-    "opencodeSmallModel": "Extra model (optional)"
+    "opencodeSmallModel": "Extra model (optional)",
+    "claudeDesktopModelHint": "Claude Desktop only accepts claude-sonnet-* / claude-opus-* / claude-haiku-* model names; leave empty to use the gateway default list.",
+    "claudeDesktop": {
+      "notInstalled": "Claude Desktop config directory not found. Install and launch Claude Desktop once first.",
+      "applied": "Managed",
+      "notApplied": "Not managed: switch to a Claude Desktop provider to write the config library",
+      "restartHint": "Changes take effect after restarting Claude Desktop",
+      "restore": "Restore original config",
+      "restoreTitle": "Restore Claude Desktop config?",
+      "restoreMessage": "Removes the gateway entry written by this app, restores the previously applied entry and deployment mode, and deactivates Claude Desktop providers.",
+      "restored": "Claude Desktop config restored; restart Desktop to apply"
+    }
   },
   "settings": {
     "title": "Settings",

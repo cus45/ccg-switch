@@ -293,3 +293,18 @@ removed on delete; top-level `model` / `small_model` / `theme` belong to the use
 write). A file that fails to parse (e.g. JSONC with comments) is an error — never overwrite it.
 OpenCode is not a proxy-takeover app (`TAKEOVER_APPS` / frontend `PROXY_APP_TYPES` exclude it).
 Health checks pick the wire protocol from `meta.npm` (`check_protocol` in `stream_check_service.rs`).
+
+## Claude Desktop 3P config
+
+`services/claude_desktop_config.rs` (approach mirrors upstream cc-switch v4) makes Claude Desktop's
+Chat/Code modes use a custom gateway by writing Desktop's 3P **config library**: our fixed entry
+`configLibrary/00000000-0000-4000-8000-00000000cc65.json` (`inferenceProvider=gateway`, base URL, key,
+`inferenceModels`), registered in `_meta.json` with `appliedId` pointing at it, and
+`deploymentMode="3p"` in both `Claude/` and `Claude-3p/claude_desktop_config.json`.
+- Model names must be `claude-(sonnet|opus|haiku|fable)-*` or Desktop rejects the whole list.
+- First takeover backs up the previous `appliedId` / deployment modes to
+  `~/.ccg-switch/claude_desktop_backup.json`; restore puts them back (users may already run 3P with
+  their own entry — never force `1p` when a backup exists). Never modify the user's own entries.
+- Windows: probe MSIX `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming`, then `%APPDATA%`, then
+  `%LOCALAPPDATA%` for `Claude-3p`. Changes apply after Desktop restarts.
+- Only direct mode is implemented; upstream's proxy (model-mapping) mode is not.
