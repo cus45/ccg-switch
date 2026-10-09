@@ -685,8 +685,11 @@ async fn open_config_file(app: tauri::AppHandle, path: String) -> Result<bool, S
 fn apply_universal_provider(
     config: UniversalProviderConfig,
     state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<Vec<String>, String> {
-    universal_provider_service::apply_universal_provider(&state.db, config)
+    let ids = universal_provider_service::apply_universal_provider(&state.db, config)?;
+    tray::refresh(&app);
+    Ok(ids)
 }
 
 // 工具版本检测
@@ -710,7 +713,10 @@ fn get_claude_desktop_status() -> services::claude_desktop_config::ClaudeDesktop
 
 /// 还原接管前的 Desktop 配置，并把 Desktop 供应商全部置为非激活
 #[tauri::command]
-fn restore_claude_desktop(state: tauri::State<'_, AppState>) -> Result<(), String> {
+fn restore_claude_desktop(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
     services::claude_desktop_config::restore().map_err(|e| e.to_string())?;
     let providers = state.db.list_providers()?;
     for mut p in providers
@@ -720,6 +726,7 @@ fn restore_claude_desktop(state: tauri::State<'_, AppState>) -> Result<(), Strin
         p.is_active = false;
         state.db.upsert_provider(&p)?;
     }
+    tray::refresh(&app);
     Ok(())
 }
 

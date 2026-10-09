@@ -9,6 +9,7 @@ import {DeepLinkImportDialog} from './components/providers/DeepLinkImportDialog'
 import {useConfigStore} from './stores/useConfigStore';
 import {useTokenStore} from './stores/useTokenStore';
 import {useAboutStore} from './stores/useAboutStore';
+import {useProviderStore} from './stores/useProviderStore';
 import {useTranslation} from 'react-i18next';
 import {listen} from '@tauri-apps/api/event';
 import {showToast} from './components/common/ToastContainer';
@@ -128,6 +129,16 @@ function App() {
 
     const timer = globalThis.setTimeout(warmup, 500);
     return () => globalThis.clearTimeout(timer);
+  }, []);
+
+  // 托盘切换供应商后同步界面与对话运行时
+  useEffect(() => {
+    const pending = listen<string>('providers-changed', (event) => {
+      void useProviderStore.getState().handleExternalSwitch(event.payload);
+    });
+    return () => {
+      void pending.then((unlisten) => unlisten());
+    };
   }, []);
 
   // 监听后端推送的自动更新事件

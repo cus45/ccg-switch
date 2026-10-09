@@ -1143,6 +1143,19 @@
     "universal": {
       "button": "通用供应商",
       "title": "通用供应商"
+    },
+    "presetPicker": {
+      "placeholder": "从 {{count}} 个预设中选择…",
+      "search": "搜索名称或域名",
+      "empty": "没有匹配的预设",
+      "getKey": "获取 API Key",
+      "website": "访问官网"
+    },
+    "presetCategory": {
+      "official": "官方",
+      "cn_official": "国内官方",
+      "aggregator": "聚合",
+      "third_party": "第三方"
     }
   },
   "settings": {

@@ -17,6 +17,8 @@ interface ProviderState {
     addProvider: (data: Omit<Provider, 'id' | 'createdAt' | 'isActive' | 'lastUsed' | 'inFailoverQueue'>) => Promise<void>;
     updateProvider: (id: string, data: Partial<Provider>) => Promise<void>;
     switchProvider: (app: AppType, providerId: string) => Promise<void>;
+    /** 托盘等外部途径切换后同步：刷新列表，Claude / Codex 标记对话运行时配置待刷新 */
+    handleExternalSwitch: (app: string) => Promise<void>;
     deleteProvider: (providerId: string) => Promise<void>;
     moveProvider: (providerId: string, targetIndex: number) => Promise<void>;
 }
@@ -96,6 +98,13 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;
+        }
+    },
+
+    handleExternalSwitch: async (app) => {
+        await get().loadAllProviders(true);
+        if (app === 'claude' || app === 'codex') {
+            await useChatStore.getState().markProviderConfigDirty();
         }
     },
 

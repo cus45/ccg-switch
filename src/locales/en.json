@@ -1256,6 +1256,19 @@
     "universal": {
       "button": "Universal provider",
       "title": "Universal provider"
+    },
+    "presetPicker": {
+      "placeholder": "Choose from {{count}} presets…",
+      "search": "Search by name or domain",
+      "empty": "No matching presets",
+      "getKey": "Get API key",
+      "website": "Website"
+    },
+    "presetCategory": {
+      "official": "Official",
+      "cn_official": "CN official",
+      "aggregator": "Aggregator",
+      "third_party": "Third party"
     }
   },
   "settings": {

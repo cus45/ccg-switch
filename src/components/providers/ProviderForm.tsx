@@ -8,6 +8,9 @@ import { useProviderStore } from '../../stores/useProviderStore';
 import { Provider, ProviderProxyConfig } from '../../types/provider';
 import { AppType, VISIBLE_APP_TYPES, APP_LABELS } from '../../types/app';
 import ProviderProxyConfigInput from './ProviderProxyConfig';
+import ProviderPresetPicker from './ProviderPresetPicker';
+import type { ProviderPresetData } from '../../config/providerPresets';
+import { open } from '@tauri-apps/plugin-shell';
 import { cn } from '../../utils/cn';
 import { getFallbackChatModels } from '../../utils/chatModels';
 
@@ -101,13 +104,6 @@ const OPENCODE_NPM_OPTIONS = [
     { value: '@ai-sdk/google', label: 'Google' },
 ];
 
-// ── 预设配置 ──────────────────────────────────────────────
-
-const PRESETS = [
-    { label: 'Claude Official', url: 'https://api.anthropic.com', appType: 'claude' as AppType },
-    { label: 'OpenRouter', url: 'https://openrouter.ai/api', appType: 'claude' as AppType },
-];
-
 // ── 白名单配置 ──────────────────────────────────────────────
 
 export default function ProviderForm({ isOpen, editingProvider, onClose, defaultAppType = 'claude' }: ProviderFormProps) {
@@ -127,6 +123,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const [defaultHaikuModel, setDefaultHaikuModel] = useState(editingProvider?.defaultHaikuModel || '');
     const [defaultReasoningModel, setDefaultReasoningModel] = useState(editingProvider?.defaultReasoningModel || '');
     const [opencodeNpm, setOpencodeNpm] = useState(editingProvider?.meta?.npm || OPENCODE_DEFAULT_NPM);
+    const [selectedPreset, setSelectedPreset] = useState<ProviderPresetData | null>(null);
 
     // 其他配置
     const [description, setDescription] = useState(editingProvider?.description || '');
@@ -165,6 +162,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             setDefaultHaikuModel(editingProvider?.defaultHaikuModel || '');
             setDefaultReasoningModel(editingProvider?.defaultReasoningModel || '');
             setOpencodeNpm(editingProvider?.meta?.npm || OPENCODE_DEFAULT_NPM);
+            setSelectedPreset(null);
             setDescription(editingProvider?.description || '');
             setTags(editingProvider?.tags || []);
             if (editingProvider?.proxyConfig) {
@@ -202,16 +200,23 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         }
     }, [isOpen, editingProvider, defaultAppType]);
 
-    const applyPreset = (preset: typeof PRESETS[number]) => {
-        if (preset.url) {
-            setUrl(preset.url);
-        }
-        setAppType(preset.appType);
+    // 预设只填空连接信息与模型，不碰 Key；选择器已按当前应用过滤
+    const applyPreset = (preset: ProviderPresetData) => {
+        setSelectedPreset(preset);
+        setName(preset.name);
+        setUrl(preset.url);
+        setFetchedModels([]);
+        setDefaultSonnetModel(preset.models?.main ?? '');
+        setDefaultOpusModel(preset.models?.opus ?? '');
+        setDefaultHaikuModel(preset.models?.haiku ?? '');
+        setDefaultReasoningModel('');
+        if (preset.npm) setOpencodeNpm(preset.npm);
     };
 
     const handleAppTypeChange = (nextAppType: AppType) => {
         const previousDefaultUrl = defaultUrlForApp(appType);
         setAppType(nextAppType);
+        setSelectedPreset(null);
         setFetchedModels([]);
         setDefaultSonnetModel('');
         setDefaultOpusModel('');
@@ -446,19 +451,24 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             confirmText={saving ? t('common.saving', '保存中...') : t('common.save', '保存')}
             maxWidthClass="max-w-[1400px]"
         >
-            {/* 预设选择 */}
+            {/* 预设选择（新增时） */}
             {!isEditing && (
-                <div className="flex gap-2 mb-4">
-                    {PRESETS.map((preset) => (
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                    <div className="min-w-[16rem] flex-1">
+                        <ProviderPresetPicker appType={appType} selected={selectedPreset} onSelect={applyPreset} />
+                    </div>
+                    {selectedPreset && (selectedPreset.apiKeyUrl || selectedPreset.websiteUrl) && (
                         <button
-                            key={preset.label}
                             type="button"
-                            onClick={() => applyPreset(preset)}
-                            className="inline-flex h-7 items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 px-3 text-xs font-medium shadow-sm transition-colors hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+                            onClick={() => void open((selectedPreset.apiKeyUrl || selectedPreset.websiteUrl)!)}
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
                         >
-                            {preset.label}
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            {selectedPreset.apiKeyUrl
+                                ? t('providers.presetPicker.getKey', '获取 API Key')
+                                : t('providers.presetPicker.website', '访问官网')}
                         </button>
-                    ))}
+                    )}
                 </div>
             )}
 

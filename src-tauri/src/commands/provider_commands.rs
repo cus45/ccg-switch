@@ -18,8 +18,10 @@ pub fn get_all_providers(state: State<AppState>) -> Result<Vec<Provider>, String
 }
 
 #[tauri::command]
-pub fn add_provider(provider: Provider, state: State<AppState>) -> Result<(), String> {
-    provider_service::add_provider_to_db(&state.db, provider)
+pub fn add_provider(provider: Provider, state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    provider_service::add_provider_to_db(&state.db, provider)?;
+    crate::tray::refresh(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -27,13 +29,18 @@ pub fn update_provider(
     provider_id: String,
     provider: Provider,
     state: State<AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
-    provider_service::update_provider_in_db(&state.db, &provider_id, provider)
+    provider_service::update_provider_in_db(&state.db, &provider_id, provider)?;
+    crate::tray::refresh(&app);
+    Ok(())
 }
 
 #[tauri::command]
-pub fn delete_provider(provider_id: String, state: State<AppState>) -> Result<(), String> {
-    provider_service::delete_provider_from_db(&state.db, &provider_id)
+pub fn delete_provider(provider_id: String, state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    provider_service::delete_provider_from_db(&state.db, &provider_id)?;
+    crate::tray::refresh(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -41,9 +48,12 @@ pub fn switch_provider(
     app: String,
     provider_id: String,
     state: State<AppState>,
+    handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let app_type: AppType = app.parse().map_err(|e: String| e)?;
-    provider_service::switch_provider_in_db(&state.db, app_type, &provider_id)
+    provider_service::switch_provider_in_db(&state.db, app_type, &provider_id)?;
+    crate::tray::refresh(&handle);
+    Ok(())
 }
 
 #[tauri::command]
