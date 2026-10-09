@@ -79,41 +79,68 @@ static CANCELLED: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new())
 static ANSI_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07").expect("ansi regex"));
 
-/// 白名单：返回 (脚本, 是否依赖 npm)
-fn resolve_script(
-    tool: &str,
-    action: ToolAction,
-    platform: Platform,
-    claude_native: bool,
-) -> Result<(String, bool), String> {
-    let npm = |pkg: &str| (format!("npm i -g {pkg}@latest"), true);
-    let script = match (tool, action) {
-        // 原生安装器装的 claude 自带 `claude update`；npm 装的走 npm
-        ("claude", ToolAction::Upgrade) if claude_native => ("claude update".to_string(), false),
-        ("claude", ToolAction::Upgrade) => npm("@anthropic-ai/claude-code"),
-        ("claude", ToolAction::Install) => match platform {
-            Platform::Windows => ("irm https://claude.ai/install.ps1 | iex".to_string(), false),
-            Platform::Unix => ("curl -fsSL https://claude.ai/install.sh | bash".to_string(), false),
-        },
-        ("codex", _) => npm("@openai/codex"),
-        ("gemini", _) => npm("@google/gemini-cli"),
-        ("opencode", ToolAction::Upgrade) => ("opencode upgrade".to_string(), false),
-        ("opencode", ToolAction::Install) => match platform {
-            Platform::Windows => npm("opencode-ai"),
-            Platform::Unix => ("curl -fsSL https://opencode.ai/install | bash".to_string(), false),
-        },
-        _ => return Err(format!("不支持的工具: {tool}")),
-    };
-    Ok(script)
+/// npm 全局安装命令（与 cc-switch 对齐）
+///
+/// Claude Code 的 postinstall 会把平台原生程序放到 bin/claude.exe；npm 12 默认拦截该脚本，
+/// 留下文本占位文件导致 Windows 报"与 Windows 版本不兼容"，因此显式放行。
+fn npm_install_command(tool: &str) -> Option<&'static str> {
+    match tool {
+        "claude" => Some(
+            "npm i -g @anthropic-ai/claude-code@latest --ignore-scripts=false --include=optional --allow-scripts=@anthropic-ai/claude-code",
+        ),
+        "codex" => Some("npm i -g @openai/codex@latest"),
+        "gemini" => Some("npm i -g @google/gemini-cli@latest"),
+        "opencode" => Some("npm i -g opencode-ai@latest"),
+        _ => None,
+    }
 }
 
-/// 原生安装器的落点：~/.local/bin/claude(.exe)
-fn is_claude_native() -> bool {
-    let Some(home) = dirs::home_dir() else {
-        return false;
+/// 工具自带的升级子命令（gemini 没有）
+fn official_update_command(tool: &str) -> Option<&'static str> {
+    match tool {
+        "claude" => Some("claude update"),
+        "codex" => Some("codex update"),
+        "opencode" => Some("opencode upgrade"),
+        _ => None,
+    }
+}
+
+/// 官方安装脚本（仅 Unix；Windows 统一走 npm，与 cc-switch 一致）
+fn unix_installer(tool: &str) -> Option<&'static str> {
+    match tool {
+        "claude" => Some("curl -fsSL https://claude.ai/install.sh | bash"),
+        "opencode" => Some("curl -fsSL https://opencode.ai/install | bash"),
+        _ => None,
+    }
+}
+
+/// `primary || fallback`。Windows PowerShell 5.1 不支持 `||`：
+/// primary 抛异常（命令不存在）或退出码非零时都执行 fallback。
+fn chain(primary: &str, fallback: &str, platform: Platform) -> String {
+    match platform {
+        Platform::Unix => format!("{primary} || {fallback}"),
+        Platform::Windows => format!(
+            "try {{ {primary} }} catch {{ $global:LASTEXITCODE = 1 }}; if ($LASTEXITCODE) {{ {fallback} }}"
+        ),
+    }
+}
+
+/// 白名单：返回 (脚本, 是否只能靠 npm)
+///
+/// 升级：官方自更新优先、失败回退 npm；安装：Unix 官方脚本优先、失败回退 npm，Windows 直接 npm。
+fn resolve_script(tool: &str, action: ToolAction, platform: Platform) -> Result<(String, bool), String> {
+    let npm = npm_install_command(tool).ok_or_else(|| format!("不支持的工具: {tool}"))?;
+    let primary = match action {
+        ToolAction::Upgrade => official_update_command(tool),
+        ToolAction::Install => match platform {
+            Platform::Unix => unix_installer(tool),
+            Platform::Windows => None,
+        },
     };
-    let bin = home.join(".local").join("bin");
-    bin.join("claude.exe").exists() || bin.join("claude").exists()
+    Ok(match primary {
+        Some(primary) => (chain(primary, npm, platform), false),
+        None => (npm.to_string(), true),
+    })
 }
 
 /// 用平台 shell 包装脚本
@@ -165,8 +192,7 @@ async fn has_npm() -> bool {
 
 /// 生成执行计划；依赖 npm 而本机没有 npm 时返回 `npm_missing`
 pub async fn get_install_plan(tool: &str, action: ToolAction) -> Result<InstallPlan, String> {
-    let (command, needs_npm) =
-        resolve_script(tool, action, Platform::current(), is_claude_native())?;
+    let (command, needs_npm) = resolve_script(tool, action, Platform::current())?;
     if needs_npm && !has_npm().await {
         return Err("npm_missing".to_string());
     }
@@ -309,42 +335,40 @@ mod tests {
 
     #[test]
     fn rejects_unknown_tool() {
-        assert!(resolve_script("rm", ToolAction::Install, Platform::Unix, false).is_err());
-        assert!(resolve_script("claude; rm -rf /", ToolAction::Upgrade, Platform::Windows, false).is_err());
+        assert!(resolve_script("rm", ToolAction::Install, Platform::Unix).is_err());
+        assert!(resolve_script("claude; rm -rf /", ToolAction::Upgrade, Platform::Windows).is_err());
     }
 
     #[test]
-    fn npm_tools_need_npm() {
-        for tool in ["codex", "gemini"] {
-            for action in [ToolAction::Install, ToolAction::Upgrade] {
-                let (script, needs_npm) =
-                    resolve_script(tool, action, Platform::Windows, false).unwrap();
-                assert!(needs_npm);
-                assert!(script.starts_with("npm i -g "));
-            }
+    fn gemini_is_npm_only() {
+        for action in [ToolAction::Install, ToolAction::Upgrade] {
+            let (script, needs_npm) = resolve_script("gemini", action, Platform::Unix).unwrap();
+            assert!(needs_npm);
+            assert_eq!(script, "npm i -g @google/gemini-cli@latest");
         }
     }
 
     #[test]
-    fn claude_upgrade_depends_on_install_kind() {
-        let (native, npm1) = resolve_script("claude", ToolAction::Upgrade, Platform::Unix, true).unwrap();
-        assert_eq!(native, "claude update");
-        assert!(!npm1);
-        let (npm_script, npm2) = resolve_script("claude", ToolAction::Upgrade, Platform::Unix, false).unwrap();
-        assert!(npm_script.contains("@anthropic-ai/claude-code"));
-        assert!(npm2);
+    fn upgrade_prefers_official_then_npm() {
+        let (unix, needs_npm) = resolve_script("claude", ToolAction::Upgrade, Platform::Unix).unwrap();
+        assert!(unix.starts_with("claude update || npm i -g @anthropic-ai/claude-code@latest"));
+        assert!(unix.contains("--allow-scripts=@anthropic-ai/claude-code"));
+        assert!(!needs_npm);
+        let (win, _) = resolve_script("opencode", ToolAction::Upgrade, Platform::Windows).unwrap();
+        assert!(win.starts_with("try { opencode upgrade }"));
+        assert!(win.ends_with("if ($LASTEXITCODE) { npm i -g opencode-ai@latest }"));
+        assert!(!win.contains("||"), "PowerShell 5.1 不支持 ||");
     }
 
     #[test]
-    fn install_scripts_are_platform_specific() {
-        let (win, _) = resolve_script("claude", ToolAction::Install, Platform::Windows, false).unwrap();
-        assert!(win.contains("install.ps1"));
-        let (unix, _) = resolve_script("claude", ToolAction::Install, Platform::Unix, false).unwrap();
-        assert!(unix.contains("install.sh"));
-        let (oc_win, oc_npm) = resolve_script("opencode", ToolAction::Install, Platform::Windows, false).unwrap();
-        assert!(oc_win.contains("opencode-ai") && oc_npm);
-        let (oc_up, _) = resolve_script("opencode", ToolAction::Upgrade, Platform::Unix, false).unwrap();
-        assert_eq!(oc_up, "opencode upgrade");
+    fn install_is_platform_specific() {
+        let (unix, _) = resolve_script("claude", ToolAction::Install, Platform::Unix).unwrap();
+        assert!(unix.starts_with("curl -fsSL https://claude.ai/install.sh | bash || npm i -g"));
+        let (win, needs_npm) = resolve_script("claude", ToolAction::Install, Platform::Windows).unwrap();
+        assert!(win.starts_with("npm i -g @anthropic-ai/claude-code@latest"));
+        assert!(needs_npm);
+        let (codex, _) = resolve_script("codex", ToolAction::Install, Platform::Unix).unwrap();
+        assert_eq!(codex, "npm i -g @openai/codex@latest");
     }
 
     #[test]
