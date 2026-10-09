@@ -23,6 +23,7 @@ pub mod storage;
 pub mod stream_check_service;
 pub mod subagent_service;
 pub mod token_service;
+pub mod tool_installer_service;
 pub mod tool_version_service;
 pub mod universal_provider_service;
 pub mod updater_service;

@@ -699,6 +699,29 @@ async fn get_tool_versions(
     )
 }
 
+// CLI 工具一键安装 / 升级
+#[tauri::command]
+async fn get_tool_install_plan(
+    tool: String,
+    action: services::tool_installer_service::ToolAction,
+) -> Result<services::tool_installer_service::InstallPlan, String> {
+    services::tool_installer_service::get_install_plan(&tool, action).await
+}
+
+#[tauri::command]
+async fn run_tool_install(
+    app: tauri::AppHandle,
+    tool: String,
+    action: services::tool_installer_service::ToolAction,
+) -> Result<(), String> {
+    services::tool_installer_service::run_install(app, tool, action).await
+}
+
+#[tauri::command]
+async fn cancel_tool_install(tool: String) -> Result<(), String> {
+    services::tool_installer_service::cancel_install(&tool).await
+}
+
 // 检查更新
 #[tauri::command]
 async fn check_for_updates(
@@ -853,6 +876,9 @@ pub fn run() {
             get_prompt_sync_status,
             // 工具版本 & 更新
             get_tool_versions,
+            get_tool_install_plan,
+            run_tool_install,
+            cancel_tool_install,
             check_for_updates,
             download_update,
             install_update,

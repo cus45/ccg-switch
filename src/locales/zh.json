@@ -1219,6 +1219,31 @@
         "20": "20 个",
         "50": "50 个"
       }
+    },
+    "manualInstall": "手动安装命令",
+    "manualInstallHint": "也可以在终端中手动执行以下命令安装对应工具。",
+    "toolInstall": {
+      "install": "安装",
+      "upgradeTo": "升级到 {{version}}",
+      "cancel": "取消",
+      "run": "执行",
+      "confirmInstallTitle": "安装 {{name}}",
+      "confirmUpgradeTitle": "升级 {{name}}",
+      "confirmHint": "将在后台执行以下命令，输出会实时显示在下方：",
+      "npmMissingTitle": "未检测到 npm",
+      "npmMissing": "该工具通过 npm 安装，请先安装 Node.js（自带 npm）后重试。",
+      "openNode": "打开 Node.js 官网",
+      "logTitleInstall": "安装 {{name}}",
+      "logTitleUpgrade": "升级 {{name}}",
+      "waiting": "等待输出…",
+      "success": "{{name}} 已完成",
+      "failed": "{{name}} 执行失败，请查看日志",
+      "status": {
+        "running": "执行中",
+        "success": "成功",
+        "failed": "失败",
+        "cancelled": "已取消"
+      }
     }
   },
   "token_usage": {

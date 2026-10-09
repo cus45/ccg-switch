@@ -1411,6 +1411,31 @@
         "20": "20",
         "50": "50"
       }
+    },
+    "manualInstall": "Manual install commands",
+    "manualInstallHint": "You can also run these commands in a terminal to install each tool.",
+    "toolInstall": {
+      "install": "Install",
+      "upgradeTo": "Upgrade to {{version}}",
+      "cancel": "Cancel",
+      "run": "Run",
+      "confirmInstallTitle": "Install {{name}}",
+      "confirmUpgradeTitle": "Upgrade {{name}}",
+      "confirmHint": "The following command will run in the background; output streams below:",
+      "npmMissingTitle": "npm not found",
+      "npmMissing": "This tool is installed via npm. Install Node.js (includes npm) and try again.",
+      "openNode": "Open nodejs.org",
+      "logTitleInstall": "Installing {{name}}",
+      "logTitleUpgrade": "Upgrading {{name}}",
+      "waiting": "Waiting for output…",
+      "success": "{{name}} finished",
+      "failed": "{{name}} failed, see the log",
+      "status": {
+        "running": "Running",
+        "success": "Succeeded",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
     }
   },
   "tray": {

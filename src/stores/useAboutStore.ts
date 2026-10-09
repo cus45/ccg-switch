@@ -2,7 +2,13 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
-import { ToolVersion, UpdateInfo, DownloadProgress, InstallProgress } from '../types/about';
+import {
+    ToolVersion, UpdateInfo, DownloadProgress, InstallProgress,
+    ToolAction, ToolInstallState, ToolInstallLog, ToolInstallFinished,
+} from '../types/about';
+
+/** 每个工具保留的日志行数上限 */
+const MAX_INSTALL_LOG_LINES = 500;
 
 // ── 类型定义 ──────────────────────────────────────────────
 
@@ -24,6 +30,8 @@ interface AboutState {
     // 安装
     installing: boolean;
     installStage: string;
+    // CLI 工具安装 / 升级：tool → 状态
+    toolInstalls: Record<string, ToolInstallState>;
 
     // actions
     fetchToolVersions: (force?: boolean) => Promise<void>;
@@ -35,6 +43,9 @@ interface AboutState {
     setCheckError: (error: string | null) => void;
     setDownloadedPath: (path: string | null) => void;
     initEventListeners: () => void;
+    startToolInstall: (tool: string, action: ToolAction) => Promise<void>;
+    cancelToolInstall: (tool: string) => Promise<void>;
+    dismissToolInstall: (tool: string) => void;
 }
 
 // ── 防重入标志 ──────────────────────────────────────────────
@@ -57,6 +68,7 @@ export const useAboutStore = create<AboutState>((set, get) => ({
     downloadedPath: null,
     installing: false,
     installStage: 'idle',
+    toolInstalls: {},
 
     fetchToolVersions: async (force = false) => {
         const { toolVersions, lastFetchTime } = get();
@@ -130,6 +142,39 @@ export const useAboutStore = create<AboutState>((set, get) => ({
         });
     },
 
+    startToolInstall: async (tool, action) => {
+        set((s) => ({
+            toolInstalls: { ...s.toolInstalls, [tool]: { action, status: 'running', logs: [], exitCode: null } },
+        }));
+        try {
+            await invoke('run_tool_install', { tool, action });
+        } catch (e: any) {
+            const msg = typeof e === 'string' ? e : e?.message || String(e);
+            set((s) => ({
+                toolInstalls: {
+                    ...s.toolInstalls,
+                    [tool]: { action, status: 'failed', logs: [msg], exitCode: null },
+                },
+            }));
+        }
+    },
+
+    cancelToolInstall: async (tool) => {
+        try {
+            await invoke('cancel_tool_install', { tool });
+        } catch {
+            // 任务可能刚好结束，结束事件会更新状态
+        }
+    },
+
+    dismissToolInstall: (tool) => {
+        set((s) => {
+            const next = { ...s.toolInstalls };
+            delete next[tool];
+            return { toolInstalls: next };
+        });
+    },
+
     setCheckError: (error) => set({ checkError: error }),
     setDownloadedPath: (path) => set({ downloadedPath: path }),
 
@@ -140,6 +185,31 @@ export const useAboutStore = create<AboutState>((set, get) => ({
         // 工具版本更新事件
         listen<ToolVersion[]>('tool-versions-updated', (event) => {
             set({ toolVersions: event.payload, loadingTools: false, lastFetchTime: Date.now() });
+        });
+
+        // CLI 工具安装日志 / 结束
+        listen<ToolInstallLog>('tool-install-log', (event) => {
+            const { tool, line } = event.payload;
+            set((s) => {
+                const cur = s.toolInstalls[tool];
+                if (!cur) return {};
+                const logs = [...cur.logs, line].slice(-MAX_INSTALL_LOG_LINES);
+                return { toolInstalls: { ...s.toolInstalls, [tool]: { ...cur, logs } } };
+            });
+        });
+        listen<ToolInstallFinished>('tool-install-finished', (event) => {
+            const { tool, success, cancelled, exitCode, error } = event.payload;
+            set((s) => {
+                const cur = s.toolInstalls[tool];
+                if (!cur) return {};
+                const status = cancelled ? 'cancelled' : success ? 'success' : 'failed';
+                const logs = error ? [...cur.logs, error] : cur.logs;
+                // 安装后后端会强制重新检测版本，先进入加载态等 tool-versions-updated
+                return {
+                    toolInstalls: { ...s.toolInstalls, [tool]: { ...cur, status, exitCode, logs } },
+                    loadingTools: true,
+                };
+            });
         });
 
         // 下载进度事件
