@@ -5,6 +5,7 @@ import {AlertCircle, Clock, RefreshCw, Wallet} from 'lucide-react';
 import {getUsageScriptConfig, Provider, UsageResult} from '../../types/provider';
 import {useProviderLimits} from '../../hooks/useUsageQueries';
 import {formatCost} from '../../utils/format';
+import {supportsBuiltinBalance} from '../../utils/builtinBalance';
 
 interface UsageFooterProps {
     provider: Provider;
@@ -14,14 +15,16 @@ interface UsageFooterProps {
  * 供应商卡片上的余额/用量展示条。
  *
  * 两条独立的用量体系：
- * 1. `usageScript` —— 用户自定义脚本查中转商/官方站余额（需在 meta 里启用）
+ * 1. 余额：`usageScript` 用户自定义脚本（需在 meta 里启用）；没有脚本时，
+ *    DeepSeek / SiliconFlow / OpenRouter 等按 Base URL 走内置余额查询
  * 2. 限额（limitDailyUsd / limitMonthlyUsd）—— 基于代理记账的真实花费，
  *    与脚本体系互不依赖：配了限额就能显示，没配脚本也能显示
  */
 export default function UsageFooter({ provider }: UsageFooterProps) {
     const { t } = useTranslation();
     const config = getUsageScriptConfig(provider);
-    const enabled = !!config?.enabled;
+    const scriptEnabled = !!config?.enabled;
+    const enabled = scriptEnabled || supportsBuiltinBalance(provider.url);
     const [usage, setUsage] = useState<UsageResult | null>(null);
     const [loading, setLoading] = useState(false);
     const loadingRef = useRef(false);
@@ -51,12 +54,12 @@ export default function UsageFooter({ provider }: UsageFooterProps) {
     useEffect(() => {
         if (!enabled) return;
         void refresh();
-        const intervalMin = provider.isActive ? (config?.autoQueryInterval ?? 0) : 0;
+        const intervalMin = provider.isActive && scriptEnabled ? (config?.autoQueryInterval ?? 0) : 0;
         if (intervalMin > 0) {
             const timer = setInterval(() => void refresh(), intervalMin * 60_000);
             return () => clearInterval(timer);
         }
-    }, [enabled, provider.isActive, refresh]);
+    }, [enabled, scriptEnabled, provider.isActive, refresh]);
 
     // 相对时间显示：有时间戳才需要走表
     useEffect(() => {

@@ -91,25 +91,36 @@ pub async fn check_provider_health(
         .map_err(|e| e.to_string())
 }
 
-/// 查询供应商用量/余额（使用已保存在 meta["usageScript"] 中的脚本配置）
+/// 查询供应商用量/余额
+///
+/// 优先使用 meta["usageScript"] 中启用的自定义脚本；没有时按 Base URL 走内置余额查询
+/// （DeepSeek / SiliconFlow / OpenRouter 等，见 `builtin_balance_service`）。
 #[tauri::command]
 pub async fn query_provider_usage(
     provider_id: String,
     state: State<'_, AppState>,
 ) -> Result<UsageResult, String> {
     let provider = provider_service::get_provider_from_db(&state.db, &provider_id)?;
-    let config_str = provider
+    let script = provider
         .meta
         .as_ref()
         .and_then(|m| m.get("usageScript"))
-        .ok_or_else(|| "未配置用量查询脚本".to_string())?;
-    let config: UsageScriptConfig =
-        serde_json::from_str(config_str).map_err(|e| format!("用量脚本配置解析失败: {e}"))?;
-    if !config.enabled {
-        return Err("用量查询未启用".to_string());
+        .and_then(|s| serde_json::from_str::<UsageScriptConfig>(s).ok())
+        .filter(|c| c.enabled);
+    if let Some(config) = script {
+        return Ok(usage_query_service::execute_and_format(
+            &config,
+            &provider.api_key,
+            provider.url.as_deref(),
+        )
+        .await);
     }
-    Ok(usage_query_service::execute_and_format(&config, &provider.api_key, provider.url.as_deref())
-        .await)
+    match provider.url.as_deref() {
+        Some(url) => crate::services::builtin_balance_service::query(url, &provider.api_key)
+            .await
+            .unwrap_or_else(|| Err("未配置用量查询脚本，且该服务商不支持内置余额查询".to_string())),
+        None => Err("未配置用量查询脚本".to_string()),
+    }
 }
 
 /// 测试用量查询脚本（使用临时传入的脚本内容，不落库）
