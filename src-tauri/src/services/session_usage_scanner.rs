@@ -962,8 +962,9 @@ fn build_row_from_claude(entry: &Value, fallback_session: &str) -> Option<Reques
         total_cost_usd: "0".into(),
         latency_ms: 0,
         first_token_ms: None,
-        // 会话文件里没有延迟信息，与参考项目保持一致记 0
-        duration_ms: Some(0),
+        // 会话文件没有首字计时，参考项目也不写 duration：用 read_new_rows 估出的
+        // latency_ms 表达总耗时，展示端在 duration 为空时回退到它
+        duration_ms: None,
         status_code: 200,
         error_message: None,
         session_id: Some(session_id),
@@ -1041,7 +1042,8 @@ fn build_row_from_codex(entry: &Value, fallback_session: &str) -> Option<Request
         total_cost_usd: "0".into(),
         latency_ms: 0,
         first_token_ms: None,
-        duration_ms: Some(0),
+        // 同上：不写 duration，让展示端回退到估算出的 latency_ms
+        duration_ms: None,
         status_code: 200,
         error_message: None,
         session_id: Some(session_id),

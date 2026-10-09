@@ -262,6 +262,25 @@ impl Database {
                         })
                         .map_err(|e| format!("Failed to backfill model/cost: {e}"))?;
                     }
+                    // 会话行的耗时（latency_ms）是后加的估算：旧库里仍为 0，重扫时回填。
+                    // 只在原值为 0/NULL（没有计时）时写，不覆盖代理先记下的真实耗时；
+                    // 同时把旧代码写死的 duration_ms = 0 清成 NULL，让展示端回退到 latency_ms。
+                    if log.latency_ms > 0 {
+                        tx.prepare_cached(
+                            "UPDATE proxy_request_logs
+                             SET latency_ms = ?1, duration_ms = ?2
+                             WHERE request_id = ?3
+                               AND (latency_ms IS NULL OR latency_ms = 0)",
+                        )
+                        .and_then(|mut up| {
+                            up.execute(rusqlite::params![
+                                log.latency_ms as i64,
+                                log.duration_ms.map(|v| v as i64),
+                                log.request_id,
+                            ])
+                        })
+                        .map_err(|e| format!("Failed to backfill latency: {e}"))?;
+                    }
                 }
             }
         }
@@ -1749,6 +1768,42 @@ mod tests {
         db.commit_session_file(&[other], "f", 1, 1, 1, None, None).unwrap();
         let detail = db.get_request_detail("e1").unwrap().unwrap();
         assert_eq!(detail.reasoning_effort.as_deref(), Some("xhigh"));
+    }
+
+    #[test]
+    fn session_row_latency_backfills_existing_rows() {
+        let db = Database::in_memory().unwrap();
+
+        // 升级前导入的会话行：latency_ms = 0、duration_ms = 0（旧代码写死的占位）
+        let mut legacy = log_at("s1", 1000, "0", 200);
+        legacy.data_source = Some("session_log".into());
+        legacy.latency_ms = 0;
+        legacy.first_token_ms = None;
+        legacy.duration_ms = Some(0);
+        db.insert_request_log(&legacy).unwrap();
+
+        // 重扫：带上估算出的耗时，回填而不算新增
+        let mut rescanned = legacy.clone();
+        rescanned.latency_ms = 8000;
+        rescanned.duration_ms = None;
+        let inserted = db
+            .commit_session_file(&[rescanned], "f", 1, 1, 1, None, None)
+            .unwrap();
+        assert_eq!(inserted, 0, "已存在的行不算新增");
+        let detail = db.get_request_detail("s1").unwrap().unwrap();
+        assert_eq!(detail.latency_ms, 8000);
+        assert_eq!(detail.duration_ms, None, "旧代码的 duration_ms = 0 应被清成 NULL");
+
+        // 代理行已有真实耗时：不被估算值覆盖
+        let mut proxy = log_at("p1", 1000, "1", 200);
+        proxy.latency_ms = 500;
+        db.insert_request_log(&proxy).unwrap();
+        let mut rescan_again = proxy.clone();
+        rescan_again.latency_ms = 9000;
+        db.commit_session_file(&[rescan_again], "f", 1, 1, 1, None, None)
+            .unwrap();
+        let detail = db.get_request_detail("p1").unwrap().unwrap();
+        assert_eq!(detail.latency_ms, 500, "不覆盖已有的真实耗时");
     }
 
     #[test]

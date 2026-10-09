@@ -747,6 +747,25 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
         }
     }
 
+    // 会话日志的耗时估算（latency_ms）也是后加的：旧库里的会话行 latency_ms 仍为 0。
+    // 扫描是增量的（游标已在文件末尾，不会重读旧行），必须清一次扫描进度让它重扫回填。
+    //
+    // 用迁移版本号（PRAGMA user_version）做一次性标记：其他迁移靠「列是否存在」判断，
+    // 这个改动没有对应新列可依赖；若靠数据特征（如 latency_ms = 0 的会话行数）判断，
+    // 会在本就估不出耗时的行上反复触发全量重扫。
+    const SESSION_TIMING_RESCAN_VERSION: i64 = 1;
+    let migration_version: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|e| format!("Failed to read user_version: {e}"))?;
+    if migration_version < SESSION_TIMING_RESCAN_VERSION {
+        if has_scan_table {
+            conn.execute_batch("DELETE FROM session_scan_files;")
+                .map_err(|e| format!("Failed to reset session scan state for latency: {e}"))?;
+        }
+        conn.execute_batch(&format!("PRAGMA user_version = {SESSION_TIMING_RESCAN_VERSION};"))
+            .map_err(|e| format!("Failed to set user_version: {e}"))?;
+    }
+
     // 索引放在迁移里建（而不是 create_tables）：
     // 旧库的 CREATE TABLE IF NOT EXISTS 会整段跳过，
     // 若索引写在建表批次里就会引用到尚未补齐的列，导致启动直接失败。
@@ -840,6 +859,39 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM session_scan_files", [], |r| r.get(0))
             .unwrap();
         assert_eq!(kept, 1, "迁移幂等：列已存在时不能再清扫描进度");
+    }
+
+    /// 会话日志耗时（latency_ms）回填：首次迁移清一次扫描进度触发重扫，之后不再清
+    #[test]
+    fn migrate_resets_scan_state_once_for_session_timing() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_tables(&conn).unwrap();
+        // 模拟旧库：文件都扫过（有扫描进度），迁移版本号还是 0
+        conn.execute_batch(
+            "INSERT INTO session_scan_files (path, size, mtime_ms, offset) VALUES ('a', 1, 1, 1);",
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM session_scan_files", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0, "首次迁移应清空扫描进度，让会话文件重扫回填耗时");
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 1, "迁移版本号应被标记");
+
+        // 重扫后又写回进度：再迁移不应再清（一次性）
+        conn.execute_batch(
+            "INSERT INTO session_scan_files (path, size, mtime_ms, offset) VALUES ('b', 1, 1, 1);",
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
+        let kept: i64 = conn
+            .query_row("SELECT COUNT(*) FROM session_scan_files", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kept, 1, "迁移只应清一次扫描进度");
     }
 
     /// 全新库：建表已含 data_source，迁移必须幂等不报错
