@@ -7,6 +7,7 @@ import type { TFunction } from 'i18next';
 const SESSION_PROVIDER_APPS: Record<string, string> = {
     'Claude (Session)': 'Claude',
     'Codex (Session)': 'Codex',
+    'OpenCode (Session)': 'OpenCode',
 };
 
 export interface UsageProviderLabel {

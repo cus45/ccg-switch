@@ -145,7 +145,7 @@ export interface RequestLogDetail {
     createdAt: number;
     /** 思考强度（客户端原值，如 low / medium / high / xhigh / max）；没有时为 null */
     reasoningEffort?: string | null;
-    /** 数据来源：proxy / session_log / codex_session；没有时为 null（按 proxy 处理） */
+    /** 数据来源：proxy / session_log / codex_session / opencode_session；没有时为 null（按 proxy 处理） */
     dataSource?: string | null;
 }
 

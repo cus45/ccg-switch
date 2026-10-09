@@ -489,6 +489,7 @@ pub fn scan_all(db: &Database) -> Result<ScanResult, String> {
 
     total.merge(&scan_claude(db, claude_dir.as_deref()));
     total.merge(&scan_codex(db, codex_dir.as_deref()));
+    total.merge(&super::session_usage_opencode::scan_opencode(db));
 
     if total.inserted > 0 {
         tracing::info!(
@@ -837,7 +838,7 @@ fn read_new_rows(
 }
 
 /// 查模型定价（带缓存）；缺价每个模型只告警一次
-fn lookup_pricing<'a>(
+pub(crate) fn lookup_pricing<'a>(
     db: &Database,
     cache: &'a mut HashMap<String, Option<ModelPricing>>,
     model: &str,
@@ -865,7 +866,7 @@ fn lookup_pricing<'a>(
 }
 
 /// 按定价算成本写回行；无定价时各项保持 "0"
-fn apply_cost(row: &mut RequestLogRow, pricing: Option<&ModelPricing>) {
+pub(crate) fn apply_cost(row: &mut RequestLogRow, pricing: Option<&ModelPricing>) {
     let Some(pricing) = pricing else {
         return;
     };

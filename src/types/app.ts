@@ -8,6 +8,9 @@ export const VISIBLE_APP_TYPES: AppType[] = ['claude', 'codex', 'gemini', 'openc
 /** 支持本地代理接管 / 故障转移的应用（OpenCode 暂不支持） */
 export const PROXY_APP_TYPES: AppType[] = ['claude', 'codex', 'gemini'];
 
+/** 使用统计里有数据来源的应用：代理记账 + 会话日志（OpenCode 读其本地数据库） */
+export const USAGE_APP_TYPES: AppType[] = ['claude', 'codex', 'gemini', 'opencode'];
+
 export const APP_LABELS: Record<AppType, string> = {
     claude: 'Claude',
     codex: 'Codex',

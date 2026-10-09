@@ -29,7 +29,7 @@ import { ModelStatsTable } from '../components/usage/ModelStatsTable';
 import { PricingConfigPanel } from '../components/usage/PricingConfigPanel';
 import SessionStatsSection from '../components/usage/session/SessionStatsSection';
 import AppFilterBar from '../components/common/AppFilterBar';
-import { PROXY_APP_TYPES, type AppType } from '../types/app';
+import { USAGE_APP_TYPES, type AppType } from '../types/app';
 import { getUsageProviderLabel } from '../components/usage/providerLabel';
 import { showToast } from '../components/common/ToastContainer';
 import {
@@ -343,7 +343,7 @@ export default function UsagePage() {
                         <div className="block">
                             <span className={fieldLabel}>{t('usage.appType')}</span>
                             <AppFilterBar
-                                apps={PROXY_APP_TYPES}
+                                apps={USAGE_APP_TYPES}
                                 value={appType as AppType | 'all'}
                                 onChange={changeAppType}
                                 allLabel={t('usage.allApps')}

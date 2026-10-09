@@ -534,7 +534,7 @@ fn provider_name_coalesce(log_alias: &str, provider_alias: &str) -> String {
     format!(
         "COALESCE({provider_alias}.name, CASE {log_alias}.provider_id \
          WHEN '_session' THEN 'Claude (Session)' \
-         WHEN '_codex_session' THEN 'Codex (Session)' \
+         WHEN '_codex_session' THEN 'Codex (Session)' WHEN '_opencode_session' THEN 'OpenCode (Session)' \
          ELSE {log_alias}.provider_id END)"
     )
 }
@@ -653,10 +653,10 @@ fn map_log_detail(row: &rusqlite::Row<'_>) -> rusqlite::Result<RequestLogDetail>
 ///
 /// 必须与 `provider_name_coalesce("l", "p")` 逐字一致 —— const 里没法调函数，
 /// 由测试 `log_provider_name_matches_stats_expression` 锁住，防止两处漂移。
-const LOG_PROVIDER_NAME: &str = "COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' ELSE l.provider_id END)";
+const LOG_PROVIDER_NAME: &str = "COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' WHEN '_opencode_session' THEN 'OpenCode (Session)' ELSE l.provider_id END)";
 
 /// 与 `map_log_detail` 的索引对应（第 3 列即 LOG_PROVIDER_NAME）
-const LOG_DETAIL_COLUMNS: &str = "l.request_id, l.provider_id, COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' ELSE l.provider_id END) AS provider_name, l.app_type,
+const LOG_DETAIL_COLUMNS: &str = "l.request_id, l.provider_id, COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' WHEN '_opencode_session' THEN 'OpenCode (Session)' ELSE l.provider_id END) AS provider_name, l.app_type,
      l.model, l.request_model, l.cost_multiplier,
      l.input_tokens, l.output_tokens, l.cache_read_tokens, l.cache_creation_tokens,
      l.input_cost_usd, l.output_cost_usd, l.cache_read_cost_usd,
@@ -1133,7 +1133,7 @@ impl Database {
         if let Some(name) = &filters.provider_name {
             // 供应商 / 模型都来自顶部下拉的精确值，不做模糊匹配 ——
             // 模糊匹配会让「gpt-5」把「gpt-5-mini」也算进来，与下拉里显示的计数对不上。
-            conditions.push("COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' ELSE l.provider_id END) = ?");
+            conditions.push("COALESCE(p.name, CASE l.provider_id WHEN '_session' THEN 'Claude (Session)' WHEN '_codex_session' THEN 'Codex (Session)' WHEN '_opencode_session' THEN 'OpenCode (Session)' ELSE l.provider_id END) = ?");
             params.push(Box::new(name.clone()));
         }
         if let Some(model) = &filters.model {
