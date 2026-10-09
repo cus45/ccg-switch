@@ -12,12 +12,20 @@ import {
 } from 'lucide-react';
 import { usageKeys, useRequestLogs } from '../../hooks/useUsageQueries';
 import type { LogFilters, LogTimeMode, TimeRange } from '../../types/usage';
-import { formatCost, getLocaleFromLanguage, parseFiniteNumber } from '../../utils/format';
+import {
+    formatCost,
+    formatEstimatedTokensPerSecond,
+    formatOutputTokensPerSecond,
+    getLocaleFromLanguage,
+    parseFiniteNumber,
+} from '../../utils/format';
 import { cn } from '../../utils/cn';
 import { RequestDetailPanel } from './RequestDetailPanel';
 import { EffortChip } from './EffortChip';
 import { getTimeWindow, RANGE_LABEL_KEYS } from '../../services/usage';
 import { getUsageProviderLabel, usageProviderTitle } from './providerLabel';
+import ProviderIcon from '../providers/ProviderIcon';
+import { APP_LABELS, type AppType } from '../../types/app';
 import {
     card,
     chip,
@@ -56,6 +64,16 @@ function toDatetimeLocal(ts: number): string {
     const d = new Date(ts * 1000);
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** 已知应用（claude/codex/gemini…）才显示图标与本地名；未知的直接回退到原值 */
+function isKnownApp(appType: string): appType is AppType {
+    return appType in APP_LABELS;
+}
+
+/** 请求日志「应用」列的名字：图标已区分品牌，列里只留最短能认出的名字 */
+function appLabelOf(appType: string): string {
+    return isKnownApp(appType) ? APP_LABELS[appType] : appType;
 }
 
 /** `datetime-local` 字符串 → Unix 秒，非法返回 null */
@@ -415,6 +433,7 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                             <thead className={thead}>
                                 <tr>
                                     <th className="whitespace-nowrap">{t('usage.time')}</th>
+                                    <th className="whitespace-nowrap">{t('usage.app')}</th>
                                     <th className="whitespace-nowrap">{t('usage.provider')}</th>
                                     <th className="min-w-[200px] whitespace-nowrap">
                                         {t('usage.billingModel')}
@@ -443,6 +462,12 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                                     <th className="min-w-[140px] whitespace-nowrap text-center">
                                         {t('usage.timingInfo')}
                                     </th>
+                                    <th
+                                        className="whitespace-nowrap text-right"
+                                        title={t('usage.speedHelp')}
+                                    >
+                                        {t('usage.speed')}
+                                    </th>
                                     <th className="whitespace-nowrap">{t('usage.status')}</th>
                                     <th className="w-8" aria-hidden="true" />
                                 </tr>
@@ -450,7 +475,7 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                             <tbody>
                                 {logs.length === 0 ? (
                                     <tr>
-                                        <td colSpan={13}>
+                                        <td colSpan={15}>
                                             <div className={emptyState}>
                                                 <Inbox className="h-8 w-8 opacity-40" />
                                                 <span>{t('usage.noData')}</span>
@@ -472,6 +497,24 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                                         const modelChanged =
                                             !!log.requestModel && log.requestModel !== log.model;
                                         const provider = getUsageProviderLabel(log.providerName, t);
+                                        const exactTps = formatOutputTokensPerSecond(log);
+                                        // 会话日志导入的请求没有首字计时，速度是按日志时间戳估的，前面带 ≈
+                                        const estimatedTps =
+                                            exactTps == null
+                                                ? formatEstimatedTokensPerSecond(log)
+                                                : null;
+                                        const tps = exactTps ?? estimatedTps;
+                                        const timingTip =
+                                            log.latencyMs > 0 && log.firstTokenMs != null
+                                                ? t('usage.timingTip', {
+                                                      duration: (log.latencyMs / 1000).toFixed(1),
+                                                      ttft: (log.firstTokenMs / 1000).toFixed(1),
+                                                  })
+                                                : estimatedTps != null
+                                                  ? t('usage.estimatedTimingTip', {
+                                                        duration: (log.latencyMs / 1000).toFixed(1),
+                                                    })
+                                                  : undefined;
                                         return (
                                             <tr
                                                 key={log.requestId}
@@ -483,6 +526,22 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                                                     {new Date(log.createdAt * 1000).toLocaleString(
                                                         locale
                                                     )}
+                                                </td>
+                                                <td className="whitespace-nowrap">
+                                                    <span
+                                                        className="flex items-center gap-1.5"
+                                                        title={appLabelOf(log.appType)}
+                                                    >
+                                                        {isKnownApp(log.appType) && (
+                                                            <ProviderIcon
+                                                                appType={log.appType}
+                                                                size="sm"
+                                                            />
+                                                        )}
+                                                        <span className="truncate">
+                                                            {appLabelOf(log.appType)}
+                                                        </span>
+                                                    </span>
                                                 </td>
                                                 <td
                                                     className={cn(
@@ -568,6 +627,27 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                                                                 : t('usage.nonStream')}
                                                         </span>
                                                     </div>
+                                                </td>
+                                                <td
+                                                    className={cn(
+                                                        'text-right tabular-nums',
+                                                        tps == null
+                                                            ? 'text-gray-400 dark:text-gray-500'
+                                                            : 'text-gray-700 dark:text-gray-200'
+                                                    )}
+                                                    title={timingTip}
+                                                >
+                                                    {tps == null ? (
+                                                        '—'
+                                                    ) : (
+                                                        <>
+                                                            {estimatedTps != null && '≈'}
+                                                            {tps}
+                                                            <span className="ms-0.5 text-[11px] font-normal text-gray-400">
+                                                                tok/s
+                                                            </span>
+                                                        </>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <span

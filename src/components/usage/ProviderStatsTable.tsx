@@ -56,7 +56,7 @@ export function ProviderStatsTable({ range, refreshMs }: ProviderStatsTableProps
                         <th className="text-right">{t('usage.tokens')}</th>
                         <th className="text-right">{t('usage.cost')}</th>
                         <th className="text-right">{t('usage.successRate')}</th>
-                        <th className="text-right" title={t('usage.speedHelp')}>
+                        <th className="text-right" title={t('usage.speedSumHelp')}>
                             {t('usage.speed')}
                         </th>
                     </tr>

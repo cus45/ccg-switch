@@ -10,7 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-dist-chk2/
+dist-chk*/
 dist-verify/
 src-tauri/target-check/
 *.local
