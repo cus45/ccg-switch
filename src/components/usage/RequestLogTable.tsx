@@ -429,13 +429,15 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
             ) : (
                 <>
                     <div className={tableWrap}>
-                        <table className="table table-sm">
+                        {/* 15 列较宽：把 DaisyUI 默认的每列左右 16px padding 收到 8px，
+                            否则常规窗口下表格就超出容器、出现横向滚动条 */}
+                        <table className="table table-sm [&_td]:px-2 [&_th]:px-2">
                             <thead className={thead}>
                                 <tr>
                                     <th className="whitespace-nowrap">{t('usage.time')}</th>
                                     <th className="whitespace-nowrap">{t('usage.app')}</th>
                                     <th className="whitespace-nowrap">{t('usage.provider')}</th>
-                                    <th className="min-w-[200px] whitespace-nowrap">
+                                    <th className="min-w-[160px] whitespace-nowrap">
                                         {t('usage.billingModel')}
                                     </th>
                                     <th className="whitespace-nowrap">
@@ -447,10 +449,10 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                                     <th className="whitespace-nowrap text-right">
                                         {t('usage.outputTokens')}
                                     </th>
-                                    <th className="min-w-[90px] whitespace-nowrap text-right">
+                                    <th className="min-w-[76px] whitespace-nowrap text-right">
                                         {t('usage.cacheReadTokens')}
                                     </th>
-                                    <th className="min-w-[90px] whitespace-nowrap text-right">
+                                    <th className="min-w-[76px] whitespace-nowrap text-right">
                                         {t('usage.cacheCreationTokens')}
                                     </th>
                                     <th className="whitespace-nowrap text-right">
@@ -459,7 +461,7 @@ export function RequestLogTable({ range, refreshMs }: RequestLogTableProps) {
                                     <th className="whitespace-nowrap text-right">
                                         {t('usage.totalCost')}
                                     </th>
-                                    <th className="min-w-[140px] whitespace-nowrap text-center">
+                                    <th className="min-w-[128px] whitespace-nowrap text-center">
                                         {t('usage.timingInfo')}
                                     </th>
                                     <th
