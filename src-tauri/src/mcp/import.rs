@@ -26,6 +26,7 @@ pub fn import_from_claude(db: &Arc<Database>) -> Result<usize, String> {
                 enabled_claude: true,
                 enabled_codex: false,
                 enabled_gemini: false,
+                enabled_opencode: false,
             };
             db.save_mcp_server(&row)?;
             existing.insert(id, row);
@@ -59,6 +60,7 @@ pub fn import_from_codex(db: &Arc<Database>) -> Result<usize, String> {
                 enabled_claude: false,
                 enabled_codex: true,
                 enabled_gemini: false,
+                enabled_opencode: false,
             };
             db.save_mcp_server(&row)?;
             existing.insert(id, row);
@@ -92,6 +94,41 @@ pub fn import_from_gemini(db: &Arc<Database>) -> Result<usize, String> {
                 enabled_claude: false,
                 enabled_codex: false,
                 enabled_gemini: true,
+                enabled_opencode: false,
+            };
+            db.save_mcp_server(&row)?;
+            existing.insert(id, row);
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
+/// 从 ~/.config/opencode/opencode.json 导入 MCP 服务器到数据库
+pub fn import_from_opencode(db: &Arc<Database>) -> Result<usize, String> {
+    let servers = super::opencode::read_opencode_mcp_servers();
+    let mut existing = db.get_all_mcp_servers()?;
+    let mut count = 0;
+
+    for (id, spec) in servers {
+        if let Some(row) = existing.get_mut(&id) {
+            if !row.enabled_opencode {
+                row.enabled_opencode = true;
+                db.save_mcp_server(row)?;
+                count += 1;
+            }
+        } else {
+            let row = McpServerRow {
+                id: id.clone(),
+                name: id.clone(),
+                server_config: spec,
+                description: None,
+                tags: vec![],
+                enabled_claude: false,
+                enabled_codex: false,
+                enabled_gemini: false,
+                enabled_opencode: true,
             };
             db.save_mcp_server(&row)?;
             existing.insert(id, row);
@@ -108,5 +145,6 @@ pub fn import_from_all(db: &Arc<Database>) -> Result<usize, String> {
     total += import_from_claude(db).unwrap_or(0);
     total += import_from_codex(db).unwrap_or(0);
     total += import_from_gemini(db).unwrap_or(0);
+    total += import_from_opencode(db).unwrap_or(0);
     Ok(total)
 }

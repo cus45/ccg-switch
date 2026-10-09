@@ -21,10 +21,12 @@ export interface McpServerRow {
     enabledClaude: boolean;
     enabledCodex: boolean;
     enabledGemini: boolean;
+    enabledOpencode: boolean;
 }
 
-export const MCP_V2_APPS: { key: keyof Pick<McpServerRow, 'enabledClaude' | 'enabledCodex' | 'enabledGemini'>; label: string; app: string }[] = [
+export const MCP_V2_APPS: { key: keyof Pick<McpServerRow, 'enabledClaude' | 'enabledCodex' | 'enabledGemini' | 'enabledOpencode'>; label: string; app: string }[] = [
     { key: 'enabledClaude', label: 'Claude', app: 'claude' },
     { key: 'enabledCodex', label: 'Codex', app: 'codex' },
     { key: 'enabledGemini', label: 'Gemini', app: 'gemini' },
+    { key: 'enabledOpencode', label: 'OpenCode', app: 'opencode' },
 ];

@@ -6,6 +6,7 @@ pub mod global_proxy_service;
 pub mod import_export_service;
 pub mod mcp_service;
 pub mod mcp_status_service;
+pub mod opencode_config;
 pub mod migration_service;
 pub mod model_api_service;
 pub mod prompt_service;

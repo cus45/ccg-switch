@@ -25,6 +25,9 @@ impl McpService {
             if prev.enabled_codex && !server.enabled_codex {
                 let _ = mcp::remove_server_from_codex(&server.id);
             }
+            if prev.enabled_opencode && !server.enabled_opencode {
+                let _ = mcp::remove_server_from_opencode(&server.id);
+            }
         }
 
         db.save_mcp_server(&server)?;
@@ -38,6 +41,9 @@ impl McpService {
         }
         if server.enabled_codex {
             let _ = mcp::sync_server_to_codex(&server.id, &server.server_config);
+        }
+        if server.enabled_opencode {
+            let _ = mcp::sync_server_to_opencode(&server.id, &server.server_config);
         }
 
         Ok(())
@@ -54,6 +60,9 @@ impl McpService {
             }
             if server.enabled_codex {
                 let _ = mcp::remove_server_from_codex(id);
+            }
+            if server.enabled_opencode {
+                let _ = mcp::remove_server_from_opencode(id);
             }
         }
         db.delete_mcp_server(id)
@@ -74,6 +83,7 @@ impl McpService {
             "claude" => server.enabled_claude = enabled,
             "gemini" => server.enabled_gemini = enabled,
             "codex" => server.enabled_codex = enabled,
+            "opencode" => server.enabled_opencode = enabled,
             _ => return Err(format!("Unknown app: {}", app)),
         }
 
@@ -97,6 +107,12 @@ impl McpService {
             }
             ("codex", false) => {
                 let _ = mcp::remove_server_from_codex(server_id);
+            }
+            ("opencode", true) => {
+                let _ = mcp::sync_server_to_opencode(server_id, &server.server_config);
+            }
+            ("opencode", false) => {
+                let _ = mcp::remove_server_from_opencode(server_id);
             }
             _ => {}
         }

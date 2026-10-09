@@ -1124,7 +1124,10 @@
     "health_status_failed": "失败",
     "health_check_batch_done": "探活完成：{{success}} 正常，{{failed}} 失败",
     "test_connectivity_success": "连接成功 ({{latency}}ms)",
-    "test_connectivity_failed": "连接失败：{{error}}"
+    "test_connectivity_failed": "连接失败：{{error}}",
+    "opencodeNpm": "SDK 类型 (npm)",
+    "opencodeModel": "主模型 (model)",
+    "opencodeSmallModel": "小模型 (small_model)"
   },
   "settings": {
     "title": "设置",

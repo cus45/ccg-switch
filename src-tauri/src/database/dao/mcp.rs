@@ -13,13 +13,16 @@ pub struct McpServerRow {
     pub enabled_claude: bool,
     pub enabled_codex: bool,
     pub enabled_gemini: bool,
+    /// 旧版本导出的数据没有该字段
+    #[serde(default)]
+    pub enabled_opencode: bool,
 }
 
 impl Database {
     pub fn get_all_mcp_servers(&self) -> Result<IndexMap<String, McpServerRow>, String> {
         let conn = lock_conn!(self.conn);
         let mut stmt = conn
-            .prepare("SELECT id, name, server_config, description, tags, enabled_claude, enabled_codex, enabled_gemini FROM mcp_servers ORDER BY name ASC, id ASC")
+            .prepare("SELECT id, name, server_config, description, tags, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode FROM mcp_servers ORDER BY name ASC, id ASC")
             .map_err(|e| format!("Failed to prepare query: {e}"))?;
 
         let rows = stmt
@@ -35,6 +38,7 @@ impl Database {
                     enabled_claude: row.get(5)?,
                     enabled_codex: row.get(6)?,
                     enabled_gemini: row.get(7)?,
+                    enabled_opencode: row.get(8)?,
                 })
             })
             .map_err(|e| format!("Failed to query mcp_servers: {e}"))?;
@@ -55,7 +59,7 @@ impl Database {
             .map_err(|e| format!("Failed to serialize tags: {e}"))?;
 
         conn.execute(
-            "INSERT OR REPLACE INTO mcp_servers (id, name, server_config, description, tags, enabled_claude, enabled_codex, enabled_gemini) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO mcp_servers (id, name, server_config, description, tags, enabled_claude, enabled_codex, enabled_gemini, enabled_opencode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 server.id,
                 server.name,
@@ -65,6 +69,7 @@ impl Database {
                 server.enabled_claude,
                 server.enabled_codex,
                 server.enabled_gemini,
+                server.enabled_opencode,
             ],
         )
         .map_err(|e| format!("Failed to save mcp_server: {e}"))?;

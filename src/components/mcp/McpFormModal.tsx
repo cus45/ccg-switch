@@ -29,6 +29,7 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
         claude: true,
         codex: true,
         gemini: true,
+        opencode: true,
     });
 
     // UI 状态
@@ -55,6 +56,7 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
                 claude: editingServer.enabledClaude,
                 codex: editingServer.enabledCodex,
                 gemini: editingServer.enabledGemini,
+                opencode: editingServer.enabledOpencode ?? false,
             });
             setSelectedPreset(null);
             setShowMetadata(!!(editingServer.description || editingServer.homepage || editingServer.docs || editingServer.tags?.length));
@@ -71,7 +73,7 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
         setFormDocs('');
         setFormTags('');
         setFormConfig('');
-        setEnabledApps({ claude: true, codex: true, gemini: true });
+        setEnabledApps({ claude: true, codex: true, gemini: true, opencode: true });
         setSelectedPreset(-1);
         setShowMetadata(false);
         setConfigError('');
@@ -198,6 +200,7 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
                 enabledClaude: enabledApps.claude,
                 enabledCodex: enabledApps.codex,
                 enabledGemini: enabledApps.gemini,
+                enabledOpencode: enabledApps.opencode,
             };
 
             await onSave(entry);
@@ -346,6 +349,15 @@ function McpFormModal({ isOpen, editingServer, existingIds = [], onClose, onSave
                                         className="checkbox checkbox-sm checkbox-primary"
                                     />
                                     <span className="text-sm text-gray-700 dark:text-gray-300">Gemini</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={enabledApps.opencode}
+                                        onChange={(e) => setEnabledApps({ ...enabledApps, opencode: e.target.checked })}
+                                        className="checkbox checkbox-sm checkbox-primary"
+                                    />
+                                    <span className="text-sm text-gray-700 dark:text-gray-300">OpenCode</span>
                                 </label>
                             </div>
                         </div>

@@ -1,5 +1,6 @@
 use crate::database::Database;
-use crate::models::provider::ProviderProxyConfig;
+use crate::models::app_type::AppType;
+use crate::models::provider::{Provider, ProviderProxyConfig};
 use futures::StreamExt;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,30 @@ fn build_request(
             let body = serde_json::json!({
                 "model": model,
                 "input": "Hi",
+                "stream": true
+            });
+
+            (url, headers, body)
+        }
+        // OpenAI 兼容的 Chat Completions（OpenCode 的 @ai-sdk/openai-compatible 走这条）
+        "openai-chat" => {
+            let url = if base.ends_with("/v1") {
+                format!("{}/chat/completions", base)
+            } else {
+                format!("{}/v1/chat/completions", base)
+            };
+
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "Authorization",
+                HeaderValue::from_str(&format!("Bearer {}", api_key)).unwrap(),
+            );
+            headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+            let body = serde_json::json!({
+                "model": model,
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": "Hi"}],
                 "stream": true
             });
 
@@ -257,6 +282,8 @@ pub async fn check_provider_health(
         .ok_or_else(|| "Provider not found".to_string())?;
 
     let app_type_str = provider.app_type.as_str().to_string();
+    // 检测用的协议：OpenCode 按其 SDK 类型决定，其它应用即自身协议
+    let protocol = check_protocol(&provider);
 
     // 按优先级选择模型
     let model = provider
@@ -276,8 +303,8 @@ pub async fn check_provider_health(
             .as_deref()
             .filter(|s| !s.is_empty()))
         .map(|s| s.to_string())
-        .unwrap_or_else(|| match app_type_str.as_str() {
-            "codex" => "gpt-4o".to_string(),
+        .unwrap_or_else(|| match protocol.as_str() {
+            "codex" | "openai-chat" => "gpt-4o".to_string(),
             "gemini" => "gemini-2.0-flash".to_string(),
             _ => "claude-sonnet-4-20250514".to_string(),
         });
@@ -286,8 +313,8 @@ pub async fn check_provider_health(
         .url
         .as_deref()
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| match app_type_str.as_str() {
-            "codex" => "https://api.openai.com",
+        .unwrap_or_else(|| match protocol.as_str() {
+            "codex" | "openai-chat" => "https://api.openai.com",
             "gemini" => "https://generativelanguage.googleapis.com",
             _ => "https://api.anthropic.com",
         })
@@ -297,7 +324,7 @@ pub async fn check_provider_health(
         base_url,
         provider.api_key.clone(),
         model.clone(),
-        Some(app_type_str.clone()),
+        Some(protocol),
         provider.proxy_config.clone(),
     )
     .await
@@ -311,4 +338,24 @@ pub async fn check_provider_health(
         latency_ms: result.latency_ms,
         error: result.error,
     })
+}
+
+/// OpenCode 供应商的检测协议由 meta.npm（AI SDK 包）决定
+fn check_protocol(provider: &Provider) -> String {
+    if provider.app_type != AppType::OpenCode {
+        return provider.app_type.as_str().to_string();
+    }
+    let npm = provider
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("npm"))
+        .map(String::as_str)
+        .unwrap_or("@ai-sdk/openai-compatible");
+    match npm {
+        "@ai-sdk/anthropic" => "claude",
+        "@ai-sdk/openai" => "codex",
+        "@ai-sdk/google" => "gemini",
+        _ => "openai-chat",
+    }
+    .to_string()
 }

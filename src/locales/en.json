@@ -1237,7 +1237,10 @@
     "health_status_failed": "Failed",
     "health_check_batch_done": "Check done: {{success}} OK, {{failed}} failed",
     "test_connectivity_success": "Connected ({{latency}}ms)",
-    "test_connectivity_failed": "Failed: {{error}}"
+    "test_connectivity_failed": "Failed: {{error}}",
+    "opencodeNpm": "SDK type (npm)",
+    "opencodeModel": "Main model (model)",
+    "opencodeSmallModel": "Small model (small_model)"
   },
   "settings": {
     "title": "Settings",

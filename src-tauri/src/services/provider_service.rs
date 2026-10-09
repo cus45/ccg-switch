@@ -32,18 +32,20 @@ pub fn get_provider_config_files(app: AppType) -> Result<Vec<(String, String)>, 
     const CLAUDE_FILES: &[(&str, &str)] = &[(".claude/settings.json", "{}")];
     const CODEX_FILES: &[(&str, &str)] = &[(".codex/auth.json", "{}"), (".codex/config.toml", "")];
     const GEMINI_FILES: &[(&str, &str)] = &[(".gemini/.env", "")];
+    const OPENCODE_FILES: &[(&str, &str)] = &[(".config/opencode/opencode.json", "{}")];
 
     let file_configs = match app {
         AppType::Claude => CLAUDE_FILES,
         AppType::Codex => CODEX_FILES,
         AppType::Gemini => GEMINI_FILES,
+        AppType::OpenCode => OPENCODE_FILES,
         _ => &[],
     };
 
     Ok(file_configs
         .iter()
         .map(|(path, default)| {
-            let full_path = home.join(path.trim_start_matches('.'));
+            let full_path = home.join(path);
             let content = read_file_content(&full_path, default);
             (path.to_string(), content)
         })
@@ -100,7 +102,15 @@ pub fn update_provider_in_db(
 
 /// 删除 provider（从数据库删除）
 pub fn delete_provider_from_db(db: &Arc<Database>, id: &str) -> Result<(), String> {
+    let existing = db.get_provider(id)?;
     db.delete_provider(id)?;
+
+    // OpenCode 是累加模式：供应商条目会留在 opencode.json 里，删除时一并清理
+    if existing.is_some_and(|p| p.app_type == AppType::OpenCode) {
+        if let Err(e) = crate::services::opencode_config::remove_provider_from_config(id) {
+            tracing::warn!("[Provider] 从 opencode.json 移除供应商 {id} 失败: {e}");
+        }
+    }
     Ok(())
 }
 
@@ -596,6 +606,7 @@ pub fn preview_provider_sync(
         AppType::Claude => preview_claude_settings(provider),
         AppType::Codex => preview_codex_config(provider),
         AppType::Gemini => preview_gemini_config(provider),
+        AppType::OpenCode => crate::services::opencode_config::preview_provider(provider),
         _ => preview_generic_settings(provider),
     }
 }
@@ -850,6 +861,7 @@ pub(crate) fn sync_provider_to_app_config(provider: &Provider) -> Result<(), io:
         AppType::Claude => sync_to_claude_settings(provider),
         AppType::Codex => sync_to_codex_config(provider),
         AppType::Gemini => sync_to_gemini_config(provider),
+        AppType::OpenCode => crate::services::opencode_config::sync_provider(provider),
         _ => sync_to_generic_settings(provider),
     }
 }

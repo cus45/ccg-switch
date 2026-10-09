@@ -89,8 +89,17 @@ const CODEX_DEFAULT_URL = 'https://api.openai.com/v1';
 const CODEX_MODEL_OPTIONS = getFallbackChatModels('codex').map((model) => model.id);
 
 function defaultUrlForApp(appType: AppType): string {
-    return appType === 'codex' ? CODEX_DEFAULT_URL : CLAUDE_DEFAULT_URL;
+    return appType === 'codex' || appType === 'opencode' ? CODEX_DEFAULT_URL : CLAUDE_DEFAULT_URL;
 }
+
+/** OpenCode 供应商使用的 AI SDK 包（写入 opencode.json 的 provider.<id>.npm） */
+const OPENCODE_DEFAULT_NPM = '@ai-sdk/openai-compatible';
+const OPENCODE_NPM_OPTIONS = [
+    { value: '@ai-sdk/openai-compatible', label: 'OpenAI Compatible' },
+    { value: '@ai-sdk/anthropic', label: 'Anthropic' },
+    { value: '@ai-sdk/openai', label: 'OpenAI' },
+    { value: '@ai-sdk/google', label: 'Google' },
+];
 
 // ── 预设配置 ──────────────────────────────────────────────
 
@@ -117,6 +126,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const [defaultOpusModel, setDefaultOpusModel] = useState(editingProvider?.defaultOpusModel || '');
     const [defaultHaikuModel, setDefaultHaikuModel] = useState(editingProvider?.defaultHaikuModel || '');
     const [defaultReasoningModel, setDefaultReasoningModel] = useState(editingProvider?.defaultReasoningModel || '');
+    const [opencodeNpm, setOpencodeNpm] = useState(editingProvider?.meta?.npm || OPENCODE_DEFAULT_NPM);
 
     // 其他配置
     const [description, setDescription] = useState(editingProvider?.description || '');
@@ -154,6 +164,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             setDefaultOpusModel(editingProvider?.defaultOpusModel || '');
             setDefaultHaikuModel(editingProvider?.defaultHaikuModel || '');
             setDefaultReasoningModel(editingProvider?.defaultReasoningModel || '');
+            setOpencodeNpm(editingProvider?.meta?.npm || OPENCODE_DEFAULT_NPM);
             setDescription(editingProvider?.description || '');
             setTags(editingProvider?.tags || []);
             if (editingProvider?.proxyConfig) {
@@ -216,11 +227,19 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         ? fetchedModels.length > 0 ? fetchedModels : CODEX_MODEL_OPTIONS
         : fetchedModels;
 
+    // OpenCode：Sonnet 位 = 主模型（model），Haiku 位 = 小模型（small_model）
     const applicableModelConfig = useMemo(() => appType === 'codex'
         ? {
             defaultSonnetModel: defaultSonnetModel.trim() || undefined,
             defaultOpusModel: undefined,
             defaultHaikuModel: undefined,
+            defaultReasoningModel: undefined,
+        }
+        : appType === 'opencode'
+        ? {
+            defaultSonnetModel: defaultSonnetModel.trim() || undefined,
+            defaultOpusModel: undefined,
+            defaultHaikuModel: defaultHaikuModel.trim() || undefined,
             defaultReasoningModel: undefined,
         }
         : {
@@ -230,17 +249,28 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             defaultReasoningModel: defaultReasoningModel.trim() || undefined,
         }, [appType, defaultSonnetModel, defaultOpusModel, defaultHaikuModel, defaultReasoningModel]);
 
+    /** OpenCode 的 SDK 类型保存在 meta.npm；保留 meta 里的其它字段（如用量脚本） */
+    const providerMeta = useMemo(() => appType === 'opencode'
+        ? { ...(editingProvider?.meta || {}), npm: opencodeNpm }
+        : editingProvider?.meta, [appType, opencodeNpm, editingProvider]);
+
+    /** 连通性测试按协议走：Anthropic SDK 用 Claude 协议，其余按 OpenAI 兼容 */
+    const connectivityAppType = appType === 'opencode'
+        ? ({ '@ai-sdk/anthropic': 'claude', '@ai-sdk/openai': 'codex', '@ai-sdk/google': 'gemini' } as Record<string, string>)[opencodeNpm] ?? 'openai-chat'
+        : appType;
+
     const handleTestConnectivity = async () => {
         if (!url.trim() || !apiKey.trim()) {
             showToast(t('providers.fetchModelsNeedUrlKey'), 'error');
             return;
         }
-        const configuredTestModel = appType === 'codex'
+        const configuredTestModel = appType === 'codex' || appType === 'opencode'
             ? defaultSonnetModel
             : defaultSonnetModel || defaultOpusModel || defaultHaikuModel || defaultReasoningModel;
         const testModel = configuredTestModel || (() => {
-            switch (appType) {
-                case 'codex': return 'gpt-4o';
+            switch (connectivityAppType) {
+                case 'codex':
+                case 'openai-chat': return 'gpt-4o';
                 case 'gemini': return 'gemini-2.0-flash';
                 default: return 'claude-sonnet-4-20250514';
             }
@@ -249,7 +279,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         setTestResult(null);
         try {
             const result = await invoke<{ model: string; available: boolean; latencyMs: number; error?: string }>(
-                'check_stream_connectivity', { url: url.trim(), apiKey: apiKey.trim(), model: testModel, appType }
+                'check_stream_connectivity', { url: url.trim(), apiKey: apiKey.trim(), model: testModel, appType: connectivityAppType }
             );
             setTestResult({
                 success: result.available,
@@ -287,7 +317,8 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                 ...applicableModelConfig,
                 description: description.trim() || undefined,
                 tags: tags.length > 0 ? tags : undefined,
-                settingsConfig: appType === 'codex' ? undefined : (() => {
+                meta: providerMeta,
+                settingsConfig: appType === 'codex' || appType === 'opencode' ? undefined : (() => {
                     // 只保存白名单内的已知字段，排除历史残留
                     const clean: Record<string, any> = {};
                     if (internalSettings) {
@@ -352,12 +383,13 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             apiKey: apiKey || 'your-api-key-here',
             url: url.trim() || undefined,
             ...applicableModelConfig,
-            settingsConfig: appType === 'codex' ? undefined : Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
+            meta: providerMeta,
+            settingsConfig: appType === 'codex' || appType === 'opencode' ? undefined : Object.keys(filteredSettings).length > 0 ? filteredSettings : undefined,
             proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
             isActive: false,
             createdAt: editingProvider?.createdAt || new Date().toISOString(),
         };
-    }, [editingProvider, name, appType, apiKey, url, applicableModelConfig, internalSettings, proxyConfig]);
+    }, [editingProvider, name, appType, apiKey, url, applicableModelConfig, providerMeta, internalSettings, proxyConfig]);
 
     // 防抖调用后端：获取预览结果，首次结果作为 baseline
     useEffect(() => {
@@ -551,7 +583,36 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                             </div>
                         )}
                         
-                        {appType === 'codex' ? (
+                        {appType === 'opencode' ? (
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <div className="col-span-2 space-y-1.5">
+                                    <LabelText>{t('providers.opencodeNpm', 'SDK 类型 (npm)')}</LabelText>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 text-sm text-gray-900 dark:text-slate-200 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={opencodeNpm}
+                                        onChange={(e) => setOpencodeNpm(e.target.value)}
+                                    >
+                                        {OPENCODE_NPM_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value} className="bg-white dark:bg-slate-900">{o.label} ({o.value})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <ModelComboBox
+                                    label={t('providers.opencodeModel', '主模型 (model)')}
+                                    placeholder="gpt-5"
+                                    value={defaultSonnetModel}
+                                    onChange={setDefaultSonnetModel}
+                                    options={fetchedModels}
+                                />
+                                <ModelComboBox
+                                    label={t('providers.opencodeSmallModel', '小模型 (small_model)')}
+                                    placeholder="gpt-5-mini"
+                                    value={defaultHaikuModel}
+                                    onChange={setDefaultHaikuModel}
+                                    options={fetchedModels}
+                                />
+                            </div>
+                        ) : appType === 'codex' ? (
                             <div className="grid grid-cols-1 gap-y-3">
                                 <ModelComboBox
                                     label={t('providers.codexModel', 'Codex 模型')}

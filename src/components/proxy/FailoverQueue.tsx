@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { GitMerge, Info } from 'lucide-react';
 import { useProviderStore } from '../../stores/useProviderStore';
 import { showToast } from '../common/ToastContainer';
-import { VISIBLE_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
+import { PROXY_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
 
 export default function FailoverQueue() {
     const { providers, hasLoaded, loading, loadAllProviders, updateProvider } = useProviderStore();
@@ -33,7 +33,7 @@ export default function FailoverQueue() {
     const queueIndexMap = new Map(queued.map((p, i) => [p.id, i + 1]));
 
     // 每个 tab 的统计
-    const tabStats = VISIBLE_APP_TYPES.map((type) => {
+    const tabStats = PROXY_APP_TYPES.map((type) => {
         const list = providers.filter((p) => p.appType === type);
         return { type, total: list.length, queued: list.filter((p) => p.inFailoverQueue).length };
     });

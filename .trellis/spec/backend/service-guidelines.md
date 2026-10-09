@@ -283,3 +283,12 @@ pub fn update_provider_in_db(db: &Arc<Database>, id: &str, updated: Provider) ->
 - 数据库 DAO 规范: [database-guidelines.md](./database-guidelines.md)
 - 错误处理: [error-handling.md](./error-handling.md)
 - 数据路径: `CLAUDE.md` 第 86-95 行
+
+## OpenCode config (additive mode)
+
+`services/opencode_config.rs` owns `~/.config/opencode/opencode.json` (same path on Windows).
+Provider switching writes only `provider.<providerId>`, `model` and `small_model`; MCP sync
+(`mcp/opencode.rs`) writes only `mcp.<id>`. Every other key is preserved (read → modify → atomic
+write). A file that fails to parse (e.g. JSONC with comments) is an error — never overwrite it.
+OpenCode is not a proxy-takeover app (`TAKEOVER_APPS` / frontend `PROXY_APP_TYPES` exclude it).
+Health checks pick the wire protocol from `meta.npm` (`check_protocol` in `stream_check_service.rs`).

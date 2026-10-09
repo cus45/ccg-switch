@@ -12,6 +12,7 @@ function createServer(overrides: Partial<McpServerRow>): McpServerRow {
         enabledClaude: overrides.enabledClaude ?? false,
         enabledCodex: overrides.enabledCodex ?? false,
         enabledGemini: overrides.enabledGemini ?? false,
+        enabledOpencode: overrides.enabledOpencode ?? false,
     };
 }
 

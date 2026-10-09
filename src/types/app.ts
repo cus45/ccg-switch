@@ -2,8 +2,11 @@ export type AppType = 'claude' | 'codex' | 'gemini' | 'opencode' | 'openclaw';
 
 export const APP_TYPES: AppType[] = ['claude', 'codex', 'gemini', 'opencode', 'openclaw'];
 
-/** 仅包含前端可见的应用类型（不含已废弃的 OpenCode/OpenClaw） */
-export const VISIBLE_APP_TYPES: AppType[] = ['claude', 'codex', 'gemini'];
+/** 前端可见的应用类型（OpenClaw 已废弃） */
+export const VISIBLE_APP_TYPES: AppType[] = ['claude', 'codex', 'gemini', 'opencode'];
+
+/** 支持本地代理接管 / 故障转移的应用（OpenCode 暂不支持） */
+export const PROXY_APP_TYPES: AppType[] = ['claude', 'codex', 'gemini'];
 
 export const APP_LABELS: Record<AppType, string> = {
     claude: 'Claude',

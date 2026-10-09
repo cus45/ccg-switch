@@ -73,6 +73,14 @@ const providerConfigShortcuts: Array<{
             { label: 'settings.json', path: '~/.gemini/settings.json' },
         ],
     },
+    {
+        appType: 'opencode',
+        cli: 'opencode',
+        termClass: 'text-violet-500 hover:bg-violet-500/10',
+        files: [
+            { label: 'opencode.json', path: '~/.config/opencode/opencode.json' },
+        ],
+    },
 ];
 
 function maskApiKey(key: string) {

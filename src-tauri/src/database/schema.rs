@@ -11,7 +11,8 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
             tags TEXT NOT NULL DEFAULT '[]',
             enabled_claude BOOLEAN NOT NULL DEFAULT 0,
             enabled_codex BOOLEAN NOT NULL DEFAULT 0,
-            enabled_gemini BOOLEAN NOT NULL DEFAULT 0
+            enabled_gemini BOOLEAN NOT NULL DEFAULT 0,
+            enabled_opencode BOOLEAN NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS skills (
@@ -712,6 +713,14 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
     if !has_data_source {
         conn.execute_batch("ALTER TABLE proxy_request_logs ADD COLUMN data_source TEXT;")
             .map_err(|e| format!("Failed to add proxy_request_logs.data_source: {e}"))?;
+    }
+
+    // mcp_servers.enabled_opencode —— OpenCode 恢复为可见应用后的 MCP 同步开关
+    if table_exists(conn, "mcp_servers")? && !column_exists(conn, "mcp_servers", "enabled_opencode")? {
+        conn.execute_batch(
+            "ALTER TABLE mcp_servers ADD COLUMN enabled_opencode BOOLEAN NOT NULL DEFAULT 0;",
+        )
+        .map_err(|e| format!("Failed to add mcp_servers.enabled_opencode: {e}"))?;
     }
 
     // 迁移不假设表一定存在：生产路径先 create_tables 再 migrate，但只跑迁移的旧库测试没有这张表

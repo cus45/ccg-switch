@@ -24,11 +24,12 @@ interface BuildChatMcpAvailabilitySummaryInput {
 
 const MCP_ERROR_MAX_LENGTH = 140;
 
-function getProviderEnabledKey(provider: string): keyof Pick<McpServerRow, 'enabledClaude' | 'enabledCodex' | 'enabledGemini'> | null {
+function getProviderEnabledKey(provider: string): keyof Pick<McpServerRow, 'enabledClaude' | 'enabledCodex' | 'enabledGemini' | 'enabledOpencode'> | null {
     const normalizedProvider = provider.trim().toLowerCase();
     if (normalizedProvider === 'claude') return 'enabledClaude';
     if (normalizedProvider === 'codex') return 'enabledCodex';
     if (normalizedProvider === 'gemini') return 'enabledGemini';
+    if (normalizedProvider === 'opencode') return 'enabledOpencode';
     return null;
 }
 
