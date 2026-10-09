@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-                    {
+                      {
+    version: '1.8.0',
+    date: '2026-10-09',
+    type: 'minor',
+    changes: [
+      { type: 'feature', text: '新增 OpenCode（供应商/MCP/Prompt/技能/使用统计）与 Claude Desktop 第三方网关配置；关于页支持 CLI 工具一键安装升级；主页统计重构，应用筛选改为图标条' }
+    ]
+  },
+{
     version: '1.7.1',
     date: '2026-10-09',
     type: 'patch',
