@@ -1358,6 +1358,11 @@
     "opencodeModel": "模型",
     "opencodeSmallModel": "附加模型（可选）",
     "claudeDesktopModelHint": "Claude Desktop 档位映射：可配置任意模型（如 deepseek-chat、gpt-4o 等），将自动通过 CCG-Switch 本地代理映射为客户端对应的 Sonnet/Opus/Haiku 档位；也可填写原生 claude-* 模型直连。",
+    "apiFormatLabel": "接口协议 (API Format)",
+    "apiFormatAnthropic": "Anthropic Messages (官方及兼容反代)",
+    "apiFormatOpenAi": "OpenAI 兼容 (DeepSeek / Ollama / Qwen 等协议转换)",
+    "apiFormatGemini": "Google Gemini (Gemini 原生协议转换)",
+    "apiFormatConvertedHint": "已启用本地协议转译：Claude Code / Desktop 发送的 Anthropic 请求将自动转为目标协议，支持流式 SSE 与工具调用。",
     "claudeDesktop": {
       "notInstalled": "未检测到 Claude Desktop 配置目录，请先安装并启动一次 Claude Desktop。",
       "applied": "已接管",

@@ -13,6 +13,7 @@ use super::usage::parser::TokenUsage;
 use crate::database::Database;
 use crate::models::app_type::AppType;
 use crate::proxy::error::ProxyError;
+use crate::proxy::translator::{self, ApiFormat};
 use axum::body::Body;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -298,24 +299,26 @@ fn drain_sse_events(buffer: &mut String) -> Vec<Value> {
 // 处理入口
 // ============================================================================
 
-/// 统一入口：SSE 走 tee 流，其余走整体读取
+/// 统一入口：SSE 走流式，其余走整体读取
 pub async fn process_response(
     upstream: reqwest::Response,
     ctx: UsageContext,
     db: Arc<Database>,
+    api_format: ApiFormat,
 ) -> Result<Response, ProxyError> {
     if is_sse_response(&upstream) {
-        Ok(handle_streaming(upstream, ctx, db))
+        Ok(handle_streaming(upstream, ctx, db, api_format))
     } else {
-        handle_non_streaming(upstream, ctx, db).await
+        handle_non_streaming(upstream, ctx, db, api_format).await
     }
 }
 
-/// 非流式：读全 body → 解析 → 异步落库 → 原样返回
+/// 非流式：读全 body → 协议转译（若需要） → 异步落库 → 返回
 pub async fn handle_non_streaming(
     upstream: reqwest::Response,
     ctx: UsageContext,
     db: Arc<Database>,
+    api_format: ApiFormat,
 ) -> Result<Response, ProxyError> {
     let status = StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
     let headers = upstream.headers().clone();
@@ -325,34 +328,59 @@ pub async fn handle_non_streaming(
         .await
         .map_err(|e| ProxyError::ForwardFailed(format!("读取响应体失败: {e}")))?;
 
-    // 解析失败不影响返回：非 JSON 响应（如 SSE 误判、纯文本错误）直接跳过采集
-    match serde_json::from_slice::<Value>(&body_bytes) {
-        Ok(json) => match parse_response_usage(ctx.app_type, &json) {
-            Some(usage) => spawn_log(
-                db,
-                &ctx,
-                usage,
-                status.as_u16(),
-                false,
-                None,
-                None,
-            ),
-            None => tracing::debug!("[Usage] 非流式响应无 usage 字段，跳过采集"),
+    let (final_body_bytes, parsed_usage) = match serde_json::from_slice::<Value>(&body_bytes) {
+        Ok(json) => match api_format {
+            ApiFormat::OpenAi => {
+                let usage = TokenUsage::from_openai_response(&json);
+                let anthropic_resp = translator::openai::openai_to_anthropic_response(&json)
+                    .map_err(|e| ProxyError::Internal(format!("OpenAI 响应转译失败: {e}")))?;
+                let trans_bytes = serde_json::to_vec(&anthropic_resp)
+                    .map_err(|e| ProxyError::Internal(e.to_string()))?;
+                (Bytes::from(trans_bytes), usage)
+            }
+            ApiFormat::Gemini => {
+                let usage = TokenUsage::from_gemini_response(&json);
+                let anthropic_resp = translator::gemini::gemini_to_anthropic_response(&json, &ctx.request_model)
+                    .map_err(|e| ProxyError::Internal(format!("Gemini 响应转译失败: {e}")))?;
+                let trans_bytes = serde_json::to_vec(&anthropic_resp)
+                    .map_err(|e| ProxyError::Internal(e.to_string()))?;
+                (Bytes::from(trans_bytes), usage)
+            }
+            ApiFormat::Anthropic => {
+                let usage = parse_response_usage(ctx.app_type, &json);
+                (body_bytes, usage)
+            }
         },
-        Err(_) => tracing::debug!("[Usage] 响应体非 JSON，跳过采集"),
+        Err(_) => (body_bytes, None),
+    };
+
+    if let Some(usage) = parsed_usage {
+        spawn_log(
+            db,
+            &ctx,
+            usage,
+            status.as_u16(),
+            false,
+            None,
+            None,
+        );
+    } else {
+        tracing::debug!("[Usage] 非流式响应无 usage 字段，跳过采集");
     }
 
-    let builder = copy_headers(Response::builder().status(status), &headers);
+    let mut builder = copy_headers(Response::builder().status(status), &headers);
+    builder = builder.header(reqwest::header::CONTENT_TYPE.as_str(), "application/json");
     builder
-        .body(Body::from(body_bytes))
+        .body(Body::from(final_body_bytes))
         .map_err(|e| ProxyError::Internal(e.to_string()))
 }
 
-/// 流式：tee。转发原始字节，旁路累积 SSE 事件
+/// 流式：根据 API 协议选择直通或转译流，同时旁路累积 SSE 事件采集用量
 pub fn handle_streaming(
     upstream: reqwest::Response,
     ctx: UsageContext,
     db: Arc<Database>,
+    api_format: ApiFormat,
 ) -> Response {
     let status = StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
     let headers = upstream.headers().clone();
@@ -363,7 +391,13 @@ pub fn handle_streaming(
         let ctx = ctx.clone();
         SseUsageCollector::new(ctx.start_time, move |events, first_token_ms| {
             let model = extract_stream_model(ctx.app_type, &events, &ctx.request_model);
-            match parse_stream_usage(ctx.app_type, &events) {
+            let parsed_usage = match api_format {
+                ApiFormat::OpenAi => TokenUsage::from_openai_stream_events(&events),
+                ApiFormat::Gemini => TokenUsage::from_gemini_stream_chunks(&events),
+                ApiFormat::Anthropic => parse_stream_usage(ctx.app_type, &events),
+            };
+
+            match parsed_usage {
                 Some(usage) => spawn_log(
                     db.clone(),
                     &ctx,
@@ -374,7 +408,6 @@ pub fn handle_streaming(
                     Some(model),
                 ),
                 None => {
-                    // 没有 usage 也记一行：请求确实发生了，成本记 0
                     tracing::debug!("[Usage] 流式响应无 usage，按 0 token 记录");
                     spawn_log(
                         db.clone(),
@@ -390,8 +423,23 @@ pub fn handle_streaming(
         })
     };
 
-    let body = Body::from_stream(tee_sse_stream(upstream.bytes_stream(), collector));
-    let builder = copy_headers(Response::builder().status(status), &headers);
+    let body = match api_format {
+        ApiFormat::OpenAi => Body::from_stream(translate_openai_sse_stream(
+            upstream.bytes_stream(),
+            collector,
+            ctx.request_model.clone(),
+        )),
+        ApiFormat::Gemini => Body::from_stream(translate_gemini_sse_stream(
+            upstream.bytes_stream(),
+            collector,
+            ctx.request_model.clone(),
+        )),
+        ApiFormat::Anthropic => Body::from_stream(tee_sse_stream(upstream.bytes_stream(), collector)),
+    };
+
+    let mut builder = copy_headers(Response::builder().status(status), &headers);
+    builder = builder.header(reqwest::header::CONTENT_TYPE.as_str(), "text/event-stream");
+    builder = builder.header("cache-control", "no-cache");
 
     match builder.body(body) {
         Ok(resp) => resp,
@@ -399,6 +447,88 @@ pub fn handle_streaming(
             tracing::error!("[Proxy] 构建流式响应失败: {e}");
             ProxyError::Internal(e.to_string()).into_response_fallback()
         }
+    }
+}
+
+/// 将 OpenAI SSE 流转译为 Anthropic SSE 流
+fn translate_openai_sse_stream<S, E>(
+    stream: S,
+    collector: SseUsageCollector,
+    model: String,
+) -> impl Stream<Item = Result<Bytes, std::io::Error>> + Send
+where
+    S: Stream<Item = Result<Bytes, E>> + Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+{
+    async_stream::stream! {
+        let mut buffer = String::new();
+        let mut translator = crate::proxy::translator::openai::OpenAiSseTranslator::new(&model);
+        tokio::pin!(stream);
+
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(bytes) => {
+                    buffer.push_str(&String::from_utf8_lossy(&bytes));
+                    for event in drain_sse_events(&mut buffer) {
+                        collector.push(event.clone());
+                        for sse_str in translator.translate_chunk(&event) {
+                            yield Ok(Bytes::from(sse_str));
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("[Proxy] 上游流中断: {e}");
+                    yield Err(std::io::Error::other(e.to_string()));
+                    break;
+                }
+            }
+        }
+
+        for sse_str in translator.finish() {
+            yield Ok(Bytes::from(sse_str));
+        }
+        collector.finish();
+    }
+}
+
+/// 将 Gemini SSE 流转译为 Anthropic SSE 流
+fn translate_gemini_sse_stream<S, E>(
+    stream: S,
+    collector: SseUsageCollector,
+    model: String,
+) -> impl Stream<Item = Result<Bytes, std::io::Error>> + Send
+where
+    S: Stream<Item = Result<Bytes, E>> + Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+{
+    async_stream::stream! {
+        let mut buffer = String::new();
+        let mut translator = crate::proxy::translator::gemini::GeminiSseTranslator::new(&model);
+        tokio::pin!(stream);
+
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(bytes) => {
+                    buffer.push_str(&String::from_utf8_lossy(&bytes));
+                    for event in drain_sse_events(&mut buffer) {
+                        collector.push(event.clone());
+                        for sse_str in translator.translate_chunk(&event) {
+                            yield Ok(Bytes::from(sse_str));
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("[Proxy] 上游流中断: {e}");
+                    yield Err(std::io::Error::other(e.to_string()));
+                    break;
+                }
+            }
+        }
+
+        for sse_str in translator.finish() {
+            yield Ok(Bytes::from(sse_str));
+        }
+        collector.finish();
     }
 }
 

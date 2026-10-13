@@ -8,6 +8,7 @@ use crate::proxy::response_processor::{self, UsageContext};
 use crate::proxy::server;
 use crate::proxy::session;
 use crate::proxy::thinking_rectifier;
+use crate::proxy::translator::{self, ApiFormat};
 use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::StatusCode;
@@ -119,7 +120,28 @@ pub async fn proxy_handler(
     for (index, provider) in candidates.iter().enumerate() {
         let is_last = index + 1 == total;
 
-        let route = match provider_router::build_route(provider, app_type, &forward_path) {
+        // 模型映射（Claude 与 ClaudeDesktop）：按 provider 配置替换请求中的模型名
+        let (mapped_json, attempt_model) = match (&body_json, app_type) {
+            (Some(json), AppType::Claude | AppType::ClaudeDesktop) => {
+                let (mapped, _original, _changed) =
+                    model_mapper::apply_model_mapping(json.clone(), provider);
+                let cur_model = mapped
+                    .get("model")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or(&request_model)
+                    .to_string();
+                (Some(mapped), cur_model)
+            }
+            _ => (body_json.clone(), request_model.clone()),
+        };
+
+        let route = match provider_router::build_route(
+            provider,
+            app_type,
+            &forward_path,
+            Some(&attempt_model),
+            is_stream,
+        ) {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(
@@ -132,23 +154,53 @@ pub async fn proxy_handler(
             }
         };
 
-        let forward_headers =
-            merge_forward_headers(route.headers, &original_headers, app_type);
+        // Claude Code count_tokens 专门拦截（OpenAI / Gemini 没有该端点）
+        if forward_path.contains("/messages/count_tokens")
+            && (route.api_format == ApiFormat::OpenAi || route.api_format == ApiFormat::Gemini)
+        {
+            let estimated = (body_bytes.len() as f64 / 3.5).ceil() as u64;
+            let resp_json = serde_json::json!({
+                "input_tokens": estimated.max(1)
+            });
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&resp_json).unwrap()))
+                .unwrap());
+        }
 
-        // 模型映射（Claude 与 ClaudeDesktop）：按 provider 配置替换请求中的模型名
-        let attempt_body: Bytes = match (&body_json, app_type) {
-            (Some(json), AppType::Claude | AppType::ClaudeDesktop) => {
-                let (mapped, _original, changed) =
-                    model_mapper::apply_model_mapping(json.clone(), provider);
-                if changed.is_some() {
-                    serde_json::to_vec(&mapped)
+        let forward_headers =
+            merge_forward_headers(route.headers, &original_headers, app_type, route.api_format);
+
+        // 请求体协议转译
+        let attempt_body: Bytes = match (app_type, route.api_format, &mapped_json) {
+            (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::OpenAi, Some(json)) => {
+                match translator::openai::anthropic_to_openai_request(json) {
+                    Ok(openai_req) => Bytes::from(serde_json::to_vec(&openai_req).unwrap()),
+                    Err(e) => {
+                        tracing::warn!("[Proxy] Anthropic->OpenAI 转换失败: {}", e);
+                        return Err(ProxyError::InvalidRequest(format!("协议转换失败: {}", e)));
+                    }
+                }
+            }
+            (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::Gemini, Some(json)) => {
+                match translator::gemini::anthropic_to_gemini_request(json) {
+                    Ok(gemini_req) => Bytes::from(serde_json::to_vec(&gemini_req).unwrap()),
+                    Err(e) => {
+                        tracing::warn!("[Proxy] Anthropic->Gemini 转换失败: {}", e);
+                        return Err(ProxyError::InvalidRequest(format!("协议转换失败: {}", e)));
+                    }
+                }
+            }
+            _ => {
+                if let Some(json) = &mapped_json {
+                    serde_json::to_vec(json)
                         .map(Bytes::from)
                         .unwrap_or_else(|_| body_bytes.clone())
                 } else {
                     body_bytes.clone()
                 }
             }
-            _ => body_bytes.clone(),
         };
 
         let timeout = if is_stream {
@@ -158,11 +210,12 @@ pub async fn proxy_handler(
         };
 
         tracing::info!(
-            "[Proxy] {} {} → {} (provider: {}, {}/{})",
+            "[Proxy] {} {} → {} (provider: {}, format: {:?}, {}/{})",
             method,
             path,
             route.target_url,
             provider.name,
+            route.api_format,
             index + 1,
             total
         );
@@ -206,13 +259,28 @@ pub async fn proxy_handler(
                             status.as_u16(),
                             err_body.clone(),
                         );
+                        let formatted_err = match route.api_format {
+                            ApiFormat::OpenAi => {
+                                Some(translator::openai::openai_error_to_anthropic(
+                                    status.as_u16(),
+                                    err_body.as_deref().unwrap_or(""),
+                                ).to_string())
+                            }
+                            ApiFormat::Gemini => {
+                                Some(translator::gemini::gemini_error_to_anthropic(
+                                    status.as_u16(),
+                                    err_body.as_deref().unwrap_or(""),
+                                ).to_string())
+                            }
+                            ApiFormat::Anthropic => err_body,
+                        };
                         return Err(ProxyError::UpstreamError {
                             status: status.as_u16(),
-                            body: err_body,
+                            body: formatted_err,
                         });
                     }
 
-                    return response_processor::process_response(resp, ctx, db.clone()).await;
+                    return response_processor::process_response(resp, ctx, db.clone(), route.api_format).await;
                 }
 
                 // 还有候选：记录错误详情后切换下一个供应商
@@ -258,6 +326,7 @@ fn merge_forward_headers(
     mut headers: reqwest::header::HeaderMap,
     original: &axum::http::HeaderMap,
     app_type: AppType,
+    api_format: ApiFormat,
 ) -> reqwest::header::HeaderMap {
     for (key, value) in original.iter() {
         let name = key.as_str();
@@ -278,7 +347,9 @@ fn merge_forward_headers(
         reqwest::header::HeaderValue::from_static("identity"),
     );
 
-    if app_type == AppType::Claude || app_type == AppType::ClaudeDesktop {
+    if (app_type == AppType::Claude || app_type == AppType::ClaudeDesktop)
+        && api_format == ApiFormat::Anthropic
+    {
         // anthropic-version：优先用客户端的版本号，否则补默认值
         let version = original
             .get("anthropic-version")

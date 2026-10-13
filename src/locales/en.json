@@ -1237,6 +1237,11 @@
     "opencodeModel": "Model",
     "opencodeSmallModel": "Extra model (optional)",
     "claudeDesktopModelHint": "Claude Desktop model mapping: Any model (e.g., deepseek-chat, gpt-4o) can be mapped via CCG-Switch local proxy to corresponding Sonnet/Opus/Haiku tiers; native claude-* models can also be used directly.",
+    "apiFormatLabel": "API Protocol / Format",
+    "apiFormatAnthropic": "Anthropic Messages (Official & Compatible)",
+    "apiFormatOpenAi": "OpenAI Compatible (DeepSeek / Ollama / Qwen Protocol Translation)",
+    "apiFormatGemini": "Google Gemini (Gemini Native Protocol Translation)",
+    "apiFormatConvertedHint": "Local protocol translation enabled: Anthropic requests from Claude Code / Desktop will be automatically translated to the target protocol, supporting streaming SSE and tool calls.",
     "claudeDesktop": {
       "notInstalled": "Claude Desktop config directory not found. Install and launch Claude Desktop once first.",
       "applied": "Managed",

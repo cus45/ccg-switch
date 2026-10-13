@@ -5,10 +5,13 @@ use crate::proxy::error::ProxyError;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use std::sync::Arc;
 
-/// 路由结果：目标 URL 与认证头
+use crate::proxy::translator::{self, ApiFormat};
+
+/// 路由结果：目标 URL、认证头与协议格式
 pub struct RouteResult {
     pub target_url: String,
     pub headers: HeaderMap,
+    pub api_format: ApiFormat,
 }
 
 /// 根据请求路径识别目标应用类型
@@ -108,20 +111,54 @@ fn is_bearer_only(provider: &Provider) -> bool {
         .unwrap_or(false)
 }
 
-/// 为指定 provider 构建上游路由（目标 URL + 认证头）
+/// 为指定 provider 构建上游路由（目标 URL + 认证头 + API 协议）
 pub fn build_route(
     provider: &Provider,
     app: AppType,
     request_path: &str,
+    model: Option<&str>,
+    is_stream: bool,
 ) -> Result<RouteResult, ProxyError> {
+    let api_format = translator::detect_api_format(provider, app);
+
     let base_url = provider
         .url
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| default_base_url(app));
+        .unwrap_or_else(|| match api_format {
+            ApiFormat::OpenAi => "https://api.openai.com/v1",
+            ApiFormat::Gemini => "https://generativelanguage.googleapis.com",
+            ApiFormat::Anthropic => default_base_url(app),
+        });
 
-    let target_url = join_url(base_url, request_path);
+    let target_url = match (app, api_format) {
+        (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::OpenAi) => {
+            let query = if let Some(idx) = request_path.find('?') {
+                &request_path[idx..]
+            } else {
+                ""
+            };
+            let base = base_url.trim_end_matches('/');
+            if base.ends_with("/chat/completions") {
+                format!("{}{}", base, query)
+            } else {
+                let joined = join_url(base, "/chat/completions");
+                format!("{}{}", joined, query)
+            }
+        }
+        (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::Gemini) => {
+            let m = model.unwrap_or("gemini-2.0-flash");
+            let method = if is_stream {
+                "streamGenerateContent?alt=sse"
+            } else {
+                "generateContent"
+            };
+            let base = base_url.trim_end_matches('/');
+            format!("{}/v1beta/models/{}:{}", base, m, method)
+        }
+        _ => join_url(base_url, request_path),
+    };
 
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -138,10 +175,17 @@ pub fn build_route(
         HeaderValue::from_str(v).map_err(|e| ProxyError::ConfigError(e.to_string()))
     };
 
-    match app {
-        AppType::Claude | AppType::ClaudeDesktop => {
-            // 与 cc-switch 对齐：默认同时携带 Bearer 与 x-api-key，兼容面最广；
-            // 仅当 provider 显式声明 bearer_only 时不发 x-api-key。
+    match (app, api_format) {
+        (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::OpenAi) | (AppType::Codex, _) => {
+            headers.insert(
+                AUTHORIZATION,
+                key_value(&format!("Bearer {}", api_key))?,
+            );
+        }
+        (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::Gemini) | (AppType::Gemini, _) => {
+            headers.insert("x-goog-api-key", key_value(api_key)?);
+        }
+        (AppType::Claude | AppType::ClaudeDesktop, ApiFormat::Anthropic) => {
             headers.insert(
                 AUTHORIZATION,
                 key_value(&format!("Bearer {}", api_key))?,
@@ -149,15 +193,6 @@ pub fn build_route(
             if !is_bearer_only(provider) {
                 headers.insert("x-api-key", key_value(api_key)?);
             }
-        }
-        AppType::Codex => {
-            headers.insert(
-                AUTHORIZATION,
-                key_value(&format!("Bearer {}", api_key))?,
-            );
-        }
-        AppType::Gemini => {
-            headers.insert("x-goog-api-key", key_value(api_key)?);
         }
         _ => {
             headers.insert(
@@ -170,6 +205,7 @@ pub fn build_route(
     Ok(RouteResult {
         target_url,
         headers,
+        api_format,
     })
 }
 
@@ -248,16 +284,18 @@ mod tests {
     #[test]
     fn claude_route_sets_both_auth_headers() {
         let p = provider(AppType::Claude, Some("https://api.anthropic.com"), "sk-1");
-        let route = build_route(&p, AppType::Claude, "/v1/messages").unwrap();
+        let route = build_route(&p, AppType::Claude, "/v1/messages", None, false).unwrap();
         assert_eq!(route.target_url, "https://api.anthropic.com/v1/messages");
         assert_eq!(route.headers.get("x-api-key").unwrap(), "sk-1");
         assert_eq!(route.headers.get(AUTHORIZATION).unwrap(), "Bearer sk-1");
+        assert_eq!(route.api_format, ApiFormat::Anthropic);
 
         let p_desk = provider(AppType::ClaudeDesktop, Some("https://api.anthropic.com"), "sk-desk");
-        let route_desk = build_route(&p_desk, AppType::ClaudeDesktop, "/v1/messages").unwrap();
+        let route_desk = build_route(&p_desk, AppType::ClaudeDesktop, "/v1/messages", None, false).unwrap();
         assert_eq!(route_desk.target_url, "https://api.anthropic.com/v1/messages");
         assert_eq!(route_desk.headers.get("x-api-key").unwrap(), "sk-desk");
         assert_eq!(route_desk.headers.get(AUTHORIZATION).unwrap(), "Bearer sk-desk");
+        assert_eq!(route_desk.api_format, ApiFormat::Anthropic);
     }
 
     #[test]
@@ -267,22 +305,55 @@ mod tests {
         meta.insert("auth_mode".to_string(), "bearer_only".to_string());
         p.meta = Some(meta);
 
-        let route = build_route(&p, AppType::Claude, "/v1/messages").unwrap();
+        let route = build_route(&p, AppType::Claude, "/v1/messages", None, false).unwrap();
         assert!(route.headers.get("x-api-key").is_none());
         assert_eq!(route.headers.get(AUTHORIZATION).unwrap(), "Bearer sk-2");
+        assert_eq!(route.api_format, ApiFormat::Anthropic);
+    }
+
+    #[test]
+    fn claude_with_openai_route_rewrites_to_chat_completions() {
+        let mut p = provider(AppType::Claude, Some("https://api.deepseek.com"), "sk-ds");
+        let mut meta = std::collections::HashMap::new();
+        meta.insert("api_format".to_string(), "openai".to_string());
+        p.meta = Some(meta);
+
+        let route = build_route(&p, AppType::Claude, "/v1/messages", Some("deepseek-chat"), false).unwrap();
+        assert_eq!(route.target_url, "https://api.deepseek.com/chat/completions");
+        assert!(route.headers.get("x-api-key").is_none());
+        assert_eq!(route.headers.get(AUTHORIZATION).unwrap(), "Bearer sk-ds");
+        assert_eq!(route.api_format, ApiFormat::OpenAi);
+    }
+
+    #[test]
+    fn claude_with_gemini_route_rewrites_to_models_generate_content() {
+        let mut p = provider(AppType::Claude, Some("https://generativelanguage.googleapis.com"), "g-key");
+        let mut meta = std::collections::HashMap::new();
+        meta.insert("api_format".to_string(), "gemini".to_string());
+        p.meta = Some(meta);
+
+        let route = build_route(&p, AppType::Claude, "/v1/messages", Some("gemini-2.0-flash"), true).unwrap();
+        assert_eq!(
+            route.target_url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse"
+        );
+        assert_eq!(route.headers.get("x-goog-api-key").unwrap(), "g-key");
+        assert!(route.headers.get(AUTHORIZATION).is_none());
+        assert_eq!(route.api_format, ApiFormat::Gemini);
     }
 
     #[test]
     fn gemini_route_uses_goog_api_key() {
         let p = provider(AppType::Gemini, None, "g-key");
-        let route = build_route(&p, AppType::Gemini, "/v1beta/models").unwrap();
+        let route = build_route(&p, AppType::Gemini, "/v1beta/models", None, false).unwrap();
         assert_eq!(route.headers.get("x-goog-api-key").unwrap(), "g-key");
         assert!(route.headers.get(AUTHORIZATION).is_none());
+        assert_eq!(route.api_format, ApiFormat::Gemini);
     }
 
     #[test]
     fn empty_api_key_is_config_error() {
         let p = provider(AppType::Claude, None, "  ");
-        assert!(build_route(&p, AppType::Claude, "/v1/messages").is_err());
+        assert!(build_route(&p, AppType::Claude, "/v1/messages", None, false).is_err());
     }
 }

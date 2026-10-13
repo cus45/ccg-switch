@@ -16,6 +16,7 @@ pub mod server;
 pub mod session;
 pub mod thinking_budget_rectifier;
 pub mod thinking_rectifier;
+pub mod translator;
 pub mod types;
 pub mod usage;
 

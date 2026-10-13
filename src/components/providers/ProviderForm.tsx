@@ -123,6 +123,9 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
     const [defaultHaikuModel, setDefaultHaikuModel] = useState(editingProvider?.defaultHaikuModel || '');
     const [defaultReasoningModel, setDefaultReasoningModel] = useState(editingProvider?.defaultReasoningModel || '');
     const [opencodeNpm, setOpencodeNpm] = useState(editingProvider?.meta?.npm || OPENCODE_DEFAULT_NPM);
+    const [apiFormat, setApiFormat] = useState<string>(
+        editingProvider?.meta?.api_format || editingProvider?.meta?.apiFormat || 'anthropic'
+    );
     const [selectedPreset, setSelectedPreset] = useState<ProviderPresetData | null>(null);
 
     // 其他配置
@@ -162,6 +165,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             setDefaultHaikuModel(editingProvider?.defaultHaikuModel || '');
             setDefaultReasoningModel(editingProvider?.defaultReasoningModel || '');
             setOpencodeNpm(editingProvider?.meta?.npm || OPENCODE_DEFAULT_NPM);
+            setApiFormat(editingProvider?.meta?.api_format || editingProvider?.meta?.apiFormat || 'anthropic');
             setSelectedPreset(null);
             setDescription(editingProvider?.description || '');
             setTags(editingProvider?.tags || []);
@@ -211,6 +215,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         setDefaultHaikuModel(preset.models?.haiku ?? '');
         setDefaultReasoningModel('');
         if (preset.npm) setOpencodeNpm(preset.npm);
+        setApiFormat('anthropic');
     };
 
     const handleAppTypeChange = (nextAppType: AppType) => {
@@ -222,6 +227,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
         setDefaultOpusModel('');
         setDefaultHaikuModel('');
         setDefaultReasoningModel('');
+        setApiFormat('anthropic');
 
         if (!url.trim() || url.trim() === previousDefaultUrl) {
             setUrl(defaultUrlForApp(nextAppType));
@@ -262,14 +268,27 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             defaultReasoningModel: defaultReasoningModel.trim() || undefined,
         }, [appType, defaultSonnetModel, defaultOpusModel, defaultHaikuModel, defaultReasoningModel]);
 
-    /** OpenCode 的 SDK 类型保存在 meta.npm；保留 meta 里的其它字段（如用量脚本） */
-    const providerMeta = useMemo(() => appType === 'opencode'
-        ? { ...(editingProvider?.meta || {}), npm: opencodeNpm }
-        : editingProvider?.meta, [appType, opencodeNpm, editingProvider]);
+    /** OpenCode 的 SDK 类型保存在 meta.npm；Claude/Desktop 接口协议保存在 meta.api_format；保留 meta 里的其它字段（如用量脚本） */
+    const providerMeta = useMemo(() => {
+        const base = { ...(editingProvider?.meta || {}) };
+        if (appType === 'opencode') {
+            base.npm = opencodeNpm;
+        } else if (appType === 'claude' || appType === 'claudedesktop') {
+            if (apiFormat && apiFormat !== 'anthropic') {
+                base.api_format = apiFormat;
+            } else {
+                delete base.api_format;
+                delete base.apiFormat;
+            }
+        }
+        return Object.keys(base).length > 0 ? base : undefined;
+    }, [appType, opencodeNpm, apiFormat, editingProvider]);
 
-    /** 连通性测试按协议走：Anthropic SDK 用 Claude 协议，其余按 OpenAI 兼容 */
+    /** 连通性测试按协议走：Anthropic SDK 用 Claude 协议，其余按 OpenAI 兼容或 Gemini 协议 */
     const connectivityAppType = appType === 'opencode'
         ? ({ '@ai-sdk/anthropic': 'claude', '@ai-sdk/openai': 'codex', '@ai-sdk/google': 'gemini' } as Record<string, string>)[opencodeNpm] ?? 'openai-chat'
+        : (appType === 'claude' || appType === 'claudedesktop')
+        ? (apiFormat === 'openai' ? 'codex' : apiFormat === 'gemini' ? 'gemini' : appType)
         : appType;
 
     const handleTestConnectivity = async () => {
@@ -641,41 +660,60 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                 />
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                <ModelComboBox
-                                    label="Sonnet Model"
-                                    placeholder="claude-sonnet-4-..."
-                                    value={defaultSonnetModel}
-                                    onChange={setDefaultSonnetModel}
-                                    options={fetchedModels}
-                                />
-                                <ModelComboBox
-                                    label="Opus Model"
-                                    placeholder="claude-opus-4-..."
-                                    value={defaultOpusModel}
-                                    onChange={setDefaultOpusModel}
-                                    options={fetchedModels}
-                                />
-                                <ModelComboBox
-                                    label="Haiku Model"
-                                    placeholder="claude-haiku-..."
-                                    value={defaultHaikuModel}
-                                    onChange={setDefaultHaikuModel}
-                                    options={fetchedModels}
-                                />
-                                {appType === 'claudedesktop' ? (
-                                    <p className="col-span-2 text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
-                                        {t('providers.claudeDesktopModelHint', 'Claude Desktop 档位映射：可配置任意模型（如 deepseek-chat、gpt-4o 等），将自动通过 CCG-Switch 本地代理映射为客户端对应的 Sonnet/Opus/Haiku 档位；也可填写原生 claude-* 模型直连。')}
-                                    </p>
-                                ) : (
+                            <div className="space-y-3">
+                                <div className="space-y-1.5">
+                                    <LabelText>{t('providers.apiFormatLabel', '接口协议 (API Format)')}</LabelText>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 px-3 text-sm text-gray-900 dark:text-slate-200 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={apiFormat}
+                                        onChange={(e) => setApiFormat(e.target.value)}
+                                    >
+                                        <option value="anthropic">{t('providers.apiFormatAnthropic', 'Anthropic Messages (官方及兼容反代)')}</option>
+                                        <option value="openai">{t('providers.apiFormatOpenAi', 'OpenAI 兼容 (DeepSeek / Ollama / Qwen 等协议转换)')}</option>
+                                        <option value="gemini">{t('providers.apiFormatGemini', 'Google Gemini (Gemini 原生协议转换)')}</option>
+                                    </select>
+                                    {apiFormat !== 'anthropic' && (
+                                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                                            {t('providers.apiFormatConvertedHint', '已启用本地协议转译：Claude Code / Desktop 发送的 Anthropic 请求将自动转为目标协议，支持流式 SSE 与工具调用。')}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                                     <ModelComboBox
-                                        label={t('providers.reasoningModel', '推理模型 (Thinking)')}
-                                        placeholder="claude-sonnet-4-..."
-                                        value={defaultReasoningModel}
-                                        onChange={setDefaultReasoningModel}
+                                        label="Sonnet Model"
+                                        placeholder={apiFormat === 'openai' ? 'deepseek-chat / gpt-4o' : apiFormat === 'gemini' ? 'gemini-2.0-flash' : 'claude-sonnet-4-...'}
+                                        value={defaultSonnetModel}
+                                        onChange={setDefaultSonnetModel}
                                         options={fetchedModels}
                                     />
-                                )}
+                                    <ModelComboBox
+                                        label="Opus Model"
+                                        placeholder={apiFormat === 'openai' ? 'deepseek-reasoner / o1' : apiFormat === 'gemini' ? 'gemini-2.0-pro' : 'claude-opus-4-...'}
+                                        value={defaultOpusModel}
+                                        onChange={setDefaultOpusModel}
+                                        options={fetchedModels}
+                                    />
+                                    <ModelComboBox
+                                        label="Haiku Model"
+                                        placeholder={apiFormat === 'openai' ? 'gpt-4o-mini' : apiFormat === 'gemini' ? 'gemini-2.0-flash-lite' : 'claude-haiku-...'}
+                                        value={defaultHaikuModel}
+                                        onChange={setDefaultHaikuModel}
+                                        options={fetchedModels}
+                                    />
+                                    {appType === 'claudedesktop' ? (
+                                        <p className="col-span-2 text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                                            {t('providers.claudeDesktopModelHint', 'Claude Desktop 档位映射：可配置任意模型（如 deepseek-chat、gpt-4o 等），将自动通过 CCG-Switch 本地代理映射为客户端对应的 Sonnet/Opus/Haiku 档位；也可填写原生 claude-* 模型直连。')}
+                                        </p>
+                                    ) : (
+                                        <ModelComboBox
+                                            label={t('providers.reasoningModel', '推理模型 (Thinking)')}
+                                            placeholder={apiFormat === 'openai' ? 'deepseek-reasoner' : 'claude-sonnet-4-...'}
+                                            value={defaultReasoningModel}
+                                            onChange={setDefaultReasoningModel}
+                                            options={fetchedModels}
+                                        />
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
