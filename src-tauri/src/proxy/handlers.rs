@@ -135,9 +135,9 @@ pub async fn proxy_handler(
         let forward_headers =
             merge_forward_headers(route.headers, &original_headers, app_type);
 
-        // 模型映射（仅 Claude）：按 provider 配置替换请求中的模型名
+        // 模型映射（Claude 与 ClaudeDesktop）：按 provider 配置替换请求中的模型名
         let attempt_body: Bytes = match (&body_json, app_type) {
-            (Some(json), AppType::Claude) => {
+            (Some(json), AppType::Claude | AppType::ClaudeDesktop) => {
                 let (mapped, _original, changed) =
                     model_mapper::apply_model_mapping(json.clone(), provider);
                 if changed.is_some() {
@@ -278,7 +278,7 @@ fn merge_forward_headers(
         reqwest::header::HeaderValue::from_static("identity"),
     );
 
-    if app_type == AppType::Claude {
+    if app_type == AppType::Claude || app_type == AppType::ClaudeDesktop {
         // anthropic-version：优先用客户端的版本号，否则补默认值
         let version = original
             .get("anthropic-version")
@@ -288,17 +288,19 @@ fn merge_forward_headers(
             headers.insert("anthropic-version", v);
         }
 
-        // anthropic-beta：确保包含 claude-code 标记（上游据此验证请求来源）
-        let beta_value = match original
-            .get("anthropic-beta")
-            .and_then(|v| v.to_str().ok())
-        {
-            Some(beta) if beta.contains(CLAUDE_CODE_BETA) => beta.to_string(),
-            Some(beta) => format!("{},{}", CLAUDE_CODE_BETA, beta),
-            None => CLAUDE_CODE_BETA.to_string(),
-        };
-        if let Ok(v) = reqwest::header::HeaderValue::from_str(&beta_value) {
-            headers.insert("anthropic-beta", v);
+        if app_type == AppType::Claude {
+            // anthropic-beta：确保包含 claude-code 标记（上游据此验证请求来源）
+            let beta_value = match original
+                .get("anthropic-beta")
+                .and_then(|v| v.to_str().ok())
+            {
+                Some(beta) if beta.contains(CLAUDE_CODE_BETA) => beta.to_string(),
+                Some(beta) => format!("{},{}", CLAUDE_CODE_BETA, beta),
+                None => CLAUDE_CODE_BETA.to_string(),
+            };
+            if let Ok(v) = reqwest::header::HeaderValue::from_str(&beta_value) {
+                headers.insert("anthropic-beta", v);
+            }
         }
     }
 

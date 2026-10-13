@@ -1200,10 +1200,11 @@
     "opencodeNpm": "SDK type (npm)",
     "opencodeModel": "Model",
     "opencodeSmallModel": "Extra model (optional)",
-    "claudeDesktopModelHint": "Claude Desktop only accepts claude-sonnet-* / claude-opus-* / claude-haiku-* model names; leave empty to use the gateway default list.",
+    "claudeDesktopModelHint": "Claude Desktop model mapping: Any model (e.g., deepseek-chat, gpt-4o) can be mapped via CCG-Switch local proxy to corresponding Sonnet/Opus/Haiku tiers; native claude-* models can also be used directly.",
     "claudeDesktop": {
       "notInstalled": "Claude Desktop config directory not found. Install and launch Claude Desktop once first.",
       "applied": "Managed",
+      "proxyMode": "Proxy Mapping Mode",
       "notApplied": "Not managed: switch to a Claude Desktop provider to write the config library",
       "restartHint": "Changes take effect after restarting Claude Desktop",
       "restore": "Restore original config",

@@ -77,6 +77,7 @@ pub struct ClaudeDesktopStatus {
     pub config_library_path: Option<String>,
     pub actual_base_url: Option<String>,
     pub has_backup: bool,
+    pub is_proxy_mode: bool,
 }
 
 fn invalid(msg: String) -> io::Error {
@@ -213,6 +214,43 @@ fn non_empty(v: &Option<String>) -> Option<&str> {
     v.as_deref().map(str::trim).filter(|s| !s.is_empty())
 }
 
+/// 判断当前 Claude Desktop 供应商是否应启用本地代理映射模式
+pub fn is_proxy_mapping_enabled(p: &Provider) -> bool {
+    let meta_enabled = p
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("proxyMappingMode").or_else(|| m.get("proxy_mapping_mode")))
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    if meta_enabled {
+        return true;
+    }
+    for m in [
+        non_empty(&p.default_sonnet_model),
+        non_empty(&p.default_opus_model),
+        non_empty(&p.default_haiku_model),
+        non_empty(&p.default_reasoning_model),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !is_claude_safe_model_id(m) {
+            return true;
+        }
+    }
+    false
+}
+
+fn get_proxy_port() -> u16 {
+    let state = crate::proxy::server::get_state();
+    if state.running && state.port > 0 {
+        return state.port;
+    }
+    crate::services::proxy_service::load_proxy_config()
+        .map(|c| c.port)
+        .unwrap_or(8080)
+}
+
 /// 供应商 → (Base URL, Key, 模型列表)
 fn gateway_settings(p: &Provider) -> io::Result<(String, String, Vec<String>)> {
     let base_url = non_empty(&p.url)
@@ -222,6 +260,30 @@ fn gateway_settings(p: &Provider) -> io::Result<(String, String, Vec<String>)> {
     if api_key.is_empty() {
         return Err(invalid("Claude Desktop 供应商缺少 API Key".into()));
     }
+
+    if is_proxy_mapping_enabled(p) {
+        let port = get_proxy_port();
+        let proxy_base_url = format!("http://127.0.0.1:{}/claudedesktop", port);
+        let proxy_key = "ccg-proxy-managed".to_string();
+
+        let mut models: Vec<String> = Vec::new();
+        if p.default_sonnet_model.as_deref().map(str::trim).is_some_and(|s| !s.is_empty()) {
+            models.push("claude-3-7-sonnet-20250219".to_string());
+        }
+        if p.default_opus_model.as_deref().map(str::trim).is_some_and(|s| !s.is_empty()) {
+            models.push("claude-3-opus-20240229".to_string());
+        }
+        if p.default_haiku_model.as_deref().map(str::trim).is_some_and(|s| !s.is_empty()) {
+            models.push("claude-3-5-haiku-20241022".to_string());
+        }
+        if models.is_empty() {
+            models.push("claude-3-7-sonnet-20250219".to_string());
+            models.push("claude-3-5-haiku-20241022".to_string());
+            models.push("claude-3-opus-20240229".to_string());
+        }
+        return Ok((proxy_base_url, proxy_key, models));
+    }
+
     let mut models: Vec<String> = Vec::new();
     for m in [
         non_empty(&p.default_sonnet_model),
@@ -393,17 +455,23 @@ fn status_at(paths: &DesktopPaths, backup_file: &Path) -> ClaudeDesktopStatus {
     let meta = read_object(&paths.meta).unwrap_or_default();
     let profile = read_object(&paths.profile).unwrap_or_default();
     let applied = str_field(&meta, "appliedId").as_deref() == Some(PROFILE_ID);
+    let actual_base_url = if applied {
+        str_field(&profile, "inferenceGatewayBaseUrl")
+    } else {
+        None
+    };
+    let is_proxy_mode = actual_base_url
+        .as_deref()
+        .map(|u| u.contains("/claudedesktop"))
+        .unwrap_or(false);
     ClaudeDesktopStatus {
         supported: true,
         installed: paths.installed(),
         applied,
         config_library_path: Some(paths.library_dir.to_string_lossy().to_string()),
-        actual_base_url: if applied {
-            str_field(&profile, "inferenceGatewayBaseUrl")
-        } else {
-            None
-        },
+        actual_base_url,
         has_backup: backup_file.exists(),
+        is_proxy_mode,
     }
 }
 
@@ -427,6 +495,7 @@ pub fn get_status() -> ClaudeDesktopStatus {
             config_library_path: None,
             actual_base_url: None,
             has_backup: false,
+            is_proxy_mode: false,
         },
     }
 }
@@ -599,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_json_or_model_aborts_without_writing() {
+    fn invalid_json_or_empty_key_aborts_without_writing() {
         let (_root, paths, backup) = sandbox("invalid");
         seed_user_3p(&paths);
         fs::write(&paths.meta, "{ broken").unwrap();
@@ -607,11 +676,37 @@ mod tests {
         assert!(!paths.profile.exists());
         assert_eq!(fs::read_to_string(&paths.meta).unwrap(), "{ broken");
 
-        let (_root2, paths2, backup2) = sandbox("badmodel");
+        let (_root2, paths2, backup2) = sandbox("emptykey");
         let mut p = provider();
-        p.default_opus_model = Some("gpt-5".into());
+        p.api_key = "".into();
         assert!(apply_at(&paths2, &backup2, &p).is_err());
         assert!(!paths2.profile.exists());
+    }
+
+    #[test]
+    fn proxy_mapping_mode_for_non_claude_model() {
+        let (_root, paths, backup) = sandbox("proxymode");
+        seed_user_3p(&paths);
+        let mut p = provider();
+        p.default_sonnet_model = Some("deepseek-chat".into());
+        p.default_opus_model = Some("gpt-4o".into());
+        p.default_haiku_model = None;
+        apply_at(&paths, &backup, &p).unwrap();
+
+        let profile = read(&paths.profile);
+        assert_eq!(profile["inferenceProvider"], "gateway");
+        let base_url = profile["inferenceGatewayBaseUrl"].as_str().unwrap();
+        assert!(base_url.starts_with("http://127.0.0.1:"));
+        assert!(base_url.ends_with("/claudedesktop"));
+        assert_eq!(profile["inferenceGatewayApiKey"], "ccg-proxy-managed");
+        assert_eq!(profile["inferenceGatewayAuthScheme"], "bearer");
+        assert_eq!(
+            profile["inferenceModels"],
+            json!(["claude-3-7-sonnet-20250219", "claude-3-opus-20240229"])
+        );
+        let status = status_at(&paths, &backup);
+        assert!(status.applied);
+        assert!(status.is_proxy_mode);
     }
 
     #[test]

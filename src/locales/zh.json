@@ -1321,10 +1321,11 @@
     "opencodeNpm": "SDK 类型 (npm)",
     "opencodeModel": "模型",
     "opencodeSmallModel": "附加模型（可选）",
-    "claudeDesktopModelHint": "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 形式的模型名；留空则使用网关默认模型列表。",
+    "claudeDesktopModelHint": "Claude Desktop 档位映射：可配置任意模型（如 deepseek-chat、gpt-4o 等），将自动通过 CCG-Switch 本地代理映射为客户端对应的 Sonnet/Opus/Haiku 档位；也可填写原生 claude-* 模型直连。",
     "claudeDesktop": {
       "notInstalled": "未检测到 Claude Desktop 配置目录，请先安装并启动一次 Claude Desktop。",
       "applied": "已接管",
+      "proxyMode": "代理映射模式",
       "notApplied": "未接管：切换一个 Claude Desktop 供应商即可写入配置库",
       "restartHint": "修改在重启 Claude Desktop 后生效",
       "restore": "恢复原配置",

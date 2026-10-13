@@ -13,6 +13,7 @@ interface ClaudeDesktopStatus {
     configLibraryPath: string | null;
     actualBaseUrl: string | null;
     hasBackup: boolean;
+    isProxyMode?: boolean;
 }
 
 interface ClaudeDesktopPanelProps {
@@ -75,6 +76,11 @@ export default function ClaudeDesktopPanel({ refreshKey, onRestored }: ClaudeDes
                 <span className="inline-flex items-center gap-1.5 text-green-600 dark:text-green-400">
                     <CheckCircle2 className="h-4 w-4" />
                     {t('providers.claudeDesktop.applied', '已接管')}
+                    {status.isProxyMode && (
+                        <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {t('providers.claudeDesktop.proxyMode', '代理映射模式')}
+                        </span>
+                    )}
                     {status.actualBaseUrl && (
                         <code className="font-mono text-gray-500 dark:text-gray-400">{status.actualBaseUrl}</code>
                     )}

@@ -665,7 +665,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                 />
                                 {appType === 'claudedesktop' ? (
                                     <p className="col-span-2 text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
-                                        {t('providers.claudeDesktopModelHint', 'Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 形式的模型名；留空则使用网关默认模型列表。')}
+                                        {t('providers.claudeDesktopModelHint', 'Claude Desktop 档位映射：可配置任意模型（如 deepseek-chat、gpt-4o 等），将自动通过 CCG-Switch 本地代理映射为客户端对应的 Sonnet/Opus/Haiku 档位；也可填写原生 claude-* 模型直连。')}
                                     </p>
                                 ) : (
                                     <ModelComboBox

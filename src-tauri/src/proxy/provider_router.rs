@@ -18,6 +18,9 @@ pub struct RouteResult {
 /// - Codex CLI:   `/v1/responses`、`/v1/chat/completions`（base_url 带 /v1 前缀）
 /// - Gemini CLI:  `/v1beta/...`
 pub fn detect_app_type(path: &str) -> AppType {
+    if path.starts_with("/claudedesktop/") || path == "/claudedesktop" {
+        return AppType::ClaudeDesktop;
+    }
     let p = strip_app_prefix(path);
     if p.starts_with("/v1beta/") || p.starts_with("/v1internal") {
         return AppType::Gemini;
@@ -32,7 +35,7 @@ pub fn detect_app_type(path: &str) -> AppType {
 ///
 /// 兼容手工把 base_url 配成 `http://127.0.0.1:port/claude` 之类的用法。
 pub fn strip_app_prefix(path: &str) -> &str {
-    for prefix in ["/claude", "/codex", "/gemini"] {
+    for prefix in ["/claudedesktop", "/claude", "/codex", "/gemini"] {
         if let Some(rest) = path.strip_prefix(prefix) {
             if rest.starts_with('/') {
                 return rest;
@@ -72,7 +75,7 @@ pub fn resolve_candidates(db: &Arc<Database>, app: AppType) -> Result<Vec<Provid
 
 fn default_base_url(app: AppType) -> &'static str {
     match app {
-        AppType::Claude => "https://api.anthropic.com",
+        AppType::Claude | AppType::ClaudeDesktop => "https://api.anthropic.com",
         AppType::Codex => "https://api.openai.com/v1",
         AppType::Gemini => "https://generativelanguage.googleapis.com",
         _ => "https://api.anthropic.com",
@@ -136,7 +139,7 @@ pub fn build_route(
     };
 
     match app {
-        AppType::Claude => {
+        AppType::Claude | AppType::ClaudeDesktop => {
             // 与 cc-switch 对齐：默认同时携带 Bearer 与 x-api-key，兼容面最广；
             // 仅当 provider 显式声明 bearer_only 时不发 x-api-key。
             headers.insert(
@@ -216,6 +219,14 @@ mod tests {
         );
         assert_eq!(detect_app_type("/claude/v1/messages"), AppType::Claude);
         assert_eq!(detect_app_type("/codex/v1/responses"), AppType::Codex);
+        assert_eq!(
+            detect_app_type("/claudedesktop/v1/messages"),
+            AppType::ClaudeDesktop
+        );
+        assert_eq!(
+            strip_app_prefix("/claudedesktop/v1/messages"),
+            "/v1/messages"
+        );
     }
 
     #[test]
@@ -241,6 +252,12 @@ mod tests {
         assert_eq!(route.target_url, "https://api.anthropic.com/v1/messages");
         assert_eq!(route.headers.get("x-api-key").unwrap(), "sk-1");
         assert_eq!(route.headers.get(AUTHORIZATION).unwrap(), "Bearer sk-1");
+
+        let p_desk = provider(AppType::ClaudeDesktop, Some("https://api.anthropic.com"), "sk-desk");
+        let route_desk = build_route(&p_desk, AppType::ClaudeDesktop, "/v1/messages").unwrap();
+        assert_eq!(route_desk.target_url, "https://api.anthropic.com/v1/messages");
+        assert_eq!(route_desk.headers.get("x-api-key").unwrap(), "sk-desk");
+        assert_eq!(route_desk.headers.get(AUTHORIZATION).unwrap(), "Bearer sk-desk");
     }
 
     #[test]
