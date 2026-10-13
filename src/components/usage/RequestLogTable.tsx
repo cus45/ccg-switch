@@ -30,17 +30,19 @@ import {
     type ChipTone,
 } from './styles';
 
-interface RequestLogTableProps {
+export interface RequestLogTableProps {
     range: UsageRangeSelection;
     /** 顶部筛选行下发的全局筛选（应用 / 供应商 / 模型） */
     filters: StatsFilters;
     refreshMs: number;
+    statusCode?: number;
+    hideToolbar?: boolean;
 }
 
 const PAGE_SIZE = 20;
 
 /** 状态码下拉的候选值（只作用于请求日志，所以留在本页签内） */
-const STATUS_CODE_OPTIONS = [200, 400, 401, 429, 500] as const;
+export const STATUS_CODE_OPTIONS = [200, 400, 401, 429, 500] as const;
 
 /** 已知应用（claude/codex/gemini…）才显示图标与本地名；未知的直接回退到原值 */
 function isKnownApp(appType: string): appType is AppType {
@@ -73,10 +75,17 @@ function pageList(page: number, totalPages: number): (number | 'gap')[] {
     return pages;
 }
 
-export function RequestLogTable({ range, filters, refreshMs }: RequestLogTableProps) {
+export function RequestLogTable({
+    range,
+    filters,
+    refreshMs,
+    statusCode: controlledStatusCode,
+    hideToolbar = false,
+}: RequestLogTableProps) {
     const { t, i18n } = useTranslation();
 
-    const [statusCode, setStatusCode] = useState<number | undefined>(undefined);
+    const [internalStatusCode, setInternalStatusCode] = useState<number | undefined>(undefined);
+    const statusCode = controlledStatusCode !== undefined ? controlledStatusCode : internalStatusCode;
     const [page, setPage] = useState(0);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -121,30 +130,34 @@ export function RequestLogTable({ range, filters, refreshMs }: RequestLogTablePr
 
     return (
         <div className="space-y-4">
-            {/* 页签内工具栏：状态码只作用于请求日志，不放进顶部全局筛选行 */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
-                <label className="flex items-center gap-2">
-                    <span className={cn('text-xs', muted)}>{t('usage.statusCode')}</span>
-                    <select
-                        className={cn(select, 'max-w-[140px]')}
-                        value={statusCode?.toString() ?? 'all'}
-                        onChange={(e) =>
-                            setStatusCode(
-                                e.target.value === 'all'
-                                    ? undefined
-                                    : Number.parseInt(e.target.value, 10)
-                            )
-                        }
-                    >
-                        <option value="all">{t('usage.statusFilter.all')}</option>
-                        {STATUS_CODE_OPTIONS.map((code) => (
-                            <option key={code} value={code}>
-                                {code}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-            </div>
+            {/* 页签内工具栏：当父级未统一托管时兜底展示 */}
+            {!hideToolbar && (
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    <label className="flex items-center gap-2">
+                        <span className={cn('text-xs whitespace-nowrap shrink-0', muted)}>
+                            {t('usage.statusCode')}
+                        </span>
+                        <select
+                            className={cn(select, 'max-w-[140px]')}
+                            value={statusCode?.toString() ?? 'all'}
+                            onChange={(e) =>
+                                setInternalStatusCode(
+                                    e.target.value === 'all'
+                                        ? undefined
+                                        : Number.parseInt(e.target.value, 10)
+                                )
+                            }
+                        >
+                            <option value="all">{t('usage.statusFilter.all')}</option>
+                            {STATUS_CODE_OPTIONS.map((code) => (
+                                <option key={code} value={code}>
+                                    {code}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                </div>
+            )}
 
             {isLoading ? (
                 <div className={cn(card, 'space-y-3 p-4')} aria-busy="true">

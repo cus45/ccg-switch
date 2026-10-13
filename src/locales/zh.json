@@ -263,6 +263,11 @@
     "importing": "正在导入…",
     "importSuccess": "导入完成：新增 {{imported}} 个，更新 {{updated}} 个，跳过 {{skipped}} 个（共获取 {{total}} 个模型）",
     "importFailed": "导入定价失败",
+    "searchModels": "搜索模型 ID 或显示名称…",
+    "allGroups": "全部",
+    "modelsCount": "{{count}} 个模型",
+    "noMatchingModels": "未找到匹配的模型",
+    "groupOther": "其他模型",
     "yearlyHeatmap": "全年使用热力图",
     "yearlyHeatmapSubtitle": "过去 365 天每日活跃度与用量分布",
     "heatmap": {

@@ -1,6 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Coins, Database, Download, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+    ChevronDown,
+    ChevronRight,
+    Coins,
+    Database,
+    Download,
+    Pencil,
+    Plus,
+    Search,
+    Trash2,
+    X,
+} from 'lucide-react';
 import {
     useModelPricing,
     useDeleteModelPricing,
@@ -18,6 +29,128 @@ import type { ModelPricingInfo, PricingModelSource } from '../../types/usage';
 import { showToast } from '../common/ToastContainer';
 import { cn } from '../../utils/cn';
 import { card, emptyState, ghostBtn, muted, primaryBtn, row, tableWrap, thead } from './styles';
+
+interface GroupDef {
+    key: string;
+    label: string;
+    match: (id: string, name: string) => boolean;
+}
+
+const MODEL_GROUPS: GroupDef[] = [
+    {
+        key: 'anthropic',
+        label: 'Anthropic (Claude)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('claude') || s.startsWith('anthropic/');
+        },
+    },
+    {
+        key: 'openai',
+        label: 'OpenAI (GPT / o1 / o3)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return (
+                s.includes('gpt-') ||
+                s.startsWith('gpt') ||
+                s.includes('o1') ||
+                s.includes('o3') ||
+                s.includes('chatgpt') ||
+                s.startsWith('openai/') ||
+                s.includes('text-embedding') ||
+                s.includes('dall-e')
+            );
+        },
+    },
+    {
+        key: 'google',
+        label: 'Google (Gemini)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('gemini') || s.startsWith('google/');
+        },
+    },
+    {
+        key: 'deepseek',
+        label: 'DeepSeek',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('deepseek');
+        },
+    },
+    {
+        key: 'qwen',
+        label: '通义千问 (Qwen)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('qwen') || s.includes('tongyi') || s.startsWith('alibaba/');
+        },
+    },
+    {
+        key: 'glm',
+        label: '智谱 AI (GLM)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('glm') || s.includes('zhipu');
+        },
+    },
+    {
+        key: 'mistral',
+        label: 'Mistral AI',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('mistral') || s.includes('codestral') || s.startsWith('mistralai/');
+        },
+    },
+    {
+        key: 'meta',
+        label: 'Meta (Llama)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('llama') || s.startsWith('meta/');
+        },
+    },
+    {
+        key: 'moonshot',
+        label: 'Moonshot (Kimi)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('moonshot') || s.includes('kimi');
+        },
+    },
+    {
+        key: 'minimax',
+        label: 'MiniMax',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('minimax') || s.includes('abab');
+        },
+    },
+    {
+        key: 'xai',
+        label: 'xAI (Grok)',
+        match: (id, name) => {
+            const s = `${id} ${name}`.toLowerCase();
+            return s.includes('grok') || s.startsWith('xai/');
+        },
+    },
+];
+
+function resolveModelGroup(model: ModelPricingInfo): { key: string; label: string } {
+    for (const g of MODEL_GROUPS) {
+        if (g.match(model.modelId, model.displayName)) {
+            return { key: g.key, label: g.label };
+        }
+    }
+    if (model.modelId.includes('/')) {
+        const prefix = model.modelId.split('/')[0];
+        return {
+            key: prefix.toLowerCase(),
+            label: prefix.charAt(0).toUpperCase() + prefix.slice(1),
+        };
+    }
+    return { key: 'other', label: '其他模型' };
+}
 
 const PRICING_APPS = ['claude', 'codex', 'gemini'] as const;
 type PricingApp = (typeof PRICING_APPS)[number];
@@ -148,6 +281,86 @@ export function PricingConfigPanel() {
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [overwriteExisting, setOverwriteExisting] = useState(false);
+
+    // 模型搜索与分组状态
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState<string>('all');
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+    const toggleGroupCollapse = (groupKey: string) => {
+        setCollapsedGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(groupKey)) {
+                next.delete(groupKey);
+            } else {
+                next.add(groupKey);
+            }
+            return next;
+        });
+    };
+
+    const { activeGroups, totalCount, displayedGroups } = useMemo(() => {
+        if (!pricing || pricing.length === 0) {
+            return { activeGroups: [], totalCount: 0, displayedGroups: [] };
+        }
+
+        const query = searchQuery.trim().toLowerCase();
+        // 1. 搜索过滤
+        const searchMatched = query
+            ? pricing.filter(
+                  (m) =>
+                      m.modelId.toLowerCase().includes(query) ||
+                      m.displayName.toLowerCase().includes(query)
+              )
+            : pricing;
+
+        // 2. 按分组归类
+        const groupMap = new Map<
+            string,
+            { key: string; label: string; models: ModelPricingInfo[] }
+        >();
+
+        for (const m of searchMatched) {
+            const { key, label } = resolveModelGroup(m);
+            const entry = groupMap.get(key) ?? {
+                key,
+                label: key === 'other' ? t('usage.groupOther', '其他模型') : label,
+                models: [],
+            };
+            entry.models.push(m);
+            groupMap.set(key, entry);
+        }
+
+        // 排序已知分组在前，其他在后
+        const sortedGroups: { key: string; label: string; models: ModelPricingInfo[] }[] = [];
+        for (const g of MODEL_GROUPS) {
+            const entry = groupMap.get(g.key);
+            if (entry && entry.models.length > 0) {
+                sortedGroups.push(entry);
+                groupMap.delete(g.key);
+            }
+        }
+        for (const [key, entry] of groupMap.entries()) {
+            if (key !== 'other' && entry.models.length > 0) {
+                sortedGroups.push(entry);
+            }
+        }
+        const otherEntry = groupMap.get('other');
+        if (otherEntry && otherEntry.models.length > 0) {
+            sortedGroups.push(otherEntry);
+        }
+
+        const filtered =
+            selectedGroup === 'all'
+                ? sortedGroups
+                : sortedGroups.filter((g) => g.key === selectedGroup);
+
+        return {
+            activeGroups: sortedGroups,
+            totalCount: searchMatched.length,
+            displayedGroups: filtered,
+        };
+    }, [pricing, searchQuery, selectedGroup, t]);
 
     // 全局配置：每个 app 独立取数，避免三行都显示同一个 app 的值
     const { map: configs, isLoading: configsLoading } = useAllPricingConfigs();
@@ -369,7 +582,7 @@ export function PricingConfigPanel() {
             <div className="border-t border-gray-100 dark:border-base-200" />
 
             {/* 模型定价配置 */}
-            <div className="space-y-3">
+            <div className="space-y-4">
                 <SectionHeader
                     title={t('usage.modelPricing')}
                     desc={`${t('usage.modelPricingDesc')} ${t('usage.perMillion')}`}
@@ -392,11 +605,75 @@ export function PricingConfigPanel() {
                     }
                 />
 
+                {pricing && pricing.length > 0 && (
+                    /* 搜索与分组切换工具栏 */
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        {/* 搜索框 */}
+                        <div className="relative min-w-[200px] max-w-xs flex-1">
+                            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder={t('usage.searchModels')}
+                                className="input input-sm input-bordered w-full pl-8 pr-7 text-xs"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* 分组切换胶囊 */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedGroup('all')}
+                                className={cn(
+                                    'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                                    selectedGroup === 'all'
+                                        ? 'bg-primary text-primary-content'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-base-200 dark:text-gray-300 dark:hover:bg-base-300'
+                                )}
+                            >
+                                {t('usage.allGroups')} ({pricing.length})
+                            </button>
+                            {activeGroups.map((g) => (
+                                <button
+                                    key={g.key}
+                                    type="button"
+                                    onClick={() => setSelectedGroup(g.key)}
+                                    className={cn(
+                                        'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                                        selectedGroup === g.key
+                                            ? 'bg-primary text-primary-content'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-base-200 dark:text-gray-300 dark:hover:bg-base-300'
+                                    )}
+                                >
+                                    {g.label} ({g.models.length})
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {!pricing || pricing.length === 0 ? (
                     <div className={card}>
                         <div className={emptyState}>
                             <Coins className="h-8 w-8 opacity-40" />
                             <span className="max-w-md text-center">{t('usage.noPricingData')}</span>
+                        </div>
+                    </div>
+                ) : totalCount === 0 ? (
+                    <div className={card}>
+                        <div className={emptyState}>
+                            <Search className="h-8 w-8 opacity-40" />
+                            <span className="max-w-md text-center">{t('usage.noMatchingModels')}</span>
                         </div>
                     </div>
                 ) : (
@@ -414,55 +691,91 @@ export function PricingConfigPanel() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {pricing.map((model) => (
-                                    <tr key={model.modelId} className={row}>
-                                        <td>
-                                            <code className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-800 dark:bg-base-200 dark:text-gray-100">
-                                                {model.modelId}
-                                            </code>
-                                        </td>
-                                        <td className="text-gray-700 dark:text-gray-200">
-                                            {model.displayName}
-                                        </td>
-                                        <td className="text-right font-mono text-xs tabular-nums">
-                                            ${model.inputCostPerMillion}
-                                        </td>
-                                        <td className="text-right font-mono text-xs tabular-nums">
-                                            ${model.outputCostPerMillion}
-                                        </td>
-                                        <td className="text-right font-mono text-xs tabular-nums">
-                                            ${model.cacheReadCostPerMillion}
-                                        </td>
-                                        <td className="text-right font-mono text-xs tabular-nums">
-                                            ${model.cacheCreationCostPerMillion}
-                                        </td>
-                                        <td className="text-right">
-                                            <div className="flex justify-end gap-1">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-ghost btn-xs btn-square"
-                                                    onClick={() => {
-                                                        setIsAddingNew(false);
-                                                        setEditingModel(model);
-                                                    }}
-                                                    title={t('common.edit')}
-                                                    aria-label={t('common.edit')}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-ghost btn-xs btn-square text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                                    onClick={() => setDeleteConfirm(model.modelId)}
-                                                    title={t('common.delete')}
-                                                    aria-label={t('common.delete')}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {displayedGroups.map((group) => {
+                                    const isCollapsed = collapsedGroups.has(group.key);
+                                    return (
+                                        <Fragment key={group.key}>
+                                            {/* 分组标题行 */}
+                                            <tr
+                                                className="cursor-pointer bg-gray-50/90 hover:bg-gray-100/90 dark:bg-base-200/60 dark:hover:bg-base-200 transition-colors select-none border-y border-gray-200/60 dark:border-base-300"
+                                                onClick={() => toggleGroupCollapse(group.key)}
+                                            >
+                                                <td colSpan={7} className="py-2.5 px-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 font-semibold text-xs text-gray-800 dark:text-gray-200">
+                                                            {isCollapsed ? (
+                                                                <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                                                            ) : (
+                                                                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                                                            )}
+                                                            <span>{group.label}</span>
+                                                            <span className="rounded-full bg-gray-200/80 px-2 py-0.5 text-[11px] font-normal text-gray-600 dark:bg-base-300 dark:text-gray-400">
+                                                                {t('usage.modelsCount', { count: group.models.length })}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-[11px] text-gray-400">
+                                                            {isCollapsed
+                                                                ? t('common.expand', { defaultValue: '展开' })
+                                                                : t('common.collapse', { defaultValue: '折叠' })}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {/* 分组下的各模型条目 */}
+                                            {!isCollapsed &&
+                                                group.models.map((model) => (
+                                                    <tr key={model.modelId} className={row}>
+                                                        <td>
+                                                            <code className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-800 dark:bg-base-200 dark:text-gray-100">
+                                                                {model.modelId}
+                                                            </code>
+                                                        </td>
+                                                        <td className="text-gray-700 dark:text-gray-200">
+                                                            {model.displayName}
+                                                        </td>
+                                                        <td className="text-right font-mono text-xs tabular-nums">
+                                                            ${model.inputCostPerMillion}
+                                                        </td>
+                                                        <td className="text-right font-mono text-xs tabular-nums">
+                                                            ${model.outputCostPerMillion}
+                                                        </td>
+                                                        <td className="text-right font-mono text-xs tabular-nums">
+                                                            ${model.cacheReadCostPerMillion}
+                                                        </td>
+                                                        <td className="text-right font-mono text-xs tabular-nums">
+                                                            ${model.cacheCreationCostPerMillion}
+                                                        </td>
+                                                        <td className="text-right">
+                                                            <div className="flex justify-end gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-ghost btn-xs btn-square"
+                                                                    onClick={() => {
+                                                                        setIsAddingNew(false);
+                                                                        setEditingModel(model);
+                                                                    }}
+                                                                    title={t('common.edit')}
+                                                                    aria-label={t('common.edit')}
+                                                                >
+                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-ghost btn-xs btn-square text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                                    onClick={() => setDeleteConfirm(model.modelId)}
+                                                                    title={t('common.delete')}
+                                                                    aria-label={t('common.delete')}
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

@@ -24,7 +24,7 @@ import { RANGE_LABEL_KEYS, TIME_RANGES, resolveUsageRange } from '../services/us
 import { UsageSummaryCards } from '../components/usage/UsageSummaryCards';
 import { UsageChartSkeleton } from '../components/usage/UsageChartSkeleton';
 import { YearlyHeatmap } from '../components/usage/YearlyHeatmap';
-import { RequestLogTable } from '../components/usage/RequestLogTable';
+import { RequestLogTable, STATUS_CODE_OPTIONS } from '../components/usage/RequestLogTable';
 import { ProviderStatsTable } from '../components/usage/ProviderStatsTable';
 import { ModelStatsTable } from '../components/usage/ModelStatsTable';
 import { PricingConfigPanel } from '../components/usage/PricingConfigPanel';
@@ -131,6 +131,7 @@ export default function UsagePage() {
     const [providerName, setProviderName] = useState<string | undefined>(undefined);
     const [model, setModel] = useState<string | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<Tab>('logs');
+    const [logStatusCode, setLogStatusCode] = useState<number | undefined>(undefined);
     const [refreshMs, setRefreshMs] = useState<RefreshInterval>(30000);
     const [pricingOpen, setPricingOpen] = useState(false);
 
@@ -491,24 +492,59 @@ export default function UsagePage() {
 
                 {/* 明细标签页 */}
                 <div className="space-y-4">
-                    <div className={cn(segment, 'w-fit')} role="tablist">
-                        {TABS.map((tab) => (
-                            <button
-                                key={tab.key}
-                                type="button"
-                                role="tab"
-                                aria-selected={activeTab === tab.key}
-                                className={segmentItem(activeTab === tab.key, true)}
-                                onClick={() => setActiveTab(tab.key)}
-                            >
-                                <tab.icon className="h-4 w-4" />
-                                {t(tab.labelKey)}
-                            </button>
-                        ))}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className={cn(segment, 'w-fit')} role="tablist">
+                            {TABS.map((tab) => (
+                                <button
+                                    key={tab.key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={activeTab === tab.key}
+                                    className={segmentItem(activeTab === tab.key, true)}
+                                    onClick={() => setActiveTab(tab.key)}
+                                >
+                                    <tab.icon className="h-4 w-4" />
+                                    {t(tab.labelKey)}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* 请求日志状态码筛选，与标签行居中对齐，杜绝换行 */}
+                        {activeTab === 'logs' && (
+                            <label className="flex items-center gap-2">
+                                <span className={cn('text-xs whitespace-nowrap shrink-0', muted)}>
+                                    {t('usage.statusCode')}
+                                </span>
+                                <select
+                                    className={cn(select, 'max-w-[140px]')}
+                                    value={logStatusCode?.toString() ?? 'all'}
+                                    onChange={(e) =>
+                                        setLogStatusCode(
+                                            e.target.value === 'all'
+                                                ? undefined
+                                                : Number.parseInt(e.target.value, 10)
+                                        )
+                                    }
+                                >
+                                    <option value="all">{t('usage.statusFilter.all')}</option>
+                                    {STATUS_CODE_OPTIONS.map((code) => (
+                                        <option key={code} value={code}>
+                                            {code}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
                     </div>
 
                     {activeTab === 'logs' && (
-                        <RequestLogTable range={range} filters={filters} refreshMs={refreshMs} />
+                        <RequestLogTable
+                            range={range}
+                            filters={filters}
+                            refreshMs={refreshMs}
+                            statusCode={logStatusCode}
+                            hideToolbar
+                        />
                     )}
                     {activeTab === 'providers' && (
                         <ProviderStatsTable range={range} filters={filters} refreshMs={refreshMs} />

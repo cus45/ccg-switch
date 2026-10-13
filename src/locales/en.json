@@ -263,6 +263,11 @@
     "importing": "Importing...",
     "importSuccess": "Import completed: {{imported}} added, {{updated}} updated, {{skipped}} skipped (total {{total}} models fetched)",
     "importFailed": "Failed to import model pricing",
+    "searchModels": "Search model ID or display name…",
+    "allGroups": "All",
+    "modelsCount": "{{count}} models",
+    "noMatchingModels": "No matching models found",
+    "groupOther": "Other Models",
     "yearlyHeatmap": "Yearly Activity Heatmap",
     "yearlyHeatmapSubtitle": "Daily activity and usage distribution over the past 365 days",
     "heatmap": {
