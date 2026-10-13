@@ -34,6 +34,7 @@ export const usageKeys = {
         ['usage', 'limits', providerId, appType] as const,
     retention: () => ['usage', 'retention'] as const,
     loggingEnabled: () => ['usage', 'loggingEnabled'] as const,
+    heatmap: (filters: StatsFilters) => ['usage', 'heatmap', filters] as const,
 };
 
 /** `0` → 关闭轮询；react-query 用 `false` 表达 */
@@ -80,6 +81,18 @@ export function useUsageTrends(
     return useQuery({
         queryKey: usageKeys.trends(range, filters),
         queryFn: () => usageApi.getUsageTrends(range, filters),
+        ...aggregateQueryOptions(refreshMs),
+    });
+}
+
+/** 全年热力图 —— 过去 365 天每日聚合 */
+export function useYearlyHeatmap(
+    filters: StatsFilters,
+    refreshMs: number
+) {
+    return useQuery({
+        queryKey: usageKeys.heatmap(filters),
+        queryFn: () => usageApi.getYearlyHeatmap(filters),
         ...aggregateQueryOptions(refreshMs),
     });
 }
@@ -171,6 +184,18 @@ export function useDeleteModelPricing() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (modelId: string) => usageApi.deleteModelPricing(modelId),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: usageKeys.all });
+        },
+    });
+}
+
+/** 从 models.dev 导入公开模型定价 */
+export function useImportModelsDevPricing() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (params: { overwriteExisting?: boolean; customUrl?: string }) =>
+            usageApi.importModelsDevPricing(params.overwriteExisting, params.customUrl),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: usageKeys.all });
         },

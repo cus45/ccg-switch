@@ -23,6 +23,7 @@ import {
 import { RANGE_LABEL_KEYS, TIME_RANGES, resolveUsageRange } from '../services/usage';
 import { UsageSummaryCards } from '../components/usage/UsageSummaryCards';
 import { UsageChartSkeleton } from '../components/usage/UsageChartSkeleton';
+import { YearlyHeatmap } from '../components/usage/YearlyHeatmap';
 import { RequestLogTable } from '../components/usage/RequestLogTable';
 import { ProviderStatsTable } from '../components/usage/ProviderStatsTable';
 import { ModelStatsTable } from '../components/usage/ModelStatsTable';
@@ -484,6 +485,9 @@ export default function UsagePage() {
                 <Suspense fallback={<UsageChartSkeleton />}>
                     <UsageTrendChart range={range} filters={filters} refreshMs={refreshMs} />
                 </Suspense>
+
+                {/* 全年热力图 */}
+                <YearlyHeatmap filters={filters} refreshMs={refreshMs} />
 
                 {/* 明细标签页 */}
                 <div className="space-y-4">

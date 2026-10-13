@@ -167,6 +167,22 @@ export interface ModelPricingInfo {
     cacheCreationCostPerMillion: string;
 }
 
+/** 全年热力图每日数据项 */
+export interface HeatmapDay {
+    date: string;
+    requestCount: number;
+    totalCost: string;
+    totalTokens: number;
+}
+
+/** models.dev 导入定价结果 */
+export interface ImportPricingResult {
+    totalFetched: number;
+    imported: number;
+    updated: number;
+    skipped: number;
+}
+
 /** Provider 限额状态 */
 export interface ProviderLimitStatus {
     providerId: string;

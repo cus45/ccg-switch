@@ -6,7 +6,7 @@
 
 use crate::database::{lock_conn, Database};
 use crate::models::usage::{
-    DailyStats, LogFilters, ModelStats, PaginatedLogs, ProviderStats, RequestLogDetail,
+    DailyStats, HeatmapDay, LogFilters, ModelStats, PaginatedLogs, ProviderStats, RequestLogDetail,
     StatsFilters, UsageSummary,
 };
 use crate::proxy::usage::calculator::{CostCalculator, ModelPricing};
@@ -431,6 +431,105 @@ impl Database {
         .map_err(|e| format!("Failed to delete model_pricing: {e}"))?;
         Ok(())
     }
+
+    /// 批量导入或更新模型定价
+    ///
+    /// `overwrite_existing = true` 时，已有模型更新为新价格；
+    /// `overwrite_existing = false` 时，已有模型保留原配置 (跳过)。
+    /// 返回 `(新增数量, 更新数量, 跳过数量)`。
+    pub fn batch_upsert_model_pricing(
+        &self,
+        items: &[(String, String, ModelPricingRow)],
+        overwrite_existing: bool,
+    ) -> Result<(usize, usize, usize), String> {
+        let mut conn = lock_conn!(self.conn);
+        let tx = conn
+            .transaction()
+            .map_err(|e| format!("Failed to start transaction: {e}"))?;
+
+        let mut existing_ids = std::collections::HashSet::new();
+        {
+            let mut stmt = tx
+                .prepare("SELECT model_id FROM model_pricing")
+                .map_err(|e| format!("Failed to query existing model_pricing: {e}"))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| format!("Failed to read existing model_pricing: {e}"))?;
+            for r in rows {
+                if let Ok(id) = r {
+                    existing_ids.insert(id);
+                }
+            }
+        }
+
+        let mut imported = 0usize;
+        let mut updated = 0usize;
+        let mut skipped = 0usize;
+
+        {
+            let mut insert_stmt = tx
+                .prepare_cached(
+                    "INSERT INTO model_pricing (
+                        model_id, display_name, input_cost_per_million, output_cost_per_million,
+                        cache_read_cost_per_million, cache_creation_cost_per_million
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                )
+                .map_err(|e| format!("Failed to prepare insert: {e}"))?;
+
+            let mut update_stmt = tx
+                .prepare_cached(
+                    "UPDATE model_pricing SET
+                        display_name = ?2, input_cost_per_million = ?3, output_cost_per_million = ?4,
+                        cache_read_cost_per_million = ?5, cache_creation_cost_per_million = ?6
+                     WHERE model_id = ?1",
+                )
+                .map_err(|e| format!("Failed to prepare update: {e}"))?;
+
+            for (model_id, display_name, pricing) in items {
+                let model_id_trim = model_id.trim();
+                if model_id_trim.is_empty() {
+                    continue;
+                }
+                let display_trim = display_name.trim();
+
+                if existing_ids.contains(model_id_trim) {
+                    if overwrite_existing {
+                        update_stmt
+                            .execute(rusqlite::params![
+                                model_id_trim,
+                                display_trim,
+                                pricing.input_cost_per_million,
+                                pricing.output_cost_per_million,
+                                pricing.cache_read_cost_per_million,
+                                pricing.cache_creation_cost_per_million,
+                            ])
+                            .map_err(|e| format!("Failed to update model_pricing for {model_id_trim}: {e}"))?;
+                        updated += 1;
+                    } else {
+                        skipped += 1;
+                    }
+                } else {
+                    insert_stmt
+                        .execute(rusqlite::params![
+                            model_id_trim,
+                            display_trim,
+                            pricing.input_cost_per_million,
+                            pricing.output_cost_per_million,
+                            pricing.cache_read_cost_per_million,
+                            pricing.cache_creation_cost_per_million,
+                        ])
+                        .map_err(|e| format!("Failed to insert model_pricing for {model_id_trim}: {e}"))?;
+                    existing_ids.insert(model_id_trim.to_string());
+                    imported += 1;
+                }
+            }
+        }
+
+        tx.commit()
+            .map_err(|e| format!("Failed to commit batch model_pricing: {e}"))?;
+
+        Ok((imported, updated, skipped))
+    }
 }
 
 /// 一小时 / 一天的秒数
@@ -832,6 +931,89 @@ impl Database {
                     total_cache_creation_tokens: 0,
                     total_cache_read_tokens: 0,
                 }),
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// 全年热力图：过去 364 天到今天的每日聚合数据 (覆盖 52-53 周，按本地日期 YYYY-MM-DD 补全)
+    pub fn get_yearly_heatmap(
+        &self,
+        filters: &StatsFilters,
+    ) -> Result<Vec<HeatmapDay>, String> {
+        let conn = lock_conn!(self.conn);
+        let real_total = real_total_tokens_sql("l");
+
+        let today = Local::now().date_naive();
+        let start_day = today - chrono::Duration::days(364);
+
+        let start_ts = start_day
+            .and_hms_opt(0, 0, 0)
+            .and_then(|dt| Local.from_local_datetime(&dt).single())
+            .map(|dt| dt.timestamp())
+            .unwrap_or_else(|| Local::now().timestamp() - 365 * DAY_SECONDS);
+
+        let end_ts = today
+            .and_hms_opt(23, 59, 59)
+            .and_then(|dt| Local.from_local_datetime(&dt).single())
+            .map(|dt| dt.timestamp())
+            .unwrap_or_else(|| Local::now().timestamp());
+
+        let (where_clause, params) = stats_where("l", Some(start_ts), Some(end_ts), filters);
+        let heatmap_sql = format!(
+            "SELECT
+                date(l.created_at, 'unixepoch', 'localtime') AS day_str,
+                COUNT(*),
+                COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0),
+                COALESCE(SUM({real_total}), 0)
+             FROM proxy_request_logs l
+             LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
+             {where_clause}
+             GROUP BY day_str
+             ORDER BY day_str ASC"
+        );
+
+        let mut stmt = conn
+            .prepare(&heatmap_sql)
+            .map_err(|e| format!("Failed to prepare heatmap query: {e}"))?;
+
+        let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(param_refs.as_slice(), |row| {
+                let day_str: String = row.get(0)?;
+                let count: i64 = row.get(1)?;
+                let cost: f64 = row.get(2)?;
+                let tokens: i64 = row.get(3)?;
+                Ok((day_str, (count as u64, cost, tokens as u64)))
+            })
+            .map_err(|e| format!("Failed to query heatmap data: {e}"))?;
+
+        let mut map: HashMap<String, (u64, f64, u64)> = HashMap::new();
+        for r in rows {
+            if let Ok((d, data)) = r {
+                map.insert(d, data);
+            }
+        }
+
+        let mut result = Vec::with_capacity(365);
+        for i in 0..=364 {
+            let d = start_day + chrono::Duration::days(i);
+            let d_str = d.format("%Y-%m-%d").to_string();
+            if let Some((req_count, cost, tokens)) = map.remove(&d_str) {
+                result.push(HeatmapDay {
+                    date: d_str,
+                    request_count: req_count,
+                    total_cost: format!("{cost:.4}"),
+                    total_tokens: tokens,
+                });
+            } else {
+                result.push(HeatmapDay {
+                    date: d_str,
+                    request_count: 0,
+                    total_cost: "0.0000".to_string(),
+                    total_tokens: 0,
+                });
             }
         }
 
@@ -2326,4 +2508,83 @@ mod tests {
         db.delete_model_pricing("my-model").unwrap();
         assert!(db.find_model_pricing("my-model").unwrap().is_none());
     }
+
+    #[test]
+    fn batch_upsert_model_pricing_overwrite_and_skip() {
+        let db = Database::in_memory().unwrap();
+        let p1 = ModelPricingRow {
+            input_cost_per_million: "1.0".into(),
+            output_cost_per_million: "2.0".into(),
+            cache_read_cost_per_million: "0.1".into(),
+            cache_creation_cost_per_million: "0.5".into(),
+        };
+        let p2 = ModelPricingRow {
+            input_cost_per_million: "5.0".into(),
+            output_cost_per_million: "10.0".into(),
+            cache_read_cost_per_million: "0.5".into(),
+            cache_creation_cost_per_million: "2.5".into(),
+        };
+
+        // First batch: insert m1, m2
+        let items = vec![
+            ("m1".to_string(), "Model 1".to_string(), p1.clone()),
+            ("m2".to_string(), "Model 2".to_string(), p2.clone()),
+        ];
+        let (imported, updated, skipped) = db.batch_upsert_model_pricing(&items, false).unwrap();
+        assert_eq!(imported, 2);
+        assert_eq!(updated, 0);
+        assert_eq!(skipped, 0);
+
+        // Second batch without overwrite: m1 has new price, m3 is new
+        let p1_new = ModelPricingRow {
+            input_cost_per_million: "99.0".into(),
+            output_cost_per_million: "99.0".into(),
+            cache_read_cost_per_million: "0.0".into(),
+            cache_creation_cost_per_million: "0.0".into(),
+        };
+        let items2 = vec![
+            ("m1".to_string(), "Model 1 New".to_string(), p1_new.clone()),
+            ("m3".to_string(), "Model 3".to_string(), p1.clone()),
+        ];
+        let (imported, updated, skipped) = db.batch_upsert_model_pricing(&items2, false).unwrap();
+        assert_eq!(imported, 1, "m3 should be inserted");
+        assert_eq!(updated, 0);
+        assert_eq!(skipped, 1, "m1 should be skipped");
+
+        let m1 = db.find_model_pricing("m1").unwrap().unwrap();
+        assert_eq!(m1.input_cost_per_million, "1.0", "m1 price should not change without overwrite");
+
+        // Third batch with overwrite: m1 should now be updated
+        let (imported, updated, skipped) = db.batch_upsert_model_pricing(&items2, true).unwrap();
+        assert_eq!(imported, 0);
+        assert_eq!(updated, 2, "m1 and m3 updated");
+        assert_eq!(skipped, 0);
+
+        let m1_updated = db.find_model_pricing("m1").unwrap().unwrap();
+        assert_eq!(m1_updated.input_cost_per_million, "99.0");
+    }
+
+    #[test]
+    fn get_yearly_heatmap_returns_365_days_with_correct_aggregation() {
+        let db = Database::in_memory().unwrap();
+        let heatmap = db.get_yearly_heatmap(&StatsFilters::default()).unwrap();
+        assert_eq!(heatmap.len(), 365, "Heatmap must contain 365 days");
+
+        // Add a log for today
+        let now = Local::now().timestamp();
+        let mut row = log_at("heat-today", now, "1.2345", 200);
+        row.input_tokens = 1000;
+        row.output_tokens = 500;
+        row.cache_read_tokens = 0;
+        row.cache_creation_tokens = 0;
+        db.insert_request_log(&row).unwrap();
+
+        let updated_heatmap = db.get_yearly_heatmap(&StatsFilters::default()).unwrap();
+        assert_eq!(updated_heatmap.len(), 365);
+        let today_entry = updated_heatmap.last().unwrap();
+        assert_eq!(today_entry.request_count, 1);
+        assert_eq!(today_entry.total_cost, "1.2345");
+        assert_eq!(today_entry.total_tokens, 1500);
+    }
 }
+

@@ -21,6 +21,8 @@ import type {
     TimeRange,
     UsageRangeSelection,
     PricingModelSource,
+    HeatmapDay,
+    ImportPricingResult,
 } from '../types/usage';
 
 /** 页面上可选的时间范围（顺序即按钮顺序） */
@@ -227,3 +229,22 @@ export async function setUsageLoggingEnabled(enabled: boolean): Promise<void> {
 export async function scanSessionUsage(): Promise<SessionScanResult> {
     return invoke('scan_session_usage');
 }
+
+/** 全年日历热力图 */
+export async function getYearlyHeatmap(
+    filters: StatsFilters = {}
+): Promise<HeatmapDay[]> {
+    return invoke('get_yearly_heatmap', filterArgs(filters));
+}
+
+/** 从 models.dev 导入公开模型定价 */
+export async function importModelsDevPricing(
+    overwriteExisting = false,
+    customUrl?: string
+): Promise<ImportPricingResult> {
+    return invoke('import_models_dev_pricing', {
+        overwriteExisting,
+        customUrl,
+    });
+}
+

@@ -188,3 +188,15 @@ pub struct ProviderLimitStatus {
     pub monthly_limit: Option<String>,
     pub monthly_exceeded: bool,
 }
+
+/// 全年热力图的单日数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeatmapDay {
+    /// 本地日期，YYYY-MM-DD
+    pub date: String,
+    pub request_count: u64,
+    pub total_cost: String,
+    pub total_tokens: u64,
+}
+

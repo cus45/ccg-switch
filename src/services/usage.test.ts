@@ -78,3 +78,27 @@ describe('resolveUsageRange', () => {
         expect(window.endDate).toBe(Math.floor(now / 1000));
     });
 });
+
+describe('getYearlyHeatmap & importModelsDevPricing', () => {
+    it('getYearlyHeatmap 透传过滤参数', async () => {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { getYearlyHeatmap } = await import('./usage');
+        await getYearlyHeatmap({ appType: 'claude', model: 'claude-3-5-sonnet' });
+        expect(invoke).toHaveBeenCalledWith('get_yearly_heatmap', {
+            appType: 'claude',
+            providerName: undefined,
+            model: 'claude-3-5-sonnet',
+        });
+    });
+
+    it('importModelsDevPricing 正确传参', async () => {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { importModelsDevPricing } = await import('./usage');
+        await importModelsDevPricing(true, 'https://custom.url');
+        expect(invoke).toHaveBeenCalledWith('import_models_dev_pricing', {
+            overwriteExisting: true,
+            customUrl: 'https://custom.url',
+        });
+    });
+});
+

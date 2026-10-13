@@ -11,6 +11,7 @@ pub mod mcp_status_service;
 pub mod opencode_config;
 pub mod migration_service;
 pub mod model_api_service;
+pub mod pricing_service;
 pub mod prompt_service;
 pub mod prompt_service_v2;
 pub mod provider_service;

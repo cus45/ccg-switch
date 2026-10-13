@@ -945,6 +945,8 @@ pub fn run() {
             usage_commands::get_model_pricing,
             usage_commands::update_model_pricing,
             usage_commands::delete_model_pricing,
+            usage_commands::import_models_dev_pricing,
+            usage_commands::get_yearly_heatmap,
             usage_commands::get_default_cost_multiplier,
             usage_commands::set_default_cost_multiplier,
             usage_commands::get_pricing_model_source,

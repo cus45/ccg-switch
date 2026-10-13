@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Coins, Database, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Coins, Database, Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
     useModelPricing,
     useDeleteModelPricing,
+    useImportModelsDevPricing,
     useGlobalPricingConfig,
     useSetGlobalPricingConfig,
     useUsageRetention,
@@ -140,10 +141,13 @@ export function PricingConfigPanel() {
     const { t } = useTranslation();
     const { data: pricing, isLoading } = useModelPricing();
     const deleteMutation = useDeleteModelPricing();
+    const importMutation = useImportModelsDevPricing();
 
     const [editingModel, setEditingModel] = useState<ModelPricingInfo | null>(null);
     const [isAddingNew, setIsAddingNew] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+    const [importModalOpen, setImportModalOpen] = useState(false);
+    const [overwriteExisting, setOverwriteExisting] = useState(false);
 
     // 全局配置：每个 app 独立取数，避免三行都显示同一个 app 的值
     const { map: configs, isLoading: configsLoading } = useAllPricingConfigs();
@@ -193,6 +197,30 @@ export function PricingConfigPanel() {
             cacheReadCostPerMillion: '0',
             cacheCreationCostPerMillion: '0',
         });
+    };
+
+    const handleImportModelsDev = () => {
+        importMutation.mutate(
+            { overwriteExisting },
+            {
+                onSuccess: (res) => {
+                    setImportModalOpen(false);
+                    setOverwriteExisting(false);
+                    showToast(
+                        t('usage.importSuccess', {
+                            imported: res.imported,
+                            updated: res.updated,
+                            skipped: res.skipped,
+                            total: res.totalFetched,
+                        }),
+                        'success'
+                    );
+                },
+                onError: (err) => {
+                    showToast(t('usage.importFailed') + ': ' + String(err), 'error');
+                },
+            }
+        );
     };
 
     const current = configs[selectedApp];
@@ -346,10 +374,21 @@ export function PricingConfigPanel() {
                     title={t('usage.modelPricing')}
                     desc={`${t('usage.modelPricingDesc')} ${t('usage.perMillion')}`}
                     action={
-                        <button type="button" className={primaryBtn} onClick={handleAddNew}>
-                            <Plus className="h-4 w-4" />
-                            {t('common.add')}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                className={ghostBtn}
+                                onClick={() => setImportModalOpen(true)}
+                                disabled={importMutation.isPending}
+                            >
+                                <Download className="h-4 w-4" />
+                                {t('usage.importModelsDev')}
+                            </button>
+                            <button type="button" className={primaryBtn} onClick={handleAddNew}>
+                                <Plus className="h-4 w-4" />
+                                {t('common.add')}
+                            </button>
+                        </div>
                     }
                 />
 
@@ -475,6 +514,72 @@ export function PricingConfigPanel() {
                         method="dialog"
                         className="modal-backdrop"
                         onClick={() => setDeleteConfirm(null)}
+                    >
+                        <button>close</button>
+                    </form>
+                </dialog>
+            )}
+
+            {/* models.dev 导入确认弹窗 */}
+            {importModalOpen && (
+                <dialog className="modal modal-open">
+                    <div className="modal-box rounded-xl">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-base-content">
+                            {t('usage.importModelsDevTitle')}
+                        </h3>
+                        <p className={cn('py-3 text-sm', muted)}>
+                            {t('usage.importModelsDevDesc')}
+                        </p>
+                        <div className="my-2 rounded-lg border border-gray-100 bg-gray-50/60 p-3 dark:border-base-200 dark:bg-base-200/30">
+                            <label className="flex cursor-pointer items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    className="checkbox checkbox-primary checkbox-sm"
+                                    checked={overwriteExisting}
+                                    onChange={(e) => setOverwriteExisting(e.target.checked)}
+                                    disabled={importMutation.isPending}
+                                />
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    {t('usage.overwriteExistingPricing')}
+                                </span>
+                            </label>
+                            <p className="mt-1.5 pl-6 text-xs text-gray-400 dark:text-gray-500">
+                                {t('usage.overwriteExistingPricingTip')}
+                            </p>
+                        </div>
+                        <div className="modal-action">
+                            <button
+                                type="button"
+                                className={ghostBtn}
+                                onClick={() => setImportModalOpen(false)}
+                                disabled={importMutation.isPending}
+                            >
+                                {t('common.cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                className={primaryBtn}
+                                onClick={handleImportModelsDev}
+                                disabled={importMutation.isPending}
+                            >
+                                {importMutation.isPending ? (
+                                    <>
+                                        <span className="loading loading-spinner loading-xs" />
+                                        {t('usage.importing')}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download className="h-4 w-4" />
+                                        {t('usage.startImport')}
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                    <form
+                        method="dialog"
+                        className="modal-backdrop"
+                        onClick={() => !importMutation.isPending && setImportModalOpen(false)}
                     >
                         <button>close</button>
                     </form>

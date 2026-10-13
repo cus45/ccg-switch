@@ -8,10 +8,11 @@
 use crate::database::dao::usage_logs::ModelPricingRow;
 use crate::database::Database;
 use crate::models::usage::{
-    DailyStats, LogFilters, ModelPricingInfo, ModelStats, PaginatedLogs, ProviderLimitStatus,
+    DailyStats, HeatmapDay, LogFilters, ModelPricingInfo, ModelStats, PaginatedLogs, ProviderLimitStatus,
     ProviderStats, RequestLogDetail, StatsFilters, UsageSummary,
 };
 use crate::proxy::usage::logger::{default_multiplier_key, pricing_model_source_key};
+use crate::services::pricing_service::{self, ImportPricingResult};
 use crate::store::AppState;
 use std::str::FromStr;
 use tauri::State;
@@ -213,6 +214,39 @@ pub async fn delete_model_pricing(
 ) -> Result<(), String> {
     let db = state.db.clone();
     run_blocking(move || db.delete_model_pricing(&model_id)).await
+}
+
+/// 从 models.dev 导入公开模型定价
+#[tauri::command]
+pub async fn import_models_dev_pricing(
+    state: State<'_, AppState>,
+    overwrite_existing: Option<bool>,
+    custom_url: Option<String>,
+) -> Result<ImportPricingResult, String> {
+    let db = state.db.clone();
+    pricing_service::fetch_and_import_models_dev_pricing(
+        &db,
+        overwrite_existing.unwrap_or(false),
+        custom_url,
+    )
+    .await
+}
+
+/// 全年热力图数据
+#[tauri::command]
+pub async fn get_yearly_heatmap(
+    state: State<'_, AppState>,
+    app_type: Option<String>,
+    provider_name: Option<String>,
+    model: Option<String>,
+) -> Result<Vec<HeatmapDay>, String> {
+    let db = state.db.clone();
+    let filters = StatsFilters {
+        app_type,
+        provider_name,
+        model,
+    };
+    run_blocking(move || db.get_yearly_heatmap(&filters)).await
 }
 
 // ---------- 全局计费配置（R8.2）----------
