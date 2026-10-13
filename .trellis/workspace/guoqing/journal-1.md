@@ -595,3 +595,36 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: 本地代理接口协议双向转译 (Anthropic ↔ OpenAI/Gemini)
+
+**Date**: 2026-10-13
+**Task**: 本地代理接口协议双向转译 (Anthropic ↔ OpenAI/Gemini)
+**Branch**: `main`
+
+### Summary
+
+实现 CCG-Switch 本地代理层对 Claude Code / Claude Desktop 请求的双向协议转译支持，涵盖 OpenAI Chat Completions 与 Google Gemini generateContent 格式，支持非流式与流式 SSE，支持 Tool Calls，Provider 协议切换及连通性测试联动
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5e6832c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

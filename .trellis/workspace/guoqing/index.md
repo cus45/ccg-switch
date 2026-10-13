@@ -8,8 +8,8 @@
 
 @@@auto:current-status
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
-- **Last Active**: 2026-10-09
+- **Total Sessions**: 18
+- **Last Active**: 2026-10-13
 @@@/auto:current-status
 
 ---
@@ -19,7 +19,7 @@
 @@@auto:active-documents
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~597 | Active |
+| `journal-1.md` | ~630 | Active |
 @@@/auto:active-documents
 
 ---
@@ -29,6 +29,7 @@
 @@@auto:session-history
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 18 | 2026-10-13 | 本地代理接口协议双向转译 (Anthropic ↔ OpenAI/Gemini) | `5e6832c` | `main` |
 | 17 | 2026-10-09 | OpenCode / Claude Desktop 配置、CLI 安装升级、主页统计重构 | `6f0276b`, `a444760`, `09d59d8`, `d3ccc3c`, `121ba33`, `7681bcc`, `9c8aea1`, `3feca31`, `868245d` | `main` |
 | 16 | 2026-06-27 | 右侧 dock 重构(文件树/审查/状态条)接入 ChatPage | `ea21505`, `ce4a121`, `5fde83c`, `e8329c0` | `main` |
 | 15 | 2026-06-27 | 子代理实时展示 + 调试模式 + Node 版本校验 + 会话侧边栏优化 | `56e0a30` | `main` |
