@@ -12,7 +12,15 @@ interface Version {
 }
 
 const versions: Version[] = [
-                      {
+                        {
+    version: '1.8.1',
+    date: '2026-10-13',
+    type: 'patch',
+    changes: [
+      { type: 'fix', text: '支持 Claude 本地代理接口双向转译与模型映射；优化全年使用热力图自适应布局与模型定价分组搜索' }
+    ]
+  },
+{
     version: '1.8.0',
     date: '2026-10-09',
     type: 'minor',
