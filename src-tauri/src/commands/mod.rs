@@ -11,3 +11,4 @@ pub mod session_commands;
 pub mod skill_commands;
 pub mod usage_commands;
 pub mod utility_commands;
+pub mod project_profile_commands;

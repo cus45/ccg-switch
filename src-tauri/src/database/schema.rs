@@ -205,6 +205,21 @@ pub fn create_tables(conn: &Connection) -> Result<(), String> {
             cache_read_cost_per_million TEXT NOT NULL DEFAULT '0',
             cache_creation_cost_per_million TEXT NOT NULL DEFAULT '0'
         );
+
+        -- 项目配置组合表（一键切换供应商、MCP、技能、Prompt）
+        CREATE TABLE IF NOT EXISTS project_profiles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            icon TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT 0,
+            providers_json TEXT NOT NULL DEFAULT '{}',
+            mcp_servers_json TEXT NOT NULL DEFAULT '{}',
+            skills_json TEXT NOT NULL DEFAULT '{}',
+            prompts_json TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
         ",
     )
     .map_err(|e| format!("Failed to create tables: {e}"))?;
@@ -790,6 +805,24 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
             ON proxy_request_logs(data_source);",
     )
     .map_err(|e| format!("Failed to create idx_request_logs_source: {e}"))?;
+
+    // 项目配置组合表（一键切换供应商、MCP、技能、Prompt）
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS project_profiles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            icon TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT 0,
+            providers_json TEXT NOT NULL DEFAULT '{}',
+            mcp_servers_json TEXT NOT NULL DEFAULT '{}',
+            skills_json TEXT NOT NULL DEFAULT '{}',
+            prompts_json TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );",
+    )
+    .map_err(|e| format!("Failed to create project_profiles table: {e}"))?;
 
     Ok(())
 }

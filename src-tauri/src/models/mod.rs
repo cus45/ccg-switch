@@ -9,3 +9,4 @@ pub mod skill;
 pub mod subagent;
 pub mod token;
 pub mod usage;
+pub mod project_profile;

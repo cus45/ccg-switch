@@ -35,3 +35,4 @@ pub mod universal_provider_service;
 pub mod updater_service;
 pub mod usage_query_service;
 pub mod webdav_service;
+pub mod project_profile_service;

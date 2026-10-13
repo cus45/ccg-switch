@@ -8,3 +8,4 @@ pub mod providers;
 pub mod proxy_config;
 pub mod skills;
 pub mod usage_logs;
+pub mod project_profile;

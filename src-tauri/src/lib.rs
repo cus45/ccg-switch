@@ -24,6 +24,7 @@ use commands::session_commands;
 use commands::skill_commands;
 use commands::usage_commands;
 use commands::utility_commands;
+use commands::project_profile_commands;
 use store::AppState;
 use tauri::Emitter;
 use tauri::Manager;
@@ -992,6 +993,12 @@ pub fn run() {
             prompt_commands::disable_prompt_v2,
             prompt_commands::import_prompt_from_file,
             prompt_commands::get_prompt_live_content,
+            // Project Profiles (项目配置组合一键切换)
+            project_profile_commands::get_project_profiles,
+            project_profile_commands::save_project_profile,
+            project_profile_commands::delete_project_profile,
+            project_profile_commands::capture_current_project_profile,
+            project_profile_commands::apply_project_profile,
             // Backup 命令
             backup_commands::create_db_backup,
             backup_commands::list_db_backups,

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {useConfigStore} from '../../stores/useConfigStore';
 import Logo from './Logo';
+import ProjectProfileSelector from '../project/ProjectProfileSelector';
 
 interface SidebarProps {
     position: 'left' | 'right' | 'top';
@@ -67,9 +68,10 @@ export default function Sidebar({ position }: SidebarProps) {
         return (
             <nav className="w-full pt-8">
                 <div className="relative flex items-center justify-center px-6 h-14">
-                    {/* 左侧 Logo */}
-                    <div className="absolute left-6">
+                    {/* 左侧 Logo + 项目切换 */}
+                    <div className="absolute left-6 flex items-center gap-3">
                         <Logo />
+                        <ProjectProfileSelector />
                     </div>
                     {/* 居中：导航图标 */}
                     <div className="flex items-center gap-1">
