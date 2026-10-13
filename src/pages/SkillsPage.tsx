@@ -247,18 +247,18 @@ function SkillsPage() {
                             <div className="contents">
                                 <button onClick={() => { setImportPayload(''); setImportModal(true); }} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1.5">
                                     <Import className="w-4 h-4" />
-                                    从分享码导入
+                                    {t('skills.importShareCode', '从分享码导入')}
                                 </button>
                                 <button onClick={async () => {
                                     setScanning(true);
                                     try {
                                         const result = await scanAndImport();
                                         if (result.imported > 0) {
-                                            showToast(`成功导入 ${result.imported} 个技能`, 'success');
+                                            showToast(t('skills.scanSuccess', { count: result.imported }), 'success');
                                         } else if (result.skipped > 0) {
-                                            showToast('所有技能已在数据库中', 'info');
+                                            showToast(t('skills.scanAllExist', '所有技能已在数据库中'), 'info');
                                         } else {
-                                            showToast('未发现可导入的技能', 'info');
+                                            showToast(t('skills.scanNoneFound', '未发现可导入的技能'), 'info');
                                         }
                                     } catch (e) {
                                         showToast(String(e), 'error');
@@ -267,7 +267,7 @@ function SkillsPage() {
                                     }
                                 }} disabled={scanning || v2Loading} className="px-3 py-1.5 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1.5 disabled:opacity-50">
                                     <FolderInput className={`w-4 h-4 ${scanning ? 'animate-pulse' : ''}`} />
-                                    {scanning ? '扫描中...' : '扫描导入'}
+                                    {scanning ? t('skills.scanning', '扫描中...') : t('skills.scanImport', '扫描导入')}
                                 </button>
                                 <button onClick={handleZipInstall} disabled={zipInstalling || v2Loading} className="px-3 py-1.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors flex items-center gap-1.5 disabled:opacity-50">
                                     <Package className={`w-4 h-4 ${zipInstalling ? 'animate-pulse' : ''}`} />
@@ -281,13 +281,13 @@ function SkillsPage() {
                                     const names = installed.map(s => s.name).join('\n');
                                     try {
                                         await invoke('write_clipboard', { text: names });
-                                        showToast(`已复制 ${installed.length} 个技能名称`, 'success');
+                                        showToast(t('skills.copyListSuccess', { count: installed.length }), 'success');
                                     } catch {
-                                        showToast('复制失败', 'error');
+                                        showToast(t('skills.copyFailed', '复制失败'), 'error');
                                     }
                                 }} className="px-3 py-1.5 bg-orange-400 text-white text-sm font-medium rounded-lg hover:bg-orange-500 transition-colors flex items-center gap-1.5">
                                     <Copy className="w-4 h-4" />
-                                    复制清单
+                                    {t('skills.copyList', '复制清单')}
                                 </button>
                                 <button onClick={() => loadInstalled()} disabled={v2Loading} className="px-3 py-1.5 bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-base-100 transition-colors flex items-center gap-1.5 disabled:opacity-50">
                                     <RefreshCw className={`w-4 h-4 ${v2Loading ? 'animate-spin' : ''}`} />
@@ -298,7 +298,7 @@ function SkillsPage() {
                         {pageTab === 'discover' && (
                             <button onClick={() => discoverSkills()} disabled={discovering} className="px-3 py-1.5 bg-purple-500 text-white text-sm font-medium rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-1.5 disabled:opacity-50">
                                 <Search className={`w-4 h-4 ${discovering ? 'animate-spin' : ''}`} />
-                                {discovering ? '发现中...' : '发现技能'}
+                                {discovering ? t('skills.discovering', '发现中...') : t('skills.discoverBtn', '发现技能')}
                             </button>
                         )}
                         {pageTab === 'repos' && (
@@ -309,7 +309,7 @@ function SkillsPage() {
                                 </button>
                                 <button onClick={() => { setRepoUrl(''); setRepoBranch(''); setRepoError(''); setAddRepoModal(true); }} className="px-3 py-1.5 bg-purple-500 text-white text-sm font-medium rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-1.5">
                                     <Plus className="w-4 h-4" />
-                                    添加仓库
+                                    {t('skills.addRepo', '添加仓库')}
                                 </button>
                             </div>
                         )}
@@ -321,17 +321,18 @@ function SkillsPage() {
                     <div className="flex gap-2">
                         <button onClick={() => setPageTab('installed')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${pageTab === 'installed' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
                             <Package className="w-4 h-4 inline mr-1.5" />
-                            已安装 ({installed.length})
+                            {t('skills.installedTab', { count: installed.length })}
                         </button>
                         <button onClick={() => setPageTab('discover')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${pageTab === 'discover' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
                             <Search className="w-4 h-4 inline mr-1.5" />
-                            发现
+                            {t('skills.discoverTab', '发现')}
                         </button>
                         <button onClick={() => setPageTab('repos')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${pageTab === 'repos' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                            仓库管理 ({repos.length})
+                            <Package className="w-4 h-4 inline mr-1.5" />
+                            {t('skills.reposTab', { count: repos.length })}
                         </button>
                         <button onClick={() => setPageTab('legacy')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${pageTab === 'legacy' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                            本地文件
+                            {t('skills.legacyTab', '本地文件')}
                         </button>
                     </div>
                     {pageTab === 'discover' && (
@@ -341,8 +342,8 @@ function SkillsPage() {
                                 onChange={(e) => setDiscoverSort(e.target.value as 'stars' | 'name')}
                                 className="px-3 py-1 bg-white dark:bg-base-200 border border-gray-200 dark:border-base-300 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-purple-500"
                             >
-                                <option value="stars">按 Star 数推荐</option>
-                                <option value="name">按名称排序</option>
+                                <option value="stars">{t('skills.sortStars', '按 Star 数推荐')}</option>
+                                <option value="name">{t('skills.sortName', '按名称排序')}</option>
                             </select>
                         </div>
                     )}
@@ -374,8 +375,8 @@ function SkillsPage() {
                         return filtered.length === 0 ? (
                             <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
                                 <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的技能' : '暂无已安装的技能'}</p>
-                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">{query ? '尝试其他关键词' : '切换到"发现"标签安装新技能'}</p>
+                                <p className="text-gray-500 dark:text-gray-400">{query ? t('skills.emptyNoMatch', '未找到匹配的技能') : t('skills.emptyInstalled', '暂无已安装的技能')}</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">{query ? t('skills.emptyNoMatchHint', '尝试其他关键词') : t('skills.emptyInstalledHint', '切换到\"发现\"标签安装新技能')}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -411,7 +412,7 @@ function SkillsPage() {
                                                                     localContent: res.local_content
                                                                 });
                                                             } else {
-                                                                showToast('当前已是最新版本', 'success');
+                                                                showToast(t('skills.alreadyUpToDate', '当前已是最新版本'), 'success');
                                                             }
                                                         } catch (e) {
                                                             showToast(String(e), 'error');
@@ -421,7 +422,7 @@ function SkillsPage() {
                                                     }}
                                                     disabled={checkingUpdate === skill.id}
                                                     className="p-2 text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors disabled:opacity-50"
-                                                    title="检查更新"
+                                                    title={t('skills.checkUpdate', '检查更新')}
                                                 >
                                                     <RefreshCw className={`w-4 h-4 ${checkingUpdate === skill.id ? "animate-spin" : ""}`} />
                                                 </button>
@@ -431,13 +432,13 @@ function SkillsPage() {
                                                     try {
                                                         const content = await invoke<string>('read_skill_content_by_id', { id: skill.id });
                                                         await invoke('write_clipboard', { text: content });
-                                                        showToast('技能系统提示词已复制', 'success');
+                                                        showToast(t('skills.copyPromptSuccess', '技能系统提示词已复制'), 'success');
                                                     } catch (e) {
                                                         showToast(String(e), 'error');
                                                     }
                                                 }}
                                                 className="p-2 text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-                                                title="复制 Prompt"
+                                                title={t('skills.copyPrompt', '复制 Prompt')}
                                             >
                                                 <Copy className="w-4 h-4" />
                                             </button>
@@ -459,7 +460,7 @@ function SkillsPage() {
                                                     }
                                                 }}
                                                 className="p-2 text-gray-500 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                                                title="沙盒测试"
+                                                title={t('skills.sandboxTest', '沙盒测试')}
                                             >
                                                 <Zap className="w-4 h-4" />
                                             </button>
@@ -468,17 +469,17 @@ function SkillsPage() {
                                                     try {
                                                         const code = await exportSkill(skill.id);
                                                         await invoke('write_clipboard', { text: code });
-                                                        showToast('分享码已复制到剪贴板', 'success');
+                                                        showToast(t('skills.shareCodeCopied', '分享码已复制到剪贴板'), 'success');
                                                     } catch (e) {
                                                         showToast(String(e), 'error');
                                                     }
                                                 }} 
                                                 className="p-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                                title="分享技能"
+                                                title={t('skills.shareSkill', '分享技能')}
                                             >
                                                 <Share2 className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => setV2DeleteModal({ isOpen: true, id: skill.id })} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="卸载技能">
+                                            <button onClick={() => setV2DeleteModal({ isOpen: true, id: skill.id })} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title={t('skills.uninstall', '卸载技能')}>
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -495,7 +496,7 @@ function SkillsPage() {
                     discovering ? (
                         <div className="bg-white dark:bg-base-100 rounded-xl p-8 text-center">
                             <Search className="w-8 h-8 text-purple-500 mx-auto mb-2 animate-spin" />
-                            <p className="text-gray-500 dark:text-gray-400">正在从 GitHub 仓库发现技能...</p>
+                            <p className="text-gray-500 dark:text-gray-400">{t('skills.discoveringFromGithub', '正在从 GitHub 仓库发现技能...')}</p>
                         </div>
                     ) : (() => {
                         const query = searchQuery.trim().toLowerCase();
@@ -520,7 +521,7 @@ function SkillsPage() {
                         return sortedDiscoverable.length === 0 ? (
                             <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
                                 <Search className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的技能' : '点击"发现技能"从 GitHub 仓库获取可安装的技能'}</p>
+                                <p className="text-gray-500 dark:text-gray-400">{query ? t('skills.emptyNoMatch', '未找到匹配的技能') : t('skills.emptyDiscover', '点击\"发现技能\"从 GitHub 仓库获取可安装的技能')}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -539,13 +540,13 @@ function SkillsPage() {
                                                             {skill.stars >= 1000 ? `${(skill.stars / 1000).toFixed(1)}k` : skill.stars}
                                                         </span>
                                                     )}
-                                                    {isInstalled && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full whitespace-nowrap">已安装</span>}
+                                                    {isInstalled && <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full whitespace-nowrap">{t('skills.installed', '已安装')}</span>}
                                                 </div>
                                                 {skill.description && <p className="text-sm text-gray-500 dark:text-gray-400">{skill.description}</p>}
                                             </div>
                                             <div className="flex items-center gap-2 ml-4">
                                                 {skill.readmeUrl && (
-                                                    <button onClick={() => invoke('open_external', { url: skill.readmeUrl! })} className="p-2 text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title="在 GitHub 中查看">
+                                                    <button onClick={() => invoke('open_external', { url: skill.readmeUrl! })} className="p-2 text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title={t('skills.openInGithub', '在 GitHub 中查看')}>
                                                         <ExternalLink className="w-4 h-4" />
                                                     </button>
                                                 )}
@@ -556,7 +557,7 @@ function SkillsPage() {
                                                             setInstallLoading(skill.key);
                                                             try {
                                                                 await installSkill(skill, 'claude');
-                                                                showToast(`已安装 ${skill.name}`, 'success');
+                                                                showToast(t('skills.installedSuccess', { name: skill.name }), 'success');
                                                             } catch (e) {
                                                                 showToast(String(e), 'error');
                                                             } finally {
@@ -566,7 +567,7 @@ function SkillsPage() {
                                                         className="px-3 py-1.5 bg-purple-500 text-white text-xs font-medium rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-1.5 disabled:opacity-50"
                                                     >
                                                         {installLoading === skill.key ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                                                        安装
+                                                        {t('skills.install', '安装')}
                                                     </button>
                                                 )}
                                             </div>
@@ -592,7 +593,7 @@ function SkillsPage() {
                         return filtered.length === 0 ? (
                             <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
                                 <Package className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的仓库' : '暂无技能仓库'}</p>
+                                <p className="text-gray-500 dark:text-gray-400">{query ? t('skills.emptyNoMatch', '未找到匹配的技能') : t('skills.emptyRepos', '暂无技能仓库')}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -606,13 +607,13 @@ function SkillsPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <label className="flex items-center cursor-pointer" title={repo.enabled ? '已启用' : '已禁用'}>
+                                            <label className="flex items-center cursor-pointer" title={repo.enabled ? t('skills.enabled', '已启用') : t('skills.disabled', '已禁用')}>
                                                 <input type="checkbox" className="toggle toggle-xs toggle-primary" checked={repo.enabled} onChange={(e) => saveRepo({ ...repo, enabled: e.target.checked })} />
                                             </label>
-                                            <button onClick={() => invoke('open_external', { url: `https://github.com/${repo.owner}/${repo.name}` })} className="p-1.5 text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title="在 GitHub 中查看">
+                                            <button onClick={() => invoke('open_external', { url: `https://github.com/${repo.owner}/${repo.name}` })} className="p-1.5 text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors" title={t('skills.openInGithub', '在 GitHub 中查看')}>
                                                 <ExternalLink className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => deleteRepo(repo.owner, repo.name)} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="删除仓库">
+                                            <button onClick={() => deleteRepo(repo.owner, repo.name)} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title={t('skills.deleteRepo', '删除仓库')}>
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
@@ -658,8 +659,8 @@ function SkillsPage() {
                         {result.length === 0 ? (
                             <div className="bg-white dark:bg-base-100 rounded-xl p-8 shadow-sm border border-gray-100 dark:border-base-200 text-center">
                                 <Zap className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                <p className="text-gray-500 dark:text-gray-400">{query ? '未找到匹配的技能' : t('skills.empty')}</p>
-                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{query ? '尝试其他关键词' : t('skills.empty_hint')}</p>
+                                <p className="text-gray-500 dark:text-gray-400">{query ? t('skills.emptyNoMatch', '未找到匹配的技能') : t('skills.empty')}</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{query ? t('skills.emptyNoMatchHint', '尝试其他关键词') : t('skills.empty_hint')}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -708,18 +709,18 @@ function SkillsPage() {
                 {/* 导入技能分享码 */}
                 <ModalDialog
                     isOpen={importModal}
-                    title="从分享码导入技能"
+                    title={t('skills.importShareCodeTitle', '从分享码导入技能')}
                     type="confirm"
                     onConfirm={async () => {
                         const code = importPayload.trim();
                         if (!code) {
-                            showToast('请粘贴有效的分享码', 'error');
+                            showToast(t('skills.invalidShareCode', '请粘贴有效的分享码'), 'error');
                             return;
                         }
                         setImportLoading(true);
                         try {
                             await importSkill(code);
-                            showToast('导入成功', 'success');
+                            showToast(t('skills.importSuccess', '导入成功'), 'success');
                             setImportModal(false);
                             setImportPayload('');
                         } catch (e) {
@@ -740,18 +741,18 @@ function SkillsPage() {
                             disabled={importLoading}
                             value={importPayload}
                             onChange={(e) => setImportPayload(e.target.value)}
-                            placeholder="粘贴以 ccg-skill:// 开头的分享码..."
+                            placeholder={t('skills.importShareCodePlaceholder', '粘贴以 ccg-skill:// 开头的分享码...')}
                             rows={8}
                             className="w-full px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-base-content font-mono text-xs resize-none disabled:opacity-50"
                         />
-                        {importLoading && <p className="text-sm text-blue-500 flex items-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin"/>正在解析写入中...</p>}
+                        {importLoading && <p className="text-sm text-blue-500 flex items-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin"/>{t('skills.importing', '正在解析写入中...')}</p>}
                     </div>
                 </ModalDialog>
 
                 {/* 沙盒测试弹窗 */}
                 <ModalDialog
                     isOpen={sandboxModal.isOpen}
-                    title={`沙盒测试 - ${sandboxModal.name}`}
+                    title={t('skills.sandbox.title', { name: sandboxModal.name })}
                     type="info"
                     maxWidthClass="max-w-4xl"
                     onConfirm={async () => {
@@ -772,7 +773,7 @@ function SkillsPage() {
                                 setSandboxCompareOutput(res.compare_content);
                             }
                         } catch (e) {
-                            setSandboxOutput(`请求失败: \n${e}`);
+                            setSandboxOutput(t('skills.sandbox.requestFailed', { error: String(e) }));
                             setSandboxCompareOutput('');
                         } finally {
                             setSandboxLoading(false);
@@ -790,8 +791,8 @@ function SkillsPage() {
                         {/* 对比模式开关 */}
                         <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <div>
-                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">对比模式</label>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">同时显示使用技能和不使用技能的输出对比</p>
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('skills.sandbox.compareMode', '对比模式')}</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{t('skills.sandbox.compareModeDesc', '同时显示使用技能和不使用技能的输出对比')}</p>
                             </div>
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
@@ -802,7 +803,7 @@ function SkillsPage() {
                                     disabled={sandboxLoading}
                                 />
                                 <span className="text-xs text-gray-600 dark:text-gray-400">
-                                    {sandboxCompareMode ? '已启用' : '未启用'}
+                                    {sandboxCompareMode ? t('skills.sandbox.enabled', '已启用') : t('skills.sandbox.disabled', '未启用')}
                                 </span>
                             </label>
                         </div>
@@ -818,7 +819,7 @@ function SkillsPage() {
                                     }
                                 }}
                             >
-                                <option value="" disabled>选择 API 渠道</option>
+                                <option value="" disabled>{t('skills.sandbox.selectProvider', '选择 API 渠道')}</option>
                                 {providers.map(p => (
                                     <option key={p.id} value={p.id}>{p.name} ({p.appType})</option>
                                 ))}
@@ -826,7 +827,7 @@ function SkillsPage() {
                             <input 
                                 type="text"
                                 className="flex-1 px-3 py-2 bg-gray-50 dark:bg-base-200 border border-gray-200 dark:border-base-300 rounded-lg text-sm"
-                                placeholder="输入模型名称 e.g. gpt-4o"
+                                placeholder={t('skills.sandbox.modelPlaceholder', '输入模型名称 e.g. gpt-4o')}
                                 value={sandboxModel}
                                 onChange={(e) => setSandboxModel(e.target.value)}
                             />
@@ -837,7 +838,7 @@ function SkillsPage() {
                             // 对比模式：三个区域（提示词、有技能、无技能）
                             <div className="space-y-3">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-gray-500">技能系统提示词</label>
+                                    <label className="text-xs font-semibold text-gray-500">{t('skills.sandbox.promptLabel', '技能系统提示词')}</label>
                                     <div className="p-2.5 bg-gray-50 dark:bg-base-300 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 h-32 overflow-y-auto whitespace-pre-wrap">
                                         {sandboxModal.content}
                                     </div>
@@ -845,26 +846,26 @@ function SkillsPage() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                            🔧 使用技能的输出
+                                            {t('skills.sandbox.withSkillOutput', '🔧 使用技能的输出')}
                                         </label>
                                         <div className="p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg text-sm text-gray-800 dark:text-gray-200 h-48 overflow-y-auto whitespace-pre-wrap border border-blue-100 dark:border-blue-800/30">
                                             {sandboxLoading ? (
                                                 <div className="flex items-center justify-center h-full text-blue-500">
-                                                    <RefreshCw className="w-5 h-5 animate-spin mr-2"/> 请求中...
+                                                    <RefreshCw className="w-5 h-5 animate-spin mr-2"/> {t('skills.sandbox.requesting', '请求中...')}
                                                 </div>
-                                            ) : (sandboxOutput || <span className="text-gray-400 italic">暂无输出...</span>)}
+                                            ) : (sandboxOutput || <span className="text-gray-400 italic">{t('skills.sandbox.noOutput', '暂无输出...')}</span>)}
                                         </div>
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                            ⚪ 不使用技能的输出
+                                            {t('skills.sandbox.withoutSkillOutput', '⚪ 不使用技能的输出')}
                                         </label>
                                         <div className="p-2.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 h-48 overflow-y-auto whitespace-pre-wrap border border-gray-300 dark:border-gray-600">
                                             {sandboxLoading ? (
                                                 <div className="flex items-center justify-center h-full text-gray-400">
-                                                    <RefreshCw className="w-5 h-5 animate-spin mr-2"/> 请求中...
+                                                    <RefreshCw className="w-5 h-5 animate-spin mr-2"/> {t('skills.sandbox.requesting', '请求中...')}
                                                 </div>
-                                            ) : (sandboxCompareOutput || <span className="text-gray-400 italic">暂无输出...</span>)}
+                                            ) : (sandboxCompareOutput || <span className="text-gray-400 italic">{t('skills.sandbox.noOutput', '暂无输出...')}</span>)}
                                         </div>
                                     </div>
                                 </div>
@@ -873,33 +874,33 @@ function SkillsPage() {
                             // 普通模式：两个区域（提示词、输出）
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-gray-500">技能系统提示词</label>
+                                    <label className="text-xs font-semibold text-gray-500">{t('skills.sandbox.promptLabel', '技能系统提示词')}</label>
                                     <div className="p-2.5 bg-gray-50 dark:bg-base-300 rounded-lg text-xs font-mono text-gray-600 dark:text-gray-400 h-48 overflow-y-auto whitespace-pre-wrap">
                                         {sandboxModal.content}
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-gray-500">模型输出结果</label>
+                                    <label className="text-xs font-semibold text-gray-500">{t('skills.sandbox.modelOutput', '模型输出结果')}</label>
                                     <div className="p-2.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg text-sm text-gray-800 dark:text-gray-200 h-48 overflow-y-auto whitespace-pre-wrap border border-blue-100 dark:border-blue-800/30">
                                         {sandboxLoading ? (
                                             <div className="flex items-center justify-center h-full text-blue-500">
-                                                <RefreshCw className="w-5 h-5 animate-spin mr-2"/> 请求中...
+                                                <RefreshCw className="w-5 h-5 animate-spin mr-2"/> {t('skills.sandbox.requesting', '请求中...')}
                                             </div>
-                                        ) : (sandboxOutput || <span className="text-gray-400 italic">暂无输出...</span>)}
+                                        ) : (sandboxOutput || <span className="text-gray-400 italic">{t('skills.sandbox.noOutput', '暂无输出...')}</span>)}
                                     </div>
                                 </div>
                             </div>
                         )}
 
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">模拟用户输入 (User Input)</label>
+                            <label className="text-xs font-semibold text-gray-500">{t('skills.sandbox.userInput', '模拟用户输入 (User Input)')}</label>
                             <textarea
                                 disabled={sandboxLoading}
                                 value={sandboxInput}
                                 onChange={(e) => setSandboxInput(e.target.value)}
                                 className="w-full px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg text-sm"
                                 rows={3}
-                                placeholder="在这里输入要测试的消息..."
+                                placeholder={t('skills.sandbox.userInputPlaceholder', '在这里输入要测试的消息...')}
                             />
                         </div>
 
@@ -909,7 +910,7 @@ function SkillsPage() {
                 {/* 更新和 Diff 确认弹窗 */}
                 <ModalDialog
                     isOpen={updateModal.isOpen}
-                    title={`更新提示 - ${updateModal.name}`}
+                    title={t('skills.updateModal.title', { name: updateModal.name })}
                     type="info"
                     maxWidthClass="max-w-4xl"
                     onConfirm={() => {
@@ -921,18 +922,18 @@ function SkillsPage() {
                 >
                     <div className="space-y-4">
                         <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-100 dark:border-yellow-800/30">
-                            <p className="text-sm text-yellow-800 dark:text-yellow-200">发现该技能（SKILL.md）在远程仓库有新版本。是否覆盖本地版本？</p>
+                            <p className="text-sm text-yellow-800 dark:text-yellow-200">{t('skills.updateModal.notice', '发现该技能（SKILL.md）在远程仓库有新版本。是否覆盖本地版本？')}</p>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold text-gray-500">本地版本 (Local)</label>
+                                <label className="text-xs font-semibold text-gray-500">{t('skills.updateModal.localVersion', '本地版本 (Local)')}</label>
                                 <div className="p-3 bg-gray-50 dark:bg-base-300 border border-gray-200 dark:border-base-200 rounded-lg text-xs font-mono text-gray-500 h-96 overflow-y-auto whitespace-pre-wrap opacity-80">
                                     {updateModal.localContent}
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold text-gray-500 text-green-600 dark:text-green-400">远程最新版本 (Remote)</label>
+                                <label className="text-xs font-semibold text-gray-500 text-green-600 dark:text-green-400">{t('skills.updateModal.remoteVersion', '远程最新版本 (Remote)')}</label>
                                 <div className="p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 rounded-lg text-xs font-mono text-gray-800 dark:text-gray-200 h-96 overflow-y-auto whitespace-pre-wrap">
                                     {updateModal.remoteContent}
                                 </div>
@@ -941,7 +942,7 @@ function SkillsPage() {
 
                         <div className="flex justify-end gap-2 pt-2">
                             <button onClick={() => setUpdateModal({ ...updateModal, isOpen: false })} disabled={applyingUpdate} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-base-200">
-                                取消
+                                {t('common.cancel', '取消')}
                             </button>
                             <button 
                                 disabled={applyingUpdate}
@@ -949,26 +950,26 @@ function SkillsPage() {
                                     setApplyingUpdate(true);
                                     try {
                                         await applySkillUpdate(updateModal.skillId, updateModal.remoteContent);
-                                        showToast('技能更新成功！', 'success');
+                                        showToast(t('skills.updateModal.updateSuccess', '技能更新成功！'), 'success');
                                         setUpdateModal({ ...updateModal, isOpen: false });
                                     } catch (e) {
-                                        showToast(`更新失败: \n${e}`, 'error');
+                                        showToast(t('skills.updateModal.updateFailed', { error: String(e) }), 'error');
                                     } finally {
                                         setApplyingUpdate(false);
                                     }
                                 }}
                                 className="px-4 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1.5"
                             >
-                                {applyingUpdate ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 确认覆盖更新
+                                {applyingUpdate ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} {t('skills.updateModal.confirmOverwrite', '确认覆盖更新')}
                             </button>
                         </div>
                     </div>
                 </ModalDialog>
 
                 {/* 删除确认（v2）*/}
-                <ModalDialog isOpen={v2DeleteModal.isOpen} title="卸载技能" message="确认卸载此技能？将从所有应用目录移除。" type="confirm" isDestructive={true}
+                <ModalDialog isOpen={v2DeleteModal.isOpen} title={t('skills.uninstall', '卸载技能')} message={t('skills.uninstallConfirm', '确认卸载此技能？将从所有应用目录移除。')} type="confirm" isDestructive={true}
                     onConfirm={async () => {
-                        try { await uninstallSkill(v2DeleteModal.id); showToast('卸载成功', 'success'); }
+                        try { await uninstallSkill(v2DeleteModal.id); showToast(t('skills.uninstallSuccess', '卸载成功'), 'success'); }
                         catch (e) { showToast(String(e), 'error'); }
                         finally { setV2DeleteModal({ isOpen: false, id: '' }); }
                     }}
@@ -977,7 +978,7 @@ function SkillsPage() {
                 {/* 添加仓库 */}
                 <ModalDialog
                     isOpen={addRepoModal}
-                    title="添加技能仓库"
+                    title={t('skills.repoModal.title', '添加技能仓库')}
                     type="confirm"
                     onConfirm={async () => {
                         setRepoError('');
@@ -989,12 +990,12 @@ function SkillsPage() {
                         cleaned = cleaned.replace(/\/$/, '');
                         const parts = cleaned.split('/');
                         if (parts.length !== 2 || !parts[0] || !parts[1]) {
-                            setRepoError('无效的仓库地址，请输入 GitHub 仓库链接或 owner/repo 格式');
+                            setRepoError(t('skills.repoModal.invalidUrl', '无效的仓库地址，请输入 GitHub 仓库链接或 owner/repo 格式'));
                             return;
                         }
                         try {
                             await saveRepo({ owner: parts[0], name: parts[1], branch: repoBranch.trim() || 'main', enabled: true });
-                            showToast('仓库添加成功', 'success');
+                            showToast(t('skills.repoModal.addSuccess', '仓库添加成功'), 'success');
                             setAddRepoModal(false);
                         } catch (e) { showToast(String(e), 'error'); }
                     }}
@@ -1002,12 +1003,12 @@ function SkillsPage() {
                 >
                     <div className="space-y-3">
                         <div>
-                            <label className="text-sm text-gray-600 dark:text-gray-400">仓库地址</label>
-                            <input type="text" value={repoUrl} onChange={(e) => { setRepoUrl(e.target.value); setRepoError(''); }} placeholder="https://github.com/owner/repo 或 owner/repo" className="w-full mt-1 px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-base-content text-sm" />
+                            <label className="text-sm text-gray-600 dark:text-gray-400">{t('skills.repoModal.urlLabel', '仓库地址')}</label>
+                            <input type="text" value={repoUrl} onChange={(e) => { setRepoUrl(e.target.value); setRepoError(''); }} placeholder={t('skills.repoModal.urlPlaceholder', 'https://github.com/owner/repo 或 owner/repo')} className="w-full mt-1 px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-base-content text-sm" />
                         </div>
                         <div>
-                            <label className="text-sm text-gray-600 dark:text-gray-400">分支（可选）</label>
-                            <input type="text" value={repoBranch} onChange={(e) => setRepoBranch(e.target.value)} placeholder="默认 main" className="w-full mt-1 px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-base-content text-sm" />
+                            <label className="text-sm text-gray-600 dark:text-gray-400">{t('skills.repoModal.branchLabel', '分支（可选）')}</label>
+                            <input type="text" value={repoBranch} onChange={(e) => setRepoBranch(e.target.value)} placeholder={t('skills.repoModal.branchPlaceholder', '默认 main')} className="w-full mt-1 px-3 py-2 bg-white dark:bg-base-200 border border-gray-300 dark:border-base-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-base-content text-sm" />
                         </div>
                         {repoError && <p className="text-sm text-red-500">{repoError}</p>}
                     </div>

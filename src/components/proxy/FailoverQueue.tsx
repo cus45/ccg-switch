@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GitMerge, Info } from 'lucide-react';
 import { useProviderStore } from '../../stores/useProviderStore';
 import { showToast } from '../common/ToastContainer';
 import { PROXY_APP_TYPES, APP_LABELS, APP_COLORS, AppType } from '../../types/app';
 
 export default function FailoverQueue() {
+    const { t } = useTranslation();
     const { providers, hasLoaded, loading, loadAllProviders, updateProvider } = useProviderStore();
     const [activeTab, setActiveTab] = useState<AppType>('claude');
 
@@ -18,11 +20,11 @@ export default function FailoverQueue() {
         try {
             await updateProvider(id, { inFailoverQueue: !current });
             showToast(
-                !current ? '已加入故障转移队列' : '已移出故障转移队列',
+                !current ? t('proxy.failover.added') : t('proxy.failover.removed'),
                 'success',
             );
         } catch (error) {
-            showToast('更新失败: ' + String(error), 'error');
+            showToast(t('proxy.failover.updateFailed', { error: String(error) }), 'error');
         }
     };
 
@@ -43,9 +45,9 @@ export default function FailoverQueue() {
             {/* 标题 */}
             <div className="flex items-center gap-2 px-5 pt-4 pb-3">
                 <GitMerge className="w-4 h-4 text-gray-500" />
-                <h2 className="font-semibold text-gray-900 dark:text-base-content">故障转移队列</h2>
+                <h2 className="font-semibold text-gray-900 dark:text-base-content">{t('proxy.failover.title')}</h2>
                 <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
-                    {queueCount} / {filtered.length} 已加入
+                    {t('proxy.failover.joinedCount', { queued: queueCount, total: filtered.length })}
                 </span>
             </div>
 
@@ -93,7 +95,7 @@ export default function FailoverQueue() {
             <div className="p-4">
                 {filtered.length === 0 ? (
                     <div className="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
-                        暂无 {APP_LABELS[activeTab]} Provider
+                        {t('proxy.failover.empty', { app: APP_LABELS[activeTab] })}
                     </div>
                 ) : (
                     <div className="space-y-1.5">
@@ -121,7 +123,7 @@ export default function FailoverQueue() {
                                         {provider.name}
                                     </span>
                                     {provider.isActive && (
-                                        <span className="badge badge-xs badge-success shrink-0">Active</span>
+                                        <span className="badge badge-xs badge-success shrink-0">{t('proxy.failover.active')}</span>
                                     )}
                                 </div>
                                 <input
@@ -129,7 +131,7 @@ export default function FailoverQueue() {
                                     checked={provider.inFailoverQueue}
                                     onChange={() => void handleToggle(provider.id, provider.inFailoverQueue)}
                                     disabled={loading}
-                                    aria-label={`${provider.name} 故障转移`}
+                                    aria-label={t('proxy.failover.ariaLabel', { name: provider.name })}
                                     className="checkbox checkbox-sm checkbox-primary disabled:opacity-50"
                                 />
                             </div>
@@ -141,7 +143,7 @@ export default function FailoverQueue() {
                 {filtered.length > 0 && (
                     <div className="flex items-start gap-1.5 mt-3 text-xs text-gray-400 dark:text-gray-500">
                         <Info className="w-3 h-3 mt-0.5 shrink-0" />
-                        <span>勾选的 Provider 将参与自动故障转移，当请求失败时按优先级（P1→P2→...）依次切换</span>
+                        <span>{t('proxy.failover.hint')}</span>
                     </div>
                 )}
             </div>

@@ -243,9 +243,9 @@ function ProvidersPage() {
             const { homeDir } = await import('@tauri-apps/api/path');
             const home = await homeDir();
             await invoke('launch_resume_session', { command, cwd: home });
-            showToast(`已启动 ${command} 终端`, 'success');
+            showToast(t('providers.launchTerminalSuccess', { command }), 'success');
         } catch (error) {
-            showToast('启动终端失败: ' + error, 'error');
+            showToast(t('providers.launchTerminalFailed', { error: String(error) }), 'error');
         }
     };
 
@@ -466,7 +466,7 @@ function ProvidersPage() {
                             <button
                                 onClick={() => handleLaunchTerminal(group.cli)}
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded transition-colors ${group.termClass}`}
-                                title={`启动 ${group.cli} 终端`}
+                                title={t('providers.launchTerminal', { cli: group.cli })}
                             >
                                 <Terminal className="w-3 h-3" />
                             </button>
@@ -635,7 +635,7 @@ function ProvidersPage() {
                                                     <button
                                                         onClick={() => invoke('open_external', { url: provider.url!.trim() }).catch(() => {})}
                                                         className="shrink-0 p-0.5 text-blue-400/60 hover:text-blue-400 transition-colors"
-                                                        title="在浏览器中打开"
+                                                        title={t('providers.openUrl', '在浏览器中打开')}
                                                     >
                                                         <ExternalLink className="w-3.5 h-3.5" />
                                                     </button>

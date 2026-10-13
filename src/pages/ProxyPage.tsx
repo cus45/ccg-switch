@@ -1,8 +1,10 @@
 import { Network } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ProxyStatus from '../components/proxy/ProxyStatus';
 import FailoverQueue from '../components/proxy/FailoverQueue';
 
 function ProxyPage() {
+    const { t } = useTranslation();
     return (
         <div className="h-full w-full overflow-y-auto">
             <div className="p-6 max-w-5xl mx-auto space-y-4">
@@ -12,7 +14,7 @@ function ProxyPage() {
                         <Network className="w-5 h-5 text-white" />
                     </div>
                     <h1 className="text-xl font-bold text-gray-900 dark:text-base-content">
-                        Proxy 控制面板
+                        {t('proxy.dashboardTitle', 'Proxy 控制面板')}
                     </h1>
                 </div>
 

@@ -72,17 +72,17 @@ const CLAUDE_SETTINGS_DEFAULTS: InternalSettings = {
 
 const CLAUDE_SETTING_KEYS = Object.keys(CLAUDE_SETTINGS_DEFAULTS) as (keyof InternalSettings)[];
 
-const CLAUDE_BOOLEAN_TOGGLES: Array<{ key: Exclude<keyof InternalSettings, 'maxOutputTokens'>; label: string }> = [
-    { key: 'alwaysThinkingEnabled', label: '扩展思考' },
-    { key: 'teammatesMode', label: 'Teammates 模式' },
-    { key: 'disableNonessentialTraffic', label: '禁用非必要流量' },
-    { key: 'disableAttributionHeader', label: '禁用归因头' },
-    { key: 'disableInstallationChecks', label: '禁用安装检查' },
-    { key: 'enableToolSearch', label: '启用 Tool Search' },
-    { key: 'disableTelemetry', label: '禁用遥测' },
-    { key: 'disableBugCommand', label: '禁用 /bug 命令' },
-    { key: 'disableAutoupdater', label: '禁用自动升级' },
-    { key: 'disableErrorReporting', label: '禁用错误报告' },
+const CLAUDE_BOOLEAN_TOGGLES: Array<{ key: Exclude<keyof InternalSettings, 'maxOutputTokens'>; labelKey: string; defaultLabel: string }> = [
+    { key: 'alwaysThinkingEnabled', labelKey: 'providers.settings.alwaysThinkingEnabled', defaultLabel: '总开启思考' },
+    { key: 'teammatesMode', labelKey: 'providers.settings.teammatesMode', defaultLabel: 'Teammates 模式' },
+    { key: 'disableNonessentialTraffic', labelKey: 'providers.settings.disableNonessentialTraffic', defaultLabel: '禁用非必要流量' },
+    { key: 'disableAttributionHeader', labelKey: 'providers.settings.disableAttributionHeader', defaultLabel: '禁用归因头' },
+    { key: 'disableInstallationChecks', labelKey: 'providers.settings.disableInstallationChecks', defaultLabel: '禁用安装检查' },
+    { key: 'enableToolSearch', labelKey: 'providers.settings.enableToolSearch', defaultLabel: '启用 Tool Search' },
+    { key: 'disableTelemetry', labelKey: 'providers.settings.disableTelemetry', defaultLabel: '禁用遥测' },
+    { key: 'disableBugCommand', labelKey: 'providers.settings.disableBugCommand', defaultLabel: '禁用 /bug 命令' },
+    { key: 'disableAutoupdater', labelKey: 'providers.settings.disableAutoupdater', defaultLabel: '禁用自动更新' },
+    { key: 'disableErrorReporting', labelKey: 'providers.settings.disableErrorReporting', defaultLabel: '禁用错误报告' },
 ];
 
 const CLAUDE_SETTING_CONTROL_CLASS = "flex min-h-[36px] items-center rounded-md border border-transparent px-2";
@@ -353,7 +353,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
             }
             onClose();
         } catch (error) {
-            showToast((isEditing ? '更新失败: ' : '添加失败: ') + error, 'error');
+            showToast(`${isEditing ? t('providers.update_failed', '更新失败') : t('providers.add_failed', '添加失败')}: ${String(error)}`, 'error');
         } finally {
             setSaving(false);
         }
@@ -712,7 +712,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                 {/* 右侧：生成预览 */}
                 <div className="flex-[1.1] min-w-0 flex flex-col pt-2 lg:pt-0 pb-1">
                     <div className="flex items-center justify-between mb-4 mt-4 lg:mt-0">
-                        <LabelText className="font-bold">配置预览 (切换后完整文件内容)</LabelText>
+                        <LabelText className="font-bold">{t('providers.previewTitle', '配置预览 (切换后完整文件内容)')}</LabelText>
                     </div>
 
                     {/* 快捷配置按钮组 */}
@@ -727,15 +727,15 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                         checked={!!internalSettings[toggle.key]}
                                         onChange={(e) => handleCheckboxChange(toggle.key, e.target.checked)}
                                     />
-                                    <span className="text-xs leading-5 text-gray-600 transition-colors group-hover:text-gray-900 dark:text-slate-300 dark:group-hover:text-slate-200">{toggle.label}</span>
+                                    <span className="text-xs leading-5 text-gray-600 transition-colors group-hover:text-gray-900 dark:text-slate-300 dark:group-hover:text-slate-200">{t(toggle.labelKey, toggle.defaultLabel)}</span>
                                 </label>
                             ))}
                             <label className={cn(CLAUDE_SETTING_CONTROL_CLASS, "gap-2 group col-span-2 xl:col-span-1")}>
-                                <span className="whitespace-nowrap text-xs leading-5 text-gray-600 dark:text-slate-300">最大输出 Tokens</span>
+                                <span className="whitespace-nowrap text-xs leading-5 text-gray-600 dark:text-slate-300">{t('providers.maxOutputTokens', '最大输出 Tokens')}</span>
                                 <input
                                     type="text"
                                     className="h-7 min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 text-xs text-gray-900 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 dark:border-slate-600 dark:bg-slate-900/50 dark:text-slate-200 dark:placeholder:text-slate-500"
-                                    placeholder="如 100000"
+                                    placeholder="100000"
                                     value={internalSettings.maxOutputTokens || ''}
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/[^0-9]/g, '');
@@ -760,7 +760,7 @@ export default function ProviderForm({ isOpen, editingProvider, onClose, default
                                         <span className="text-xs font-mono text-gray-600 dark:text-slate-300">{file.title}</span>
                                         {changedCount > 0 && (
                                             <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                                                {changedCount} 行变更
+                                                {t('providers.linesChanged', { count: changedCount })}
                                             </span>
                                         )}
                                     </div>

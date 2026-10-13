@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Shield, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useProviderStore } from '../../stores/useProviderStore';
 import { CircuitBreakerState } from '../../types/proxy';
@@ -11,25 +12,25 @@ function getCircuitState(index: number): CircuitBreakerState {
 }
 
 const STATE_CONFIG: Record<CircuitBreakerState, {
-    label: string;
+    labelKey: string;
     icon: typeof CheckCircle;
     badgeClass: string;
     iconClass: string;
 }> = {
     closed: {
-        label: '正常',
+        labelKey: 'proxy.circuitBreaker.stateNormal',
         icon: CheckCircle,
         badgeClass: 'badge-success',
         iconClass: 'text-green-500',
     },
     open: {
-        label: '断开',
+        labelKey: 'proxy.circuitBreaker.stateOpen',
         icon: XCircle,
         badgeClass: 'badge-error',
         iconClass: 'text-red-500',
     },
     halfopen: {
-        label: '半开',
+        labelKey: 'proxy.circuitBreaker.stateHalfOpen',
         icon: AlertCircle,
         badgeClass: 'badge-warning',
         iconClass: 'text-amber-500',
@@ -37,6 +38,7 @@ const STATE_CONFIG: Record<CircuitBreakerState, {
 };
 
 export default function CircuitBreakerPanel() {
+    const { t } = useTranslation();
     const { providers, hasLoaded, loadAllProviders } = useProviderStore();
 
     useEffect(() => {
@@ -51,15 +53,15 @@ export default function CircuitBreakerPanel() {
         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 p-5">
             <div className="flex items-center gap-2 mb-4">
                 <Shield className="w-4 h-4 text-gray-500" />
-                <h2 className="font-semibold text-gray-900 dark:text-base-content">熔断器状态</h2>
+                <h2 className="font-semibold text-gray-900 dark:text-base-content">{t('proxy.circuitBreaker.title')}</h2>
                 <span className="ml-auto text-xs text-gray-400 bg-gray-100 dark:bg-base-200 px-2 py-0.5 rounded-full">
-                    占位展示
+                    {t('proxy.circuitBreaker.mockBadge')}
                 </span>
             </div>
 
             {claudeProviders.length === 0 ? (
                 <div className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-                    暂无 Claude Provider
+                    {t('proxy.circuitBreaker.empty')}
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -79,7 +81,7 @@ export default function CircuitBreakerPanel() {
                                     </span>
                                 </div>
                                 <span className={`badge badge-sm ${cfg.badgeClass} shrink-0 ml-2`}>
-                                    {cfg.label}
+                                    {t(cfg.labelKey)}
                                 </span>
                             </div>
                         );

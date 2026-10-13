@@ -1,9 +1,11 @@
 import {useEffect, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {Activity, Check, Copy, Power, RefreshCw, Save, Settings} from 'lucide-react';
 import {useProxyStore} from '../../stores/useProxyStore';
 import {showToast} from '../common/ToastContainer';
 
 export default function ProxyStatus() {
+    const { t } = useTranslation();
     const { proxyState, config, loading, loadStatus, loadConfig, startProxy, stopProxy, updateConfig } = useProxyStore();
 
     const running = proxyState?.running ?? false;
@@ -41,18 +43,18 @@ export default function ProxyStatus() {
                 await updateConfig({ host, port, takeoverMode: localTakeover });
             }
             await startProxy(host, port);
-            showToast('代理服务已启动', 'success');
+            showToast(t('proxy.status.started'), 'success');
         } catch (error) {
-            showToast('启动失败: ' + String(error), 'error');
+            showToast(t('proxy.status.startFailed', { error: String(error) }), 'error');
         }
     };
 
     const handleStop = async () => {
         try {
             await stopProxy();
-            showToast('代理服务已停止', 'info');
+            showToast(t('proxy.status.stoppedToast'), 'info');
         } catch (error) {
-            showToast('停止失败: ' + String(error), 'error');
+            showToast(t('proxy.status.stopFailed', { error: String(error) }), 'error');
         }
     };
 
@@ -64,9 +66,9 @@ export default function ProxyStatus() {
                 port: portNum,
                 takeoverMode: localTakeover,
             });
-            showToast('配置已保存', 'success');
+            showToast(t('proxy.status.configSaved'), 'success');
         } catch (error) {
-            showToast('保存配置失败: ' + error, 'error');
+            showToast(t('proxy.status.configSaveFailed', { error: String(error) }), 'error');
         }
     };
 
@@ -85,7 +87,7 @@ export default function ProxyStatus() {
                 <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${running ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
                     <span className={`text-sm font-semibold ${running ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                        {running ? '运行中' : '已停止'}
+                        {running ? t('proxy.status.running') : t('proxy.status.stopped')}
                     </span>
                     {running && proxyState && (
                         <div className="flex items-center gap-1.5 ml-1">
@@ -95,7 +97,7 @@ export default function ProxyStatus() {
                             <button
                                 onClick={handleCopyAddress}
                                 className="btn btn-ghost btn-xs px-1"
-                                title="复制地址"
+                                title={t('proxy.status.copyAddress')}
                             >
                                 {copied
                                     ? <Check className="w-3 h-3 text-green-500" />
@@ -105,9 +107,9 @@ export default function ProxyStatus() {
                             {proxyState.takeoverActive && (
                                 <span
                                     className="text-[10px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded-full"
-                                    title={`已改写 ${proxyState.takenOverApps.join('、')} 的配置文件指向本地代理，停止时自动恢复`}
+                                    title={t('proxy.status.takenOverHint', { apps: proxyState.takenOverApps.join('、') })}
                                 >
-                                    已接管: {proxyState.takenOverApps.join(' / ')}
+                                    {t('proxy.status.takenOver', { apps: proxyState.takenOverApps.join(' / ') })}
                                 </span>
                             )}
                         </div>
@@ -117,14 +119,14 @@ export default function ProxyStatus() {
                     {running && proxyState && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 mr-2 flex items-center gap-1">
                             <Activity className="w-3 h-3" />
-                            {proxyState.requestCount} 请求
+                            {t('proxy.status.requests', { count: proxyState.requestCount })}
                         </span>
                     )}
                     <button
                         onClick={() => void loadStatus()}
                         disabled={loading}
                         className="btn btn-ghost btn-xs btn-square"
-                        title="刷新状态"
+                        title={t('proxy.status.refresh')}
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
@@ -138,7 +140,7 @@ export default function ProxyStatus() {
                                 ? <span className="loading loading-spinner loading-xs" />
                                 : <Power className="w-3.5 h-3.5" />
                             }
-                            启动
+                            {t('proxy.status.start')}
                         </button>
                     ) : (
                         <button
@@ -150,7 +152,7 @@ export default function ProxyStatus() {
                                 ? <span className="loading loading-spinner loading-xs" />
                                 : <Power className="w-3.5 h-3.5" />
                             }
-                            停止
+                            {t('proxy.status.stop')}
                         </button>
                     )}
                 </div>
@@ -160,10 +162,12 @@ export default function ProxyStatus() {
             <div className="p-4 pt-3">
                 <div className="flex items-center gap-1.5 mb-3">
                     <Settings className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">基础配置</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {t('proxy.config.basicTitle')}
+                    </span>
                     {running && (
                         <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full ml-auto">
-                            运行中不可修改
+                            {t('proxy.config.cannotModifyRunning')}
                         </span>
                     )}
                 </div>
@@ -171,7 +175,9 @@ export default function ProxyStatus() {
                 <div className="grid grid-cols-2 md:grid-cols-[1fr_120px_auto_auto] gap-3 items-end">
                     {/* Host */}
                     <div>
-                        <label htmlFor="proxy-host" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">监听地址</label>
+                        <label htmlFor="proxy-host" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            {t('proxy.config.host')}
+                        </label>
                         <input
                             id="proxy-host"
                             type="text"
@@ -185,7 +191,9 @@ export default function ProxyStatus() {
 
                     {/* Port */}
                     <div>
-                        <label htmlFor="proxy-port" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">端口</label>
+                        <label htmlFor="proxy-port" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            {t('proxy.config.port')}
+                        </label>
                         <input
                             id="proxy-port"
                             type="number"
@@ -210,9 +218,9 @@ export default function ProxyStatus() {
                         />
                         <span
                             className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap"
-                            title="启动代理时自动改写 Claude/Codex/Gemini 的配置文件指向本地代理（原配置备份，停止时恢复）；关闭则需手动把 BASE_URL 指向代理地址"
+                            title={t('proxy.config.takeoverHint')}
                         >
-                            接管模式
+                            {t('proxy.config.takeoverMode')}
                         </span>
                     </div>
 
@@ -223,12 +231,12 @@ export default function ProxyStatus() {
                         className="btn btn-sm gap-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-none disabled:opacity-50"
                     >
                         <Save className="w-3.5 h-3.5" />
-                        保存
+                        {t('proxy.config.save')}
                     </button>
                 </div>
 
                 {!portValid && localPort.length > 0 && (
-                    <p className="text-xs text-error mt-1.5">端口需在 1024–65535 范围内</p>
+                    <p className="text-xs text-error mt-1.5">{t('proxy.config.portRange')}</p>
                 )}
             </div>
         </div>

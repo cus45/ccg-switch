@@ -64,7 +64,7 @@ export default function UniversalProviderPanel({ onClose }: UniversalProviderPan
             );
             onClose?.();
         } catch (error) {
-            showToast(t('providers.universal.error_apply', '应用失败: ') + error, 'error');
+            showToast(t('providers.universal.error_apply', { error: String(error) }), 'error');
         } finally {
             setApplying(false);
         }

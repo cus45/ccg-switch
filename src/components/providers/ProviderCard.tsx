@@ -78,7 +78,7 @@ export default function ProviderCard({
                         onPointerDown={onPointerDragStart}
                         onClick={(e) => e.preventDefault()}
                         className="inline-flex h-6 w-6 items-center justify-center rounded text-base-content/40 hover:bg-base-200 cursor-grab active:cursor-grabbing shrink-0"
-                        title="拖拽排序"
+                        title={t('common.dragToSort', '拖拽排序')}
                     >
                         <GripVertical className="w-4 h-4" />
                     </button>
@@ -123,7 +123,7 @@ export default function ProviderCard({
                         <button
                             type="button"
                             className="shrink-0 p-0.5 text-blue-400/60 hover:text-blue-400 transition-colors"
-                            title="在浏览器中打开"
+                            title={t('providers.openUrl', '在浏览器中打开')}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 const u = provider.url!.trim();
@@ -155,22 +155,22 @@ export default function ProviderCard({
                             <span className="text-xs text-base-content/40">Sonnet</span>
                             {provider.defaultSonnetModel
                                 ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultSonnetModel}>{provider.defaultSonnetModel}</code>
-                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                                : <span className="text-xs text-base-content/25 italic">{t('providers.defaultModel', '默认')}</span>
                             }
                             <span className="text-xs text-base-content/40">Opus</span>
                             {provider.defaultOpusModel
                                 ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultOpusModel}>{provider.defaultOpusModel}</code>
-                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                                : <span className="text-xs text-base-content/25 italic">{t('providers.defaultModel', '默认')}</span>
                             }
                             <span className="text-xs text-base-content/40">Haiku</span>
                             {provider.defaultHaikuModel
                                 ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultHaikuModel}>{provider.defaultHaikuModel}</code>
-                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                                : <span className="text-xs text-base-content/25 italic">{t('providers.defaultModel', '默认')}</span>
                             }
                             <span className="text-xs text-base-content/40">Thinking</span>
                             {provider.defaultReasoningModel
                                 ? <code className="font-mono text-xs text-base-content/70 truncate min-w-0" title={provider.defaultReasoningModel}>{provider.defaultReasoningModel}</code>
-                                : <span className="text-xs text-base-content/25 italic">默认</span>
+                                : <span className="text-xs text-base-content/25 italic">{t('providers.defaultModel', '默认')}</span>
                             }
                         </>
                     )}
@@ -204,21 +204,21 @@ export default function ProviderCard({
                         onClick={() => onSwitch(provider.id)}
                         className={`btn btn-xs gap-1 ${provider.isActive ? 'btn-disabled' : 'btn-ghost text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'}`}
                         disabled={provider.isActive}
-                        title="切换为活跃"
+                        title={t('providers.switchToActive', '切换为活跃')}
                     >
                         <Zap className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => onEdit(provider)}
                         className="btn btn-ghost btn-xs gap-1"
-                        title="编辑"
+                        title={t('common.edit', '编辑')}
                     >
                         <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => onClone(provider)}
                         className="btn btn-ghost btn-xs gap-1"
-                        title="克隆"
+                        title={t('common.clone', '克隆')}
                     >
                         <Copy className="w-3.5 h-3.5" />
                     </button>
@@ -242,7 +242,7 @@ export default function ProviderCard({
                     <button
                         onClick={() => onDelete(provider.id, provider.name)}
                         className="btn btn-ghost btn-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 gap-1 ml-auto"
-                        title="删除"
+                        title={t('common.delete', '删除')}
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
