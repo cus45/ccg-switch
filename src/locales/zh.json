@@ -272,6 +272,11 @@
       "cost": "费用",
       "less": "少",
       "more": "多",
+      "weekdays": {
+        "mon": "周一",
+        "wed": "周三",
+        "fri": "周五"
+      },
       "totalActiveDays": "活跃天数",
       "totalYearRequests": "年请求数",
       "totalYearTokens": "年 Token 消耗",

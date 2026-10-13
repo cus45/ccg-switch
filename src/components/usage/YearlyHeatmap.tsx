@@ -19,11 +19,11 @@ const MONTH_KEYS = [
     'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
 ] as const;
 
-const WEEKDAYS = [
-    { row: 1, label: 'Mon' },
-    { row: 3, label: 'Wed' },
-    { row: 5, label: 'Fri' },
-];
+const WEEKDAY_ROWS = [
+    { row: 1, key: 'mon', defaultLabel: 'Mon' },
+    { row: 3, key: 'wed', defaultLabel: 'Wed' },
+    { row: 5, key: 'fri', defaultLabel: 'Fri' },
+] as const;
 
 const LEVEL_COLORS: Record<number, string> = {
     0: 'bg-gray-100 dark:bg-base-200/80 hover:ring-1 hover:ring-gray-300 dark:hover:ring-base-300',
@@ -164,6 +164,14 @@ export function YearlyHeatmap({ filters, refreshMs }: Props) {
         return { columns: cols, monthHeaders: mHeaders };
     }, [days, t]);
 
+    const monthHeaderMap = useMemo(() => {
+        const map = new Map<number, string>();
+        for (const m of monthHeaders) {
+            map.set(m.colIndex, m.label);
+        }
+        return map;
+    }, [monthHeaders]);
+
     const handleMouseEnter = (
         e: React.MouseEvent<HTMLDivElement>,
         day: HeatmapDay | null
@@ -247,40 +255,53 @@ export function YearlyHeatmap({ filters, refreshMs }: Props) {
 
             {/* 热力图网格滚动区域 */}
             <div className="relative overflow-x-auto pb-2 pt-1">
-                <div className="inline-block min-w-full">
+                <div className="min-w-[720px] w-full pr-2">
                     {/* 月份标头行 */}
-                    <div className="flex pl-8 text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                        <div className="relative h-4 w-full">
-                            {monthHeaders.map((m) => (
-                                <span
-                                    key={m.colIndex}
-                                    className="absolute whitespace-nowrap"
-                                    style={{ left: `${m.colIndex * 15}px` }}
-                                >
-                                    {m.label}
-                                </span>
-                            ))}
+                    <div className="mb-1 flex gap-2 select-none text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                        {/* 左侧占位对齐星期标签 */}
+                        <div className="w-8 shrink-0" aria-hidden="true" />
+                        {/* 53 列月份标头 */}
+                        <div className="flex flex-1 gap-[3px] min-w-0">
+                            {columns.map((_, colIdx) => {
+                                const header = monthHeaderMap.get(colIdx);
+                                return (
+                                    <div key={colIdx} className="relative h-4 flex-1 min-w-0">
+                                        {header && (
+                                            <span className="absolute left-0 top-0 whitespace-nowrap">
+                                                {header}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
                     {/* 网格主容器：左侧星期标号 + 右侧矩阵 */}
                     <div className="flex gap-2">
                         {/* 左侧星期标签 */}
-                        <div className="flex flex-col justify-between py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
-                            {WEEKDAYS.map((w) => (
-                                <span
-                                    key={w.label}
-                                    style={{ height: '12px', lineHeight: '12px' }}
-                                >
-                                    {w.label}
-                                </span>
-                            ))}
+                        <div className="flex w-8 shrink-0 flex-col gap-[3px] select-none text-[10px] font-medium text-gray-400 dark:text-gray-500">
+                            {Array.from({ length: 7 }).map((_, rIdx) => {
+                                const item = WEEKDAY_ROWS.find((w) => w.row === rIdx);
+                                return (
+                                    <div
+                                        key={rIdx}
+                                        className="flex flex-1 items-center justify-end pr-1 text-[10px] leading-none"
+                                    >
+                                        {item
+                                            ? t(`usage.heatmap.weekdays.${item.key}`, {
+                                                  defaultValue: item.defaultLabel,
+                                              })
+                                            : null}
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         {/* 53 列网格 */}
-                        <div className="flex gap-[3px]">
+                        <div className="flex flex-1 gap-[3px] min-w-0">
                             {columns.map((col, colIdx) => (
-                                <div key={colIdx} className="flex flex-col gap-[3px]">
+                                <div key={colIdx} className="flex flex-1 flex-col gap-[3px] min-w-0">
                                     {col.map((day, rowIdx) => {
                                         const level = getLevel(day);
                                         const colorClass = LEVEL_COLORS[level];
@@ -288,7 +309,7 @@ export function YearlyHeatmap({ filters, refreshMs }: Props) {
                                             <div
                                                 key={rowIdx}
                                                 className={cn(
-                                                    'h-3 w-3 rounded-sm transition-all',
+                                                    'w-full aspect-square rounded-sm transition-all',
                                                     day ? colorClass : 'opacity-0 pointer-events-none'
                                                 )}
                                                 onMouseEnter={(e) => handleMouseEnter(e, day)}

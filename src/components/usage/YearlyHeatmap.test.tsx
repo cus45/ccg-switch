@@ -177,4 +177,39 @@ describe('YearlyHeatmap', () => {
         });
         expect(buttons[2].getAttribute('aria-selected')).toBe('true');
     });
+
+    it('renders full-width responsive grid container and aligned weekdays', () => {
+        const days = generateMockDays(365);
+        mockUseYearlyHeatmap.mockReturnValue({
+            data: days,
+            isLoading: false,
+        });
+
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        root = createRoot(container);
+
+        act(() => {
+            root?.render(
+                createElement(
+                    I18nextProvider,
+                    { i18n: createKeyOnlyI18n() },
+                    createElement(YearlyHeatmap, { filters: {}, refreshMs: 0 })
+                )
+            );
+        });
+
+        // Check that responsive container with w-full exists
+        const responsiveWrapper = container.querySelector('.w-full.min-w-\\[720px\\]');
+        expect(responsiveWrapper).not.toBeNull();
+
+        // Check weekday text content (Mon, Wed, Fri by default fallback)
+        expect(container.textContent).toContain('Mon');
+        expect(container.textContent).toContain('Wed');
+        expect(container.textContent).toContain('Fri');
+
+        // Check that month headers are distributed across columns
+        const monthSpans = responsiveWrapper?.querySelectorAll('span.whitespace-nowrap');
+        expect(monthSpans && monthSpans.length).toBeGreaterThan(0);
+    });
 });
