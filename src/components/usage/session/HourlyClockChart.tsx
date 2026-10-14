@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Clock } from 'lucide-react';
+import {useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import {Clock} from 'lucide-react';
 
 interface HourlyClockChartProps {
     hourData: { hour: number; count: number }[];
@@ -44,11 +44,16 @@ export default function HourlyClockChart({ hourData, maxHourCount }: HourlyClock
 
     return (
         <div className="bg-white dark:bg-base-100 rounded-xl p-5 pb-3 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
-            <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-5 h-5 text-indigo-500" />
-                <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                    {t('token_usage.hourly_title')}
-                </h2>
+            <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-indigo-500" />
+                    <h2 className="font-semibold text-gray-900 dark:text-base-content">
+                        {t('token_usage.hourly_title')}
+                    </h2>
+                </div>
+                <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                    {t('token_usage.local_timezone_hint')}
+                </span>
             </div>
             <div className="flex items-center justify-center">
                 <svg viewBox="0 0 300 300" className="w-full max-w-[300px]">
@@ -109,7 +114,7 @@ export default function HourlyClockChart({ hourData, maxHourCount }: HourlyClock
                     </text>
                     <text x={cx} y={cy + 12} textAnchor="middle" dominantBaseline="central"
                         className="fill-gray-400 dark:fill-gray-500" style={{ fontSize: '11px' }}>
-                        {hoveredHour !== null ? `${String(hoveredHour).padStart(2, '0')}:00` : t('token_usage.total_messages')}
+                        {hoveredHour !== null ? `${String(hoveredHour).padStart(2, '0')}:00` : t('token_usage.hourly_requests')}
                     </text>
                 </svg>
             </div>

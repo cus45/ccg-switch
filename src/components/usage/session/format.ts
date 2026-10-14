@@ -13,14 +13,18 @@ export function formatCompactTokens(value: number) {
 
 export function formatDateLabel(rawDate?: string) {
     if (!rawDate) return '';
-    const parsed = new Date(rawDate);
-    if (Number.isNaN(parsed.getTime())) return rawDate;
-    return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+    const parts = rawDate.split('-');
+    if (parts.length === 3) {
+        return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+    }
+    return rawDate;
 }
 
 export function formatDateFull(rawDate?: string) {
     if (!rawDate) return '';
-    const parsed = new Date(rawDate);
-    if (Number.isNaN(parsed.getTime())) return rawDate;
-    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+    const parts = rawDate.split('-');
+    if (parts.length === 3) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+    return rawDate;
 }

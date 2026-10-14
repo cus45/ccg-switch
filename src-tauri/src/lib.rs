@@ -160,8 +160,13 @@ where
 
 // Dashboard 数据命令（全部走阻塞线程池，见 run_fs_blocking）
 #[tauri::command]
-async fn get_dashboard_stats() -> Result<DashboardStats, String> {
-    run_fs_blocking(|| dashboard_service::get_stats().map_err(|e| e.to_string())).await
+async fn get_dashboard_stats(state: State<'_, AppState>) -> Result<DashboardStats, String> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        dashboard_service::get_unified_dashboard_stats(&db)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -175,9 +180,16 @@ async fn get_activity_history() -> Result<Vec<HistoryEntry>, String> {
 }
 
 #[tauri::command]
-async fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, String> {
-    run_fs_blocking(|| dashboard_service::get_project_token_stats().map_err(|e| e.to_string()))
-        .await
+async fn get_project_token_stats(
+    state: State<'_, AppState>,
+    app_type: Option<String>,
+) -> Result<Vec<ProjectTokenStat>, String> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        dashboard_service::get_project_token_stats_from_db(&db, app_type.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -210,15 +222,33 @@ async fn fetch_available_models(base_url: String, api_key: String) -> Result<Vec
     token_service::fetch_models(base_url, api_key).await
 }
 
-// Stats Cache 命令（refresh 要全量遍历会话文件，必须离开主线程）
+// Stats Cache 命令（统一支持多端 Claude+Codex+Gemini，本地时区聚合）
 #[tauri::command]
-async fn get_stats_cache_data() -> Result<StatsCache, String> {
-    run_fs_blocking(|| stats_service::get_stats_cache().map_err(|e| e.to_string())).await
+async fn get_stats_cache_data(
+    state: State<'_, AppState>,
+    app_type: Option<String>,
+) -> Result<StatsCache, String> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        stats_service::get_unified_stats_cache(&db, app_type.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-async fn refresh_stats_cache() -> Result<StatsCache, String> {
-    run_fs_blocking(|| stats_service::refresh_stats_cache().map_err(|e| e.to_string())).await
+async fn refresh_stats_cache(
+    state: State<'_, AppState>,
+    app_type: Option<String>,
+) -> Result<StatsCache, String> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        // 先触发一次快速增量扫描，确保最新会话及时落库
+        let _ = crate::services::session_usage_scanner::scan_all(&db);
+        stats_service::get_unified_stats_cache(&db, app_type.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 // 在终端中打开目录

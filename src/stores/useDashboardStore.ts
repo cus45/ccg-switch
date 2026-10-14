@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
+import {create} from 'zustand';
+import {invoke} from '@tauri-apps/api/core';
 
 // ── 类型定义 ──────────────────────────────────────────────
 
@@ -52,11 +52,13 @@ interface DashboardState {
     activity: HistoryEntry[];
     tokenStats: StatsCache | null;
     projectTokenStats: ProjectTokenStat[];
+    selectedAppType: string;
     hasLoaded: boolean;
     loading: boolean;
     refreshingStats: boolean;
 
     loadData: (force?: boolean) => Promise<void>;
+    setSelectedAppType: (appType: string) => Promise<void>;
     refreshStatsCache: () => Promise<void>;
 }
 
@@ -67,6 +69,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     activity: [],
     tokenStats: null,
     projectTokenStats: [],
+    selectedAppType: 'all',
     hasLoaded: false,
     loading: false,
     refreshingStats: false,
@@ -75,11 +78,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         if (!force && get().hasLoaded) return;
         set({ loading: true });
 
+        const appTypeParam = get().selectedAppType === 'all' ? null : get().selectedAppType;
+
         const [statsResult, activityResult, tokenResult, projectResult] = await Promise.allSettled([
             invoke<DashboardStats>('get_dashboard_stats'),
             invoke<HistoryEntry[]>('get_activity_history'),
-            invoke<StatsCache>('get_stats_cache_data'),
-            invoke<ProjectTokenStat[]>('get_project_token_stats'),
+            invoke<StatsCache>('get_stats_cache_data', { appType: appTypeParam }),
+            invoke<ProjectTokenStat[]>('get_project_token_stats', { appType: appTypeParam }),
         ]);
 
         let tokenStats = tokenResult.status === 'fulfilled' ? tokenResult.value : get().tokenStats;
@@ -87,7 +92,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         // 缓存为空时自动刷新
         if (!tokenStats || Object.keys(tokenStats.modelUsage || {}).length === 0) {
             try {
-                tokenStats = await invoke<StatsCache>('refresh_stats_cache');
+                tokenStats = await invoke<StatsCache>('refresh_stats_cache', { appType: appTypeParam });
             } catch { /* 静默失败 */ }
         }
 
@@ -101,11 +106,39 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         });
     },
 
+    setSelectedAppType: async (selectedAppType: string) => {
+        set({ selectedAppType, loading: true });
+        const appTypeParam = selectedAppType === 'all' ? null : selectedAppType;
+        try {
+            let [tokenStats, projectTokenStats] = await Promise.all([
+                invoke<StatsCache>('get_stats_cache_data', { appType: appTypeParam }),
+                invoke<ProjectTokenStat[]>('get_project_token_stats', { appType: appTypeParam }),
+            ]);
+
+            // 若对应应用类型无缓存数据，自动按需刷新一次
+            if (!tokenStats || Object.keys(tokenStats.modelUsage || {}).length === 0) {
+                try {
+                    tokenStats = await invoke<StatsCache>('refresh_stats_cache', { appType: appTypeParam });
+                } catch { /* 静默失败 */ }
+            }
+
+            set({ tokenStats, projectTokenStats });
+        } catch (e) {
+            console.error('Failed to filter dashboard stats by app:', e);
+        } finally {
+            set({ loading: false });
+        }
+    },
+
     refreshStatsCache: async () => {
         set({ refreshingStats: true });
+        const appTypeParam = get().selectedAppType === 'all' ? null : get().selectedAppType;
         try {
-            const newStats = await invoke<StatsCache>('refresh_stats_cache');
-            set({ tokenStats: newStats });
+            const [newStats, newProjects] = await Promise.all([
+                invoke<StatsCache>('refresh_stats_cache', { appType: appTypeParam }),
+                invoke<ProjectTokenStat[]>('get_project_token_stats', { appType: appTypeParam }),
+            ]);
+            set({ tokenStats: newStats, projectTokenStats: newProjects });
         } finally {
             set({ refreshingStats: false });
         }

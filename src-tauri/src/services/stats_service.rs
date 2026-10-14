@@ -80,12 +80,14 @@ pub struct LongestSession {
     pub timestamp: String,
 }
 
+#[allow(dead_code)]
 fn get_stats_cache_path() -> Result<PathBuf, io::Error> {
     let home = dirs::home_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
     Ok(home.join(".claude").join("stats-cache.json"))
 }
 
+#[allow(dead_code)]
 pub fn get_stats_cache() -> Result<StatsCache, io::Error> {
     let path = get_stats_cache_path()?;
     if !path.exists() {
@@ -97,7 +99,261 @@ pub fn get_stats_cache() -> Result<StatsCache, io::Error> {
     Ok(cache)
 }
 
+/// 模型名称规范化清洗（剥离前缀、别名合并、过滤占位项）
+pub fn normalize_model_name(raw: &str) -> String {
+    let mut s = raw.trim();
+    if s.is_empty() || s == "<synthetic>" || s.eq_ignore_ascii_case("model") {
+        return String::new();
+    }
+    // 移除提供商前缀（如 "anthropic/", "openai/", "deepseek-ai/"）
+    if let Some((_, right)) = s.rsplit_once('/') {
+        s = right;
+    }
+    // 移除版本或标签后缀（如 ":v2"）
+    if let Some((left, _)) = s.split_once(':') {
+        s = left;
+    }
+    // 移除 @ 后缀
+    if let Some((left, _)) = s.split_once('@') {
+        s = left;
+    }
+    let mut normalized = s.to_string();
+    // 移除 -thinking / _thinking
+    if normalized.ends_with("-thinking") {
+        normalized.truncate(normalized.len() - "-thinking".len());
+    } else if normalized.ends_with("_thinking") {
+        normalized.truncate(normalized.len() - "_thinking".len());
+    }
+    // 规范常见变体连字符/点号
+    match normalized.as_str() {
+        "claude-opus-4-6" => "claude-opus-4.6".to_string(),
+        "claude-opus-4-8" => "claude-opus-4.8".to_string(),
+        "claude-fable-5-1" => "claude-fable-5.1".to_string(),
+        "claude-opus-5-5" => "claude-opus-5.5".to_string(),
+        _ => normalized,
+    }
+}
+
+/// 从 SQLite (proxy_request_logs) 获取统一本地会话统计（支持多端 Claude+Codex+Gemini，本地时区，连续30天）
+pub fn get_unified_stats_cache(
+    db: &crate::database::Database,
+    app_filter: Option<&str>,
+) -> Result<StatsCache, String> {
+    let conn = db.conn_for_read()?;
+
+    let (where_clause, param) = match app_filter {
+        Some("claude") => (
+            "WHERE (data_source = 'session_log' OR (data_source IS NOT NULL AND app_type = 'claude'))",
+            None,
+        ),
+        Some("codex") => (
+            "WHERE (data_source = 'codex_session' OR (data_source IS NOT NULL AND app_type = 'codex'))",
+            None,
+        ),
+        Some("gemini") => (
+            "WHERE (data_source = 'gemini_session' OR (data_source IS NOT NULL AND app_type = 'gemini'))",
+            None,
+        ),
+        Some(other) if other != "all" && !other.is_empty() => (
+            "WHERE (data_source IS NOT NULL AND app_type = ?1)",
+            Some(other.to_string()),
+        ),
+        _ => (
+            "WHERE data_source IN ('session_log', 'codex_session', 'gemini_session', 'opencode_session')",
+            None,
+        ),
+    };
+
+    let today = chrono::Local::now().date_naive();
+    let start_date = today - chrono::Duration::days(29);
+    let start_date_str = start_date.format("%Y-%m-%d").to_string();
+
+    // 1. 每日模型 Token 统计（本地时区自然日，最近 30 天连续）
+    let daily_param_idx = if param.is_some() { "2" } else { "1" };
+    let daily_sql = format!(
+        "SELECT strftime('%Y-%m-%d', datetime(created_at, 'unixepoch', 'localtime')) as day,
+                model,
+                sum(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) as total_tokens
+         FROM proxy_request_logs
+         {} AND strftime('%Y-%m-%d', datetime(created_at, 'unixepoch', 'localtime')) >= ?{}
+         GROUP BY day, model",
+        where_clause, daily_param_idx
+    );
+
+    let mut daily_map: HashMap<String, HashMap<String, u64>> = HashMap::new();
+    {
+        let mut stmt = conn.prepare(&daily_sql).map_err(|e| e.to_string())?;
+        let map_row = |row: &rusqlite::Row| -> rusqlite::Result<(String, String, u64)> {
+            let day: String = row.get(0)?;
+            let model: String = row.get(1)?;
+            let tokens: i64 = row.get(2)?;
+            Ok((day, model, tokens.max(0) as u64))
+        };
+
+        let rows: Vec<(String, String, u64)> = if let Some(ref p) = param {
+            stmt.query_map(rusqlite::params![p, start_date_str], map_row)
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect()
+        } else {
+            stmt.query_map([&start_date_str], map_row)
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        for (day, raw_model, tokens) in rows {
+            let norm_model = normalize_model_name(&raw_model);
+            if !norm_model.is_empty() && tokens > 0 {
+                let m = daily_map.entry(day).or_default();
+                *m.entry(norm_model).or_insert(0) += tokens;
+            }
+        }
+    }
+
+    // 生成最近 30 天的严格连续序列（未活跃日期填 0）
+    let mut daily_model_tokens = Vec::with_capacity(30);
+    for i in 0..30 {
+        let current_date = start_date + chrono::Duration::days(i);
+        let date_str = current_date.format("%Y-%m-%d").to_string();
+        let tokens_by_model = daily_map.remove(&date_str).unwrap_or_default();
+        daily_model_tokens.push(DailyModelTokens {
+            date: date_str,
+            tokens_by_model,
+        });
+    }
+
+    // 2. 模型使用汇总（全量归一化）
+    let model_sql = format!(
+        "SELECT model,
+                sum(input_tokens),
+                sum(output_tokens),
+                sum(cache_read_tokens),
+                sum(cache_creation_tokens),
+                sum(CAST(total_cost_usd AS REAL))
+         FROM proxy_request_logs
+         {}
+         GROUP BY model",
+        where_clause
+    );
+
+    let mut model_usage: HashMap<String, ModelUsage> = HashMap::new();
+    {
+        let mut stmt = conn.prepare(&model_sql).map_err(|e| e.to_string())?;
+        let map_row = |row: &rusqlite::Row| -> rusqlite::Result<(String, i64, i64, i64, i64, f64)> {
+            let model: String = row.get(0)?;
+            let in_t: i64 = row.get(1)?;
+            let out_t: i64 = row.get(2)?;
+            let c_read: i64 = row.get(3)?;
+            let c_create: i64 = row.get(4)?;
+            let cost: f64 = row.get(5)?;
+            Ok((model, in_t, out_t, c_read, c_create, cost))
+        };
+
+        let rows: Vec<(String, i64, i64, i64, i64, f64)> = if let Some(ref p) = param {
+            stmt.query_map([p], map_row)
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect()
+        } else {
+            stmt.query_map([], map_row)
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        for (raw_model, in_t, out_t, c_read, c_create, cost) in rows {
+            let norm_model = normalize_model_name(&raw_model);
+            if norm_model.is_empty() {
+                continue;
+            }
+            let u = model_usage.entry(norm_model).or_default();
+            u.input_tokens += in_t.max(0) as u64;
+            u.output_tokens += out_t.max(0) as u64;
+            u.cache_read_input_tokens += c_read.max(0) as u64;
+            u.cache_creation_input_tokens += c_create.max(0) as u64;
+            u.cost_usd += cost;
+        }
+    }
+
+    // 3. 小时分布（0..23，本地时区）
+    let hour_sql = format!(
+        "SELECT cast(strftime('%H', datetime(created_at, 'unixepoch', 'localtime')) as integer) as hr,
+                count(*) as cnt
+         FROM proxy_request_logs
+         {}
+         GROUP BY hr",
+        where_clause
+    );
+
+    let mut hour_counts: HashMap<String, u64> = (0..24).map(|i| (i.to_string(), 0)).collect();
+    {
+        let mut stmt = conn.prepare(&hour_sql).map_err(|e| e.to_string())?;
+        let map_row = |row: &rusqlite::Row| -> rusqlite::Result<(i64, u64)> {
+            let hr: i64 = row.get(0)?;
+            let cnt: i64 = row.get(1)?;
+            Ok((hr, cnt.max(0) as u64))
+        };
+
+        let rows: Vec<(i64, u64)> = if let Some(ref p) = param {
+            stmt.query_map([p], map_row)
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect()
+        } else {
+            stmt.query_map([], map_row)
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        for (hr, cnt) in rows {
+            hour_counts.insert(hr.to_string(), cnt);
+        }
+    }
+
+    // 4. 总计统计 (总 session 数、总消息/请求数、首次日期)
+    let totals_sql = format!(
+        "SELECT count(DISTINCT session_id),
+                count(*),
+                min(strftime('%Y-%m-%d', datetime(created_at, 'unixepoch', 'localtime')))
+         FROM proxy_request_logs
+         {}",
+        where_clause
+    );
+
+    let (total_sessions, total_messages, first_session_date): (u64, u64, Option<String>) = {
+        let mut stmt = conn.prepare(&totals_sql).map_err(|e| e.to_string())?;
+        let map_row = |row: &rusqlite::Row| -> rusqlite::Result<(u64, u64, Option<String>)> {
+            let s_cnt: i64 = row.get(0)?;
+            let m_cnt: i64 = row.get(1)?;
+            let first_d: Option<String> = row.get(2)?;
+            Ok((s_cnt.max(0) as u64, m_cnt.max(0) as u64, first_d))
+        };
+
+        if let Some(ref p) = param {
+            stmt.query_row([p], map_row).unwrap_or((0, 0, None))
+        } else {
+            stmt.query_row([], map_row).unwrap_or((0, 0, None))
+        }
+    };
+
+    Ok(StatsCache {
+        version: 3,
+        last_computed_date: Some(today.format("%Y-%m-%d").to_string()),
+        daily_activity: vec![],
+        daily_model_tokens,
+        model_usage,
+        total_sessions,
+        total_messages,
+        longest_session: None,
+        first_session_date,
+        hour_counts,
+    })
+}
+
 /// 递归收集目录下所有 .jsonl 文件路径（包括 subagents/ 等子目录）
+#[allow(dead_code)]
 fn collect_jsonl_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -114,6 +370,7 @@ fn collect_jsonl_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// 刷新统计缓存 - 遍历所有会话文件重新计算
+#[allow(dead_code)]
 pub fn refresh_stats_cache() -> Result<StatsCache, io::Error> {
     let home = dirs::home_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;

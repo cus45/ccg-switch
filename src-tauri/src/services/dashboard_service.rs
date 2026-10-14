@@ -195,6 +195,7 @@ pub fn list_projects() -> Result<Vec<ProjectInfo>, io::Error> {
 }
 
 /// 获取仪表盘统计数据
+#[allow(dead_code)]
 pub fn get_stats() -> Result<DashboardStats, io::Error> {
     let claude_home = get_claude_home()?;
 
@@ -307,6 +308,7 @@ fn decode_project_path(encoded: &str) -> String {
 }
 
 /// 获取每个项目的 Token 使用统计（按项目内全部 session 聚合）
+#[allow(dead_code)]
 pub fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, io::Error> {
     let projects_dir = get_claude_home()?.join("projects");
     if !projects_dir.exists() {
@@ -356,7 +358,292 @@ pub fn get_project_token_stats() -> Result<Vec<ProjectTokenStat>, io::Error> {
     Ok(stats)
 }
 
+/// 构建跨工具（Claude、Codex、Gemini）会话 ID 到项目工程路径的映射（内存缓存 60 秒）
+pub fn get_session_project_map(db: &crate::database::Database) -> HashMap<String, String> {
+    static CACHE: OnceLock<Mutex<(i64, HashMap<String, String>)>> = OnceLock::new();
+    let cache_mutex = CACHE.get_or_init(|| Mutex::new((0, HashMap::new())));
+    let now = chrono::Local::now().timestamp();
+    if let Ok(guard) = cache_mutex.lock() {
+        if now - guard.0 < 60 && !guard.1.is_empty() {
+            return guard.1.clone();
+        }
+    }
+
+    let mut map = HashMap::new();
+
+    // 1. 读取 Gemini projects.json 获取 hash 对应的实际路径
+    let mut gemini_map = HashMap::new();
+    if let Some(home) = dirs::home_dir() {
+        let p_file = home.join(".gemini").join("projects.json");
+        if let Ok(content) = fs::read_to_string(&p_file) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(projects) = v.get("projects").and_then(|p| p.as_object()) {
+                    for (path_str, _) in projects {
+                        use sha2::{Digest, Sha256};
+                        let mut hasher = Sha256::new();
+                        hasher.update(path_str.as_bytes());
+                        let h = format!("{:x}", hasher.finalize());
+                        gemini_map.insert(h, path_str.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. 从 session_scan_files 读取所有扫描过的会话路径并解析项目
+    if let Ok(conn) = db.conn_for_read() {
+        if let Ok(mut stmt) = conn.prepare("SELECT path FROM session_scan_files") {
+            if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
+                for path_str in rows.flatten() {
+                    let p = Path::new(&path_str);
+                    let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                    let norm = path_str.replace('/', "\\");
+
+                    if norm.contains("\\.claude\\projects\\") {
+                        if let Some(rest) = norm.split("\\.claude\\projects\\").nth(1) {
+                            let parts: Vec<&str> = rest.split('\\').collect();
+                            let encoded = parts[0];
+                            let project_path = if encoded.starts_with("C--") {
+                                format!("C:\\{}", &encoded[3..].replace('-', "\\"))
+                            } else {
+                                decode_project_path(encoded)
+                            };
+                            map.insert(stem.clone(), project_path.clone());
+                        }
+                    } else if norm.contains("\\.codex\\sessions\\") {
+                        // 读取 Codex 会话第一行的 session_meta.payload.cwd
+                        if let Ok(f) = fs::File::open(p) {
+                            let mut reader = BufReader::new(f);
+                            let mut first_line = String::new();
+                            if reader.read_line(&mut first_line).is_ok() && !first_line.is_empty() {
+                                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&first_line) {
+                                    let meta = v.get("payload");
+                                    let sid = meta.and_then(|m| m.get("session_id").or_else(|| m.get("id"))).and_then(|s| s.as_str());
+                                    let cwd = meta.and_then(|m| m.get("cwd")).and_then(|s| s.as_str());
+                                    if let Some(cwd) = cwd {
+                                        if let Some(sid) = sid {
+                                            map.insert(sid.to_string(), cwd.to_string());
+                                        }
+                                        map.insert(stem.clone(), cwd.to_string());
+                                        if stem.starts_with("rollout-") {
+                                            if let Some(uuid_part) = stem.split('-').last() {
+                                                map.insert(uuid_part.to_string(), cwd.to_string());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if norm.contains("\\.gemini\\tmp\\") {
+                        if let Some(rest) = norm.split("\\.gemini\\tmp\\").nth(1) {
+                            let parts: Vec<&str> = rest.split('\\').collect();
+                            let hash = parts[0];
+                            let proj_path = gemini_map.get(hash).cloned().unwrap_or_else(|| hash.to_string());
+                            map.insert(stem.clone(), proj_path.clone());
+                            if stem.starts_with("session-") {
+                                map.insert(stem[8..].to_string(), proj_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(mut guard) = cache_mutex.lock() {
+        *guard = (now, map.clone());
+    }
+
+    map
+}
+
+/// 从 SQLite (proxy_request_logs) 获取统一项目 Token 排行（支持 Claude+Codex+Gemini，包含缓存 Token）
+pub fn get_project_token_stats_from_db(
+    db: &crate::database::Database,
+    app_filter: Option<&str>,
+) -> Result<Vec<ProjectTokenStat>, String> {
+    let session_map = get_session_project_map(db);
+
+    let where_clause = match app_filter {
+        Some("claude") => "WHERE (data_source = 'session_log' OR (data_source IS NOT NULL AND app_type = 'claude'))",
+        Some("codex") => "WHERE (data_source = 'codex_session' OR (data_source IS NOT NULL AND app_type = 'codex'))",
+        Some("gemini") => "WHERE (data_source = 'gemini_session' OR (data_source IS NOT NULL AND app_type = 'gemini'))",
+        Some(other) if other != "all" && !other.is_empty() => "WHERE (data_source IS NOT NULL AND app_type = ?1)",
+        _ => "WHERE data_source IN ('session_log', 'codex_session', 'gemini_session', 'opencode_session')",
+    };
+
+    let sql = format!(
+        "SELECT session_id,
+                sum(input_tokens),
+                sum(output_tokens),
+                sum(cache_read_tokens)
+         FROM proxy_request_logs
+         {}
+         GROUP BY session_id",
+        where_clause
+    );
+
+    let conn = db.conn_for_read()?;
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+    struct ProjectAccum {
+        name: String,
+        path: String,
+        sessions: std::collections::HashSet<String>,
+        input_tokens: u64,
+        output_tokens: u64,
+        total_tokens: u64,
+    }
+
+    let mut project_map: HashMap<String, ProjectAccum> = HashMap::new();
+
+    let map_row = |row: &rusqlite::Row| -> rusqlite::Result<(Option<String>, i64, i64, i64)> {
+        let sid: Option<String> = row.get(0)?;
+        let in_t: i64 = row.get(1)?;
+        let out_t: i64 = row.get(2)?;
+        let cache_t: i64 = row.get(3)?;
+        Ok((sid, in_t, out_t, cache_t))
+    };
+
+    let rows: Vec<(Option<String>, i64, i64, i64)> = if let Some(app) = app_filter.filter(|a| *a != "all" && !a.is_empty() && *a != "claude" && *a != "codex" && *a != "gemini") {
+        stmt.query_map([app], map_row)
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect()
+    } else {
+        stmt.query_map([], map_row)
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+
+    for (sid_opt, in_t, out_t, cache_t) in rows {
+        let sid = sid_opt.unwrap_or_default();
+        let project_path = session_map.get(&sid).cloned().unwrap_or_else(|| "Other".to_string());
+        
+        let display_name = project_path
+            .trim_end_matches(['/', '\\'])
+            .split(['/', '\\'])
+            .next_back()
+            .unwrap_or(&project_path)
+            .to_string();
+
+        let entry = project_map.entry(project_path.clone()).or_insert_with(|| ProjectAccum {
+            name: display_name,
+            path: project_path,
+            sessions: std::collections::HashSet::new(),
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+        });
+
+        if !sid.is_empty() {
+            entry.sessions.insert(sid);
+        }
+        let in_val = in_t.max(0) as u64;
+        let out_val = out_t.max(0) as u64;
+        let cache_val = cache_t.max(0) as u64;
+        entry.input_tokens = entry.input_tokens.saturating_add(in_val);
+        entry.output_tokens = entry.output_tokens.saturating_add(out_val);
+        // 总 token 包含 input + output + cache_read
+        let req_total = in_val.saturating_add(out_val).saturating_add(cache_val);
+        entry.total_tokens = entry.total_tokens.saturating_add(req_total);
+    }
+
+    let mut stats: Vec<ProjectTokenStat> = project_map
+        .into_values()
+        .map(|acc| ProjectTokenStat {
+            name: acc.name,
+            path: acc.path,
+            session_count: acc.sessions.len(),
+            input_tokens: acc.input_tokens,
+            output_tokens: acc.output_tokens,
+            total_tokens: acc.total_tokens,
+        })
+        .collect();
+
+    // 应用 workspace 元数据（自定义名称、置顶、归档）
+    let metadata = crate::session_manager::workspace_metadata::load_project_metadata_map();
+    if !metadata.is_empty() {
+        stats.retain(|project| {
+            let key = crate::session_manager::workspace_metadata::normalize_project_key(&project.path);
+            !metadata.get(&key).map(|meta| meta.removed).unwrap_or(false)
+        });
+        for project in &mut stats {
+            let key = crate::session_manager::workspace_metadata::normalize_project_key(&project.path);
+            if let Some(meta) = metadata.get(&key) {
+                if let Some(custom) = &meta.custom_name {
+                    project.name = custom.clone();
+                }
+            }
+        }
+    }
+
+    stats.sort_by(|a, b| b.total_tokens.cmp(&a.total_tokens));
+    Ok(stats)
+}
+
+/// 获取跨工具汇总的仪表盘 KPI 统计
+pub fn get_unified_dashboard_stats(db: &crate::database::Database) -> Result<DashboardStats, String> {
+    let home = dirs::home_dir().ok_or_else(|| "无法定位主目录".to_string())?;
+
+    // 读取 .claude.json 获取启动次数
+    let num_startups = {
+        let claude_json = home.join(".claude.json");
+        if claude_json.exists() {
+            if let Ok(content) = fs::read_to_string(&claude_json) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    json.get("numStartups").and_then(|v| v.as_u64()).unwrap_or(0)
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    };
+
+    // 统计总历史记录数 (history.jsonl)
+    let total_history = {
+        let history_file = home.join(".claude").join("history.jsonl");
+        if history_file.exists() {
+            fs::read_to_string(&history_file).map(|c| c.lines().count()).unwrap_or(0)
+        } else {
+            0
+        }
+    };
+
+    // 从数据库统计多端项目数与会话数
+    let (total_sessions, total_projects) = if let Ok(conn) = db.conn_for_read() {
+        let session_count: i64 = conn
+            .query_row(
+                "SELECT count(DISTINCT session_id) FROM proxy_request_logs WHERE data_source IN ('session_log', 'codex_session', 'gemini_session', 'opencode_session')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        let session_map = get_session_project_map(db);
+        let mut projects: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for proj in session_map.values() {
+            projects.insert(proj.clone());
+        }
+        (session_count.max(0) as usize, projects.len().max(1))
+    } else {
+        (0, 0)
+    };
+
+    Ok(DashboardStats {
+        num_startups,
+        total_projects,
+        total_sessions,
+        total_history,
+    })
+}
+
 /// 单个会话文件的 token 合计缓存项
+#[allow(dead_code)]
 struct TokenSumEntry {
     size: u64,
     mtime_ms: i64,
@@ -365,11 +652,10 @@ struct TokenSumEntry {
 }
 
 /// 按文件 (size, mtime) 记忆化的 token 合计
-///
-/// 首页每次加载都要把所有会话文件过一遍；会话文件只增不改，
-/// size + mtime 没变就直接复用上次结果，刷新时只重解析有变化的文件。
+#[allow(dead_code)]
 static TOKEN_SUM_CACHE: OnceLock<Mutex<HashMap<PathBuf, TokenSumEntry>>> = OnceLock::new();
 
+#[allow(dead_code)]
 fn cached_session_tokens(path: &Path) -> Option<(u64, u64)> {
     let meta = fs::metadata(path).ok()?;
     let size = meta.len();
@@ -404,6 +690,7 @@ fn cached_session_tokens(path: &Path) -> Option<(u64, u64)> {
     Some((input, output))
 }
 
+#[allow(dead_code)]
 fn sum_session_tokens(path: &std::path::Path) -> Result<(u64, u64), io::Error> {
     let file = fs::File::open(path)?;
     let reader = BufReader::new(file);
@@ -457,6 +744,7 @@ fn sum_session_tokens(path: &std::path::Path) -> Result<(u64, u64), io::Error> {
     Ok((input_tokens, output_tokens))
 }
 
+#[allow(dead_code)]
 fn extract_usage_u64(usage: &serde_json::Value, key: &str) -> Option<u64> {
     let value = usage.get(key)?;
     if let Some(v) = value.as_u64() {

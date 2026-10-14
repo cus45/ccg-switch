@@ -11,7 +11,7 @@ import {
     TrendingUp
 } from 'lucide-react';
 import {type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useState} from 'react';
-import {useDashboardStore} from '../../../stores/useDashboardStore';
+import {type ModelUsage, useDashboardStore} from '../../../stores/useDashboardStore';
 import HourlyClockChart from './HourlyClockChart';
 import {formatCompactTokens, formatDateFull, formatDateLabel, truncateText} from './format';
 
@@ -27,19 +27,38 @@ interface DonutSegment extends PieShareItem {
 }
 
 /**
- * 本地会话统计（扫描 ~/.claude 会话文件得出）
- *
- * 原先在主页的可折叠区里，现迁到 /usage 的「本地会话」分区；图表逻辑保持原样。
+ * 本地会话统计（统一多端：Claude / Codex / Gemini 数据大盘）
  */
 interface SessionStatsSectionProps {
     /** overview：主页用，只要趋势 / 模型占比 / 项目排行 / 时段图；full：/usage 本地会话分区完整版 */
     variant?: 'full' | 'overview';
 }
 
+function getModelTotalTokens(u: ModelUsage) {
+    return (
+        (u.inputTokens || 0) +
+        (u.outputTokens || 0) +
+        (u.cacheReadInputTokens || 0) +
+        (u.cacheCreationInputTokens || 0)
+    );
+}
+
 export default function SessionStatsSection({ variant = 'full' }: SessionStatsSectionProps) {
     const overview = variant === 'overview';
     const { t } = useTranslation();
-    const { stats, activity, tokenStats, projectTokenStats, hasLoaded, loading, loadData, refreshStatsCache, refreshingStats } = useDashboardStore();
+    const {
+        stats,
+        activity,
+        tokenStats,
+        projectTokenStats,
+        selectedAppType,
+        setSelectedAppType,
+        hasLoaded,
+        loading,
+        loadData,
+        refreshStatsCache,
+        refreshingStats,
+    } = useDashboardStore();
     const [hoveredPieName, setHoveredPieName] = useState<string | null>(null);
 
     useEffect(() => {
@@ -52,13 +71,14 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
     const maxCount = useMemo(() => Math.max(...recentActivity.map(a => a.count), 1), [recentActivity]);
 
     const modelEntries = useMemo(() => tokenStats ? Object.entries(tokenStats.modelUsage) : [], [tokenStats]);
-    const totalTokens = useMemo(() => modelEntries.reduce((sum, [, u]) => sum + u.inputTokens + u.outputTokens, 0), [modelEntries]);
+    const totalTokens = useMemo(() => modelEntries.reduce((sum, [, u]) => sum + getModelTotalTokens(u), 0), [modelEntries]);
 
     const { dailyTotals, totalRecentTokens, avgDailyTokens, peakTokenDay, maxDailyTokens } = useMemo(() => {
         const recentTokenDays = (tokenStats?.dailyModelTokens || []).slice(-30);
         const _dailyTotals = recentTokenDays.map(d => ({
             date: d.date,
             total: Object.values(d.tokensByModel).reduce((s, v) => s + v, 0),
+            tokensByModel: d.tokensByModel,
         }));
         const _maxDailyTokens = Math.max(..._dailyTotals.map(d => d.total), 1);
         const _totalRecentTokens = _dailyTotals.reduce((sum, day) => sum + day.total, 0);
@@ -78,7 +98,7 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
     }, [tokenStats]);
 
     const topModels = useMemo(() => [...modelEntries]
-        .sort(([, a], [, b]) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens))
+        .sort(([, a], [, b]) => getModelTotalTokens(b) - getModelTotalTokens(a))
         .slice(0, 10), [modelEntries]);
 
     const { topProjects, maxProjectTokens } = useMemo(() => {
@@ -92,7 +112,7 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
         const pieColors = ['#14b8a6', '#3b82f6', '#f97316', '#a855f7', '#22c55e', '#94a3b8'];
         const primaryPieData: PieShareItem[] = topModels.slice(0, 5).map(([name, usage], index) => ({
             name,
-            tokens: usage.inputTokens + usage.outputTokens,
+            tokens: getModelTotalTokens(usage),
             color: pieColors[index],
         }));
         const primaryPieTokens = primaryPieData.reduce((sum, item) => sum + item.tokens, 0);
@@ -183,84 +203,121 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
         );
     }
 
+    const appFilters = [
+        { key: 'all', label: t('token_usage.filter_all') },
+        { key: 'claude', label: t('token_usage.filter_claude') },
+        { key: 'codex', label: t('token_usage.filter_codex') },
+        { key: 'gemini', label: t('token_usage.filter_gemini') },
+    ];
+
     return (
         <div className="space-y-4">
-                            {!overview && (<>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                                <StatCard icon={Activity} label={t('dashboard.stats_startups')} value={stats.num_startups} color="text-blue-500" />
-                                <StatCard icon={Coins} label={t('token_usage.total_tokens')} value={totalTokens} color="text-emerald-500" />
-                                <StatCard icon={Hash} label={t('dashboard.stats_sessions')} value={stats.total_sessions} color="text-purple-500" />
-                                <StatCard icon={MessageSquare} label={t('token_usage.total_messages')} value={tokenStats?.totalMessages || 0} color="text-pink-500" />
-                                <StatCard icon={FolderOpen} label={t('dashboard.stats_projects')} value={stats.total_projects} color="text-cyan-500" />
-                                <StatCard icon={BarChart3} label={t('dashboard.stats_history')} value={stats.total_history} color="text-amber-500" />
-                            </div>
+            {/* 统一应用筛选器与全局刷新栏 */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="inline-flex items-center p-1 bg-gray-100 dark:bg-base-200/90 rounded-xl border border-gray-200/60 dark:border-base-300 text-xs">
+                    {appFilters.map((item) => {
+                        const active = selectedAppType === item.key;
+                        return (
+                            <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => void setSelectedAppType(item.key)}
+                                className={`px-3 py-1 rounded-lg font-medium transition-all duration-150 ${
+                                    active
+                                        ? 'bg-white dark:bg-base-100 text-gray-900 dark:text-base-content shadow-sm'
+                                        : 'text-gray-500 hover:text-gray-900 dark:hover:text-base-content'
+                                }`}
+                            >
+                                {item.label}
+                            </button>
+                        );
+                    })}
+                </div>
 
-                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                                {recentActivity.length > 0 && (
-                                    <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 pb-3 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <BarChart3 className="w-5 h-5 text-gray-500" />
-                                            <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                                                {t('dashboard.activity_title')}
-                                            </h2>
+                <div className="flex items-center gap-2.5">
+                    <span className="hidden sm:inline-block text-[11px] text-gray-400 dark:text-gray-500">
+                        {t('token_usage.cache_included_hint')}
+                    </span>
+                    <button
+                        onClick={() => refreshStatsCache()}
+                        disabled={refreshingStats}
+                        className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-white dark:bg-base-100 border border-gray-200 dark:border-base-300 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-base-200 transition-colors shadow-sm disabled:opacity-50"
+                        title={t('token_usage.refresh_stats_title')}
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${refreshingStats ? 'animate-spin' : ''}`} />
+                        {refreshingStats ? t('token_usage.refreshing_stats') : t('token_usage.refresh_stats')}
+                    </button>
+                </div>
+            </div>
+
+            {!overview && (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <StatCard icon={Activity} label={t('dashboard.stats_startups')} value={stats.num_startups} color="text-blue-500" />
+                        <StatCard icon={Coins} label={t('token_usage.total_tokens')} value={totalTokens} color="text-emerald-500" />
+                        <StatCard icon={Hash} label={t('dashboard.stats_sessions')} value={tokenStats?.totalSessions ?? stats.total_sessions} color="text-purple-500" />
+                        <StatCard icon={MessageSquare} label={t('token_usage.total_messages')} value={tokenStats?.totalMessages || 0} color="text-pink-500" />
+                        <StatCard icon={FolderOpen} label={t('dashboard.stats_projects')} value={projectTokenStats.length || stats.total_projects} color="text-cyan-500" />
+                        <StatCard icon={BarChart3} label={t('dashboard.stats_history')} value={stats.total_history} color="text-amber-500" />
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        {recentActivity.length > 0 && (
+                            <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 pb-3 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <BarChart3 className="w-5 h-5 text-gray-500" />
+                                    <h2 className="font-semibold text-gray-900 dark:text-base-content">
+                                        {t('dashboard.activity_title')}
+                                    </h2>
+                                </div>
+                                <div className="flex flex-1 min-h-[14rem]">
+                                    <div className="flex flex-col justify-between pr-2 text-xs text-gray-400 shrink-0">
+                                        <span>{maxCount}</span>
+                                        <span>{Math.round(maxCount / 2)}</span>
+                                        <span>0</span>
+                                    </div>
+                                    <div className="flex-1 flex flex-col">
+                                        <div className="flex items-end gap-1 flex-1 min-h-[14rem]">
+                                            {recentActivity.map((entry, i) => {
+                                                const height = Math.max((entry.count / maxCount) * 100, 4);
+                                                return (
+                                                    <div key={i} className="flex-1 h-full flex flex-col items-center justify-end">
+                                                        <div
+                                                            className="w-full rounded-t bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-600 dark:to-blue-400 transition-all duration-200 min-w-[4px]"
+                                                            style={{ height: `${height}%` }}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                        <div className="flex flex-1 min-h-[14rem]">
-                                            <div className="flex flex-col justify-between pr-2 text-xs text-gray-400 shrink-0">
-                                                <span>{maxCount}</span>
-                                                <span>{Math.round(maxCount / 2)}</span>
-                                                <span>0</span>
-                                            </div>
-                                            <div className="flex-1 flex flex-col">
-                                                <div className="flex items-end gap-1 flex-1 min-h-[14rem]">
-                                                    {recentActivity.map((entry, i) => {
-                                                        const height = Math.max((entry.count / maxCount) * 100, 4);
-                                                        return (
-                                                            <div key={i} className="flex-1 h-full flex flex-col items-center justify-end">
-                                                                <div
-                                                                    className="w-full rounded-t bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-600 dark:to-blue-400 transition-all duration-200 min-w-[4px]"
-                                                                    style={{ height: `${height}%` }}
-                                                                />
-                                                            </div>
-                                                        );
-                                                    })}
+                                        <div className="flex gap-1 mt-1">
+                                            {recentActivity.map((entry, i) => (
+                                                <div key={i} className="flex-1 text-center">
+                                                    <span className="text-[10px] text-gray-400">{formatDateLabel(entry.date)}</span>
                                                 </div>
-                                                <div className="flex gap-1 mt-1">
-                                                    {recentActivity.map((entry, i) => (
-                                                        <div key={i} className="flex-1 text-center">
-                                                            <span className="text-[10px] text-gray-400">{formatDateLabel(entry.date)}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
+                                            ))}
                                         </div>
                                     </div>
-                                )}
-
-                                <HourlyClockChart hourData={hourData} maxHourCount={maxHourCount} />
+                                </div>
                             </div>
+                        )}
 
-                            </>)}
+                        <HourlyClockChart hourData={hourData} maxHourCount={maxHourCount} />
+                    </div>
+                </>
+            )}
 
-                            {/* Token 每日趋势 + 模型占比 */}
-                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                                {dailyTotals.length > 0 && (
-                        <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col overflow-hidden">
-                            <div className="flex items-center gap-2 mb-4">
-                                <TrendingUp className="w-5 h-5 text-emerald-500" />
-                                <h2 className="font-semibold text-gray-900 dark:text-base-content">
-                                    {t('token_usage.daily_trend_title')}
-                                </h2>
-                                <span className="text-xs text-gray-400 tabular-nums">{dailyTotals.length}d</span>
-                                <button
-                                    onClick={() => refreshStatsCache()}
-                                    disabled={refreshingStats}
-                                    className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-gray-200 dark:border-base-300 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-base-300 transition-colors disabled:opacity-50"
-                                    title={t('token_usage.refresh_stats_title')}
-                                >
-                                    <RefreshCw className={`w-3 h-3 ${refreshingStats ? 'animate-spin' : ''}`} />
-                                    {refreshingStats ? t('token_usage.refreshing_stats') : t('token_usage.refresh_stats')}
-                                </button>
-                            </div>
+            {/* Token 每日趋势 + 模型占比 */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                {dailyTotals.length > 0 && (
+                    <div className="xl:col-span-2 bg-white dark:bg-base-100 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-base-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex flex-col overflow-hidden">
+                        <div className="flex items-center gap-2 mb-4">
+                            <TrendingUp className="w-5 h-5 text-emerald-500" />
+                            <h2 className="font-semibold text-gray-900 dark:text-base-content">
+                                {t('token_usage.daily_trend_title')}
+                            </h2>
+                            <span className="text-xs text-gray-400 tabular-nums">({dailyTotals.length}d)</span>
+                        </div>
 
                             {/* 摘要指标 */}
                             <div className="grid grid-cols-3 gap-2 mb-4">
@@ -336,15 +393,25 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
                                                 />
                                                 {/* Tooltip：跟随曲线点，保持在可视区域内 */}
                                                 <div
-                                                    className="absolute pointer-events-none z-10 bg-gray-800 dark:bg-slate-700 text-white text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
+                                                    className="absolute pointer-events-none z-10 bg-gray-850 dark:bg-slate-800 text-white text-[11px] px-2.5 py-2 rounded-lg shadow-xl border border-gray-750 dark:border-slate-700 whitespace-nowrap min-w-[140px]"
                                                     style={{
                                                         left: `${trendPoints[hoveredTrendIndex].pct}%`,
                                                         top: `${(trendPoints[hoveredTrendIndex].y / TREND_VB_H) * 100}%`,
                                                         transform: `translateX(${trendPoints[hoveredTrendIndex].pct > 80 ? '-100%' : trendPoints[hoveredTrendIndex].pct < 15 ? '0%' : '-50%'}) translateY(${(trendPoints[hoveredTrendIndex].y / TREND_VB_H) < 0.3 ? '8px' : '-100%'})`,
                                                     }}
                                                 >
-                                                    <div className="text-gray-300 text-[10px]">{formatDateFull(dailyTotals[hoveredTrendIndex].date)}</div>
-                                                    <div className="font-semibold">{dailyTotals[hoveredTrendIndex].total.toLocaleString()} tokens</div>
+                                                    <div className="text-gray-300 text-[10px] font-medium">{formatDateFull(dailyTotals[hoveredTrendIndex].date)}</div>
+                                                    <div className="font-semibold text-emerald-400 text-xs mb-1">{dailyTotals[hoveredTrendIndex].total.toLocaleString()} tokens</div>
+                                                    {Object.entries(dailyTotals[hoveredTrendIndex].tokensByModel || {})
+                                                        .filter(([, tokens]) => tokens > 0)
+                                                        .sort(([, a], [, b]) => b - a)
+                                                        .slice(0, 3)
+                                                        .map(([m, tokens]) => (
+                                                            <div key={m} className="text-[10px] text-gray-300 flex items-center justify-between gap-3">
+                                                                <span className="truncate max-w-[120px] opacity-80" title={m}>{m}</span>
+                                                                <span className="tabular-nums text-emerald-300/90 font-medium shrink-0">{formatCompactTokens(tokens)}</span>
+                                                            </div>
+                                                        ))}
                                                 </div>
                                             </>
                                         )}
@@ -475,25 +542,39 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-base-200">
-                                        <th className="text-left py-2 pr-4 font-medium">Model</th>
+                                        <th className="text-left py-2 pr-4 font-medium">{t('token_usage.model')}</th>
                                         <th className="text-right py-2 px-2 font-medium">{t('token_usage.input_tokens')}</th>
+                                        <th className="text-right py-2 px-2 font-medium">{t('token_usage.cache_tokens')}</th>
                                         <th className="text-right py-2 px-2 font-medium">{t('token_usage.output_tokens')}</th>
                                         <th className="text-right py-2 pl-2 font-medium">{t('token_usage.total_tokens')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {topModels.map(([model, usage]) => (
-                                        <tr key={model} className="border-b border-gray-50 dark:border-base-200 last:border-0 hover:bg-gray-50 dark:hover:bg-base-200 transition-colors">
-                                            <td className="py-2 pr-4 font-medium text-gray-900 dark:text-base-content truncate max-w-[220px]" title={model}>
-                                                {model}
-                                            </td>
-                                            <td className="py-2 px-2 text-right text-gray-600 dark:text-gray-300">{usage.inputTokens.toLocaleString()}</td>
-                                            <td className="py-2 px-2 text-right text-gray-600 dark:text-gray-300">{usage.outputTokens.toLocaleString()}</td>
-                                            <td className="py-2 pl-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                                                {(usage.inputTokens + usage.outputTokens).toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {topModels.map(([model, usage]) => {
+                                        const modelTotal = getModelTotalTokens(usage);
+                                        const cacheTotal = (usage.cacheReadInputTokens || 0) + (usage.cacheCreationInputTokens || 0);
+                                        return (
+                                            <tr key={model} className="border-b border-gray-50 dark:border-base-200 last:border-0 hover:bg-gray-50 dark:hover:bg-base-200 transition-colors">
+                                                <td className="py-2 pr-4 font-medium text-gray-900 dark:text-base-content truncate max-w-[180px]" title={model}>
+                                                    {model}
+                                                </td>
+                                                <td className="py-2 px-2 text-right text-gray-600 dark:text-gray-300">{usage.inputTokens.toLocaleString()}</td>
+                                                <td className="py-2 px-2 text-right text-gray-500 dark:text-gray-400 text-xs">
+                                                    {cacheTotal > 0 ? (
+                                                        <span title={`${t('token_usage.cache_read')}: ${(usage.cacheReadInputTokens || 0).toLocaleString()} | ${t('token_usage.cache_creation')}: ${(usage.cacheCreationInputTokens || 0).toLocaleString()}`}>
+                                                            {cacheTotal.toLocaleString()}
+                                                        </span>
+                                                    ) : (
+                                                        '-'
+                                                    )}
+                                                </td>
+                                                <td className="py-2 px-2 text-right text-gray-600 dark:text-gray-300">{usage.outputTokens.toLocaleString()}</td>
+                                                <td className="py-2 pl-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                                    {modelTotal.toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -519,7 +600,7 @@ export default function SessionStatsSection({ variant = 'full' }: SessionStatsSe
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="min-w-0">
                                                 <div className="text-sm font-medium text-gray-900 dark:text-base-content truncate" title={project.path}>
-                                                    {project.name}
+                                                    {project.name || t('token_usage.unknown_project')}
                                                 </div>
                                                 <div className="text-[11px] text-gray-400">
                                                     {project.session_count} {t('dashboard.projects_sessions')}

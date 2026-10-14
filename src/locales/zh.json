@@ -1593,7 +1593,17 @@
     "longest_session": "最长会话",
     "duration_minutes": "{{minutes}} 分钟",
     "messages": "条消息",
-    "no_data": "暂无统计数据"
+    "no_data": "暂无统计数据",
+    "filter_all": "全部应用",
+    "filter_claude": "Claude",
+    "filter_codex": "Codex",
+    "filter_gemini": "Gemini",
+    "hourly_requests": "活跃请求",
+    "local_timezone_hint": "本地时区 (0-23点)",
+    "cache_included_hint": "含输入、输出与提示词缓存 · 本地时区",
+    "cache_tokens": "缓存 (命中/创建)",
+    "model": "模型",
+    "unknown_project": "其他 / 未归属工程"
   },
   "sessions": {
     "all_sessions": "全部会话",

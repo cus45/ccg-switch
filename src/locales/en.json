@@ -1472,7 +1472,17 @@
     "longest_session": "Longest Session",
     "duration_minutes": "{{minutes}} min",
     "messages": "messages",
-    "no_data": "No stats data available"
+    "no_data": "No stats data available",
+    "filter_all": "All Apps",
+    "filter_claude": "Claude",
+    "filter_codex": "Codex",
+    "filter_gemini": "Gemini",
+    "hourly_requests": "Active Requests",
+    "local_timezone_hint": "Local Time (0-23h)",
+    "cache_included_hint": "Includes input, output & prompt cache · Local Time",
+    "cache_tokens": "Cache (Hit/Write)",
+    "model": "Model",
+    "unknown_project": "Other / Unknown Project"
   },
   "skills": {
     "title": "Skill Management",
