@@ -694,3 +694,38 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 
 - 推进 Phase 3：开发统一自适应工具调用卡片 `ToolCallCard.tsx`（内置 Diff 视图、命令控制台终端、状态记忆缓存）。
 
+
+
+## Session 21: 对齐 mindfs 对话模块深度重构与服务商无缝切换
+
+**Date**: 2026-10-15
+**Task**: 对齐 mindfs 对话模块深度重构与服务商无缝切换
+**Branch**: `main`
+
+### Summary
+
+全面对齐 mindfs 对话模块架构与视觉交互：1. 完成 ChatProviderSelector 服务商 0ms 无缝热切换与模型级联；2. 实现 useSessionStream 流式状态机与双模 SessionTimeline 虚拟化长对话渲染；3. 统一多工具自适应渲染卡片 ToolCallCard（内置 Unified Diff 增删行号高亮与终端输出美化）；4. 完善 Composer 斜杠自动补全（新增 /provider, /model, /fork）与会话任意回合分叉 forkSessionAtMessage；5. 104 个测试套件 966 项测试及前后端构建全部零错误通过并归档任务。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d4f7c3c` | (see git log) |
+| `7808935` | (see git log) |
+| `8c07ffe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
