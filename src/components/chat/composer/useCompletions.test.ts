@@ -7,6 +7,9 @@ describe('getSlashCommandCompletions', () => {
 
         expect(labels).toEqual(expect.arrayContaining([
             '/clear',
+            '/provider',
+            '/model',
+            '/fork',
             '/compact',
             '/context',
             '/init',
@@ -26,6 +29,9 @@ describe('getSlashCommandCompletions', () => {
     it('filters slash commands by command label and description', () => {
         expect(getSlashCommandCompletions('pla').map((item) => item.label)).toContain('/plan');
         expect(getSlashCommandCompletions('tokens').map((item) => item.label)).toContain('/compact');
+        expect(getSlashCommandCompletions('provider').map((item) => item.label)).toContain('/provider');
+        expect(getSlashCommandCompletions('model').map((item) => item.label)).toContain('/model');
+        expect(getSlashCommandCompletions('fork').map((item) => item.label)).toContain('/fork');
     });
 
     it('normalizes backend-provided project commands', () => {

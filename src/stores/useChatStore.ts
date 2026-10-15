@@ -2969,9 +2969,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const state = get();
         const key = tabKey ?? state.activeTabKey;
         if (!key) return false;
+        const existingTab = state.openTabs.find((item) => item.key === key);
         const tab = key === state.activeTabKey
             ? currentTopLevelTab(state)
-            : state.openTabs.find((item) => item.key === key);
+            : existingTab;
         if (!tab || hasActiveTabTurn(tab)) return false;
 
         const index = tab.messages.findIndex((m) => m.id === messageId);
@@ -2979,7 +2980,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         const target = tab.messages[index];
         const targetUuid = target.raw?.uuid?.trim();
-        const sessionId = tab.sessionId ?? (tab.activeSession?.sessionId ?? null);
+        const activeSession = tab.activeSession ?? existingTab?.activeSession ?? null;
+        const sessionId = tab.sessionId ?? existingTab?.sessionId ?? activeSession?.sessionId ?? null;
 
         let forkedSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         let forkedSourcePath: string | null = null;
@@ -2991,7 +2993,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     {
                         sessionId,
                         messageUuid: targetUuid,
-                        sourcePath: tab.activeSession?.sourcePath ?? null,
+                        sourcePath: activeSession?.sourcePath ?? null,
                     },
                 );
                 forkedSessionId = fork.forkedSessionId;
@@ -3011,12 +3013,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
             sessionId: forkedSessionId,
             provider: tab.provider,
             model: tab.model,
-            activeSession: tab.activeSession
+            activeSession: activeSession
                 ? {
-                    ...tab.activeSession,
+                    ...activeSession,
                     sessionId: forkedSessionId,
-                    sourcePath: forkedSourcePath ?? tab.activeSession.sourcePath,
-                    title: tab.activeSession.title ? `${tab.activeSession.title} (Fork)` : 'Forked Session',
+                    sourcePath: forkedSourcePath ?? activeSession.sourcePath,
+                    title: activeSession.title ? `${activeSession.title} (Fork)` : 'Forked Session',
                 }
                 : null,
             draft: '',

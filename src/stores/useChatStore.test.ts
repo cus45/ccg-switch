@@ -3992,4 +3992,72 @@ describe('useChatStore system message handling (compact boundary)', () => {
         expect(divider.role).toBe('system');
         expect(divider.compact).toEqual({trigger: 'auto', preTokens: 156000});
     });
+
+    it('forkSessionAtMessage creates a new tab with messages up to the target message', async () => {
+        useChatStore.setState({
+            activeTabKey: 'tab-1',
+            provider: 'claude',
+            model: 'claude-sonnet-4-6',
+            messages: [
+                { id: 'msg-1', role: 'user', content: 'hello', createdAt: 1000, raw: { uuid: 'uuid-1' } as never },
+                { id: 'msg-2', role: 'assistant', content: 'hi there', createdAt: 2000, raw: { uuid: 'uuid-2' } as never },
+                { id: 'msg-3', role: 'user', content: 'how are you', createdAt: 3000, raw: { uuid: 'uuid-3' } as never },
+            ],
+            openTabs: [
+                {
+                    key: 'tab-1',
+                    sessionId: 'session-original',
+                    provider: 'claude',
+                    model: 'claude-sonnet-4-6',
+                    permissionMode: 'default',
+                    reasoningEffort: 'medium',
+                    longContextEnabled: false,
+                    currentCwd: 'C:/workspace/main',
+                    activeSession: {
+                        providerId: 'claude',
+                        sessionId: 'session-original',
+                        title: 'Original Chat',
+                        summary: null,
+                        projectDir: 'C:/workspace/main',
+                        createdAt: 1000,
+                        lastActiveAt: 3000,
+                        sourcePath: 'C:/path/session.json',
+                        resumeCommand: null,
+                    },
+                    messages: [
+                        { id: 'msg-1', role: 'user', content: 'hello', createdAt: 1000, raw: { uuid: 'uuid-1' } as never },
+                        { id: 'msg-2', role: 'assistant', content: 'hi there', createdAt: 2000, raw: { uuid: 'uuid-2' } as never },
+                        { id: 'msg-3', role: 'user', content: 'how are you', createdAt: 3000, raw: { uuid: 'uuid-3' } as never },
+                    ],
+                    draft: '',
+                    status: 'idle',
+                    error: null,
+                    contextTokens: 0,
+                    contextMaxTokens: null,
+                    activeRequestId: null,
+                    queuedMessages: [],
+                } as never,
+            ],
+        });
+
+        tauriMocks.invoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'chat_fork_claude_session') {
+                return { forkedSessionId: 'session-forked-123', forkedSourcePath: 'C:/path/forked.json' };
+            }
+            return null;
+        });
+
+        const ok = await useChatStore.getState().forkSessionAtMessage('tab-1', 'msg-2');
+        expect(ok).toBe(true);
+
+        const state = useChatStore.getState();
+        expect(state.openTabs.length).toBe(2);
+        const newTab = state.openTabs.find((t) => t.key === state.activeTabKey);
+        expect(newTab).toBeDefined();
+        expect(newTab?.key).not.toBe('tab-1');
+        expect(newTab?.messages.length).toBe(2);
+        expect(newTab?.messages.map((m) => m.id)).toEqual(['msg-1', 'msg-2']);
+        expect(newTab?.sessionId).toBe('session-forked-123');
+        expect(newTab?.activeSession?.title).toBe('Original Chat (Fork)');
+    });
 });

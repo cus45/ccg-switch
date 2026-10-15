@@ -15,6 +15,9 @@ interface SlashCommand {
 /** 内置 Slash 命令兜底，对齐 cc-gui 的 SlashCommandRegistry 常用项。 */
 const SLASH_COMMANDS: SlashCommand[] = [
     { id: 'clear', label: '/clear', description: '清空当前会话并新建会话', source: 'local' },
+    { id: 'provider', label: '/provider', description: '切换当前活跃的 API 服务商配置 (Provider Switcher)', source: 'local' },
+    { id: 'model', label: '/model', description: '切换当前会话调用的 AI 模型 (Model Switcher)', source: 'local' },
+    { id: 'fork', label: '/fork', description: '分叉当前会话到新标签页 (Fork Session)', source: 'local' },
     { id: 'compact', label: '/compact', description: 'Summarize conversation to free context/tokens', source: 'builtin' },
     { id: 'context', label: '/context', description: 'Visualize current context usage as a colored grid', source: 'builtin' },
     { id: 'init', label: '/init', description: 'Initialize a new CLAUDE.md or AGENTS.md file', source: 'builtin' },
@@ -255,7 +258,7 @@ export function useCompletions({ cwd, provider }: UseCompletionsOptions = {}): C
                             'chat_list_slash_commands',
                             { cwd, provider },
                         );
-                        const result = getSlashCommandCompletions(active.query, commands);
+                        const result = getSlashCommandCompletions(active.query, [...commands, ...SLASH_COMMANDS]);
                         return result.length > 0 ? result : getSlashCommandCompletions(active.query);
                     } catch {
                         return getSlashCommandCompletions(active.query);

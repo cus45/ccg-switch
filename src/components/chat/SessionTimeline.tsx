@@ -40,6 +40,8 @@ export interface SessionTimelineProps {
     virtualizedThreshold?: number;
     /** 会话分叉回调 */
     onForkMessage?: (message: ChatMessage) => void;
+    /** 打开文件回调（在外部或右侧 Dock 中打开） */
+    onOpenFile?: (path: string) => void;
 }
 
 function getToolAnchorProps(toolIds: string[]) {
@@ -63,8 +65,8 @@ function getToolAnchorProps(toolIds: string[]) {
     return anchorProps;
 }
 
-function renderTimelineToolBlock(toolCall: ToolCall) {
-    return <ToolCallCard toolCall={toolCall} viewCache={defaultToolCallViewCache} />;
+function renderTimelineToolBlock(toolCall: ToolCall, onOpenFile?: (path: string) => void) {
+    return <ToolCallCard toolCall={toolCall} viewCache={defaultToolCallViewCache} onOpenFile={onOpenFile} />;
 }
 
 export default function SessionTimeline({
@@ -80,6 +82,7 @@ export default function SessionTimeline({
     onLoadEarlierServerHistory,
     virtualizedThreshold = 30,
     onForkMessage,
+    onOpenFile,
 }: SessionTimelineProps) {
     const { t } = useTranslation();
     const internalScrollRef = useRef<HTMLDivElement | null>(null);
@@ -291,7 +294,7 @@ export default function SessionTimeline({
                     {...anchorProps}
                     className={cn(anchorProps.className, 'px-2 py-1')}
                 >
-                    {renderTimelineToolBlock(item.toolCall)}
+                    {renderTimelineToolBlock(item.toolCall, onOpenFile)}
                 </div>
             );
         }

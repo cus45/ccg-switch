@@ -37,6 +37,21 @@ const LOCAL_COMMANDS: &[(&str, &str, &str)] = &[
         "Clear the current conversation and start a new session",
         "local",
     ),
+    (
+        "/provider",
+        "Switch active provider configuration seamlessly",
+        "local",
+    ),
+    (
+        "/model",
+        "Switch active model for current conversation",
+        "local",
+    ),
+    (
+        "/fork",
+        "Fork current conversation into a new tab",
+        "local",
+    ),
     ("/help", "Show available slash commands", "local"),
 ];
 
