@@ -525,6 +525,11 @@ interface ChatState {
         messageId: string,
         opts?: {restoreFiles?: boolean},
     ) => Promise<boolean>;
+    /** 从指定消息分叉出新会话，保留该消息及之前的所有历史并切换至新 tab */
+    forkSessionAtMessage: (
+        tabKey: string | null,
+        messageId: string,
+    ) => Promise<boolean>;
     markProviderConfigDirty: () => Promise<void>;
     startNewSession: (cwd?: string | null) => Promise<void>;
     abort: () => Promise<void>;
@@ -2958,6 +2963,74 @@ export const useChatStore = create<ChatState>((set, get) => ({
             })));
             return false;
         }
+    },
+
+    forkSessionAtMessage: async (tabKey, messageId) => {
+        const state = get();
+        const key = tabKey ?? state.activeTabKey;
+        if (!key) return false;
+        const tab = key === state.activeTabKey
+            ? currentTopLevelTab(state)
+            : state.openTabs.find((item) => item.key === key);
+        if (!tab || hasActiveTabTurn(tab)) return false;
+
+        const index = tab.messages.findIndex((m) => m.id === messageId);
+        if (index < 0) return false;
+
+        const target = tab.messages[index];
+        const targetUuid = target.raw?.uuid?.trim();
+        const sessionId = tab.sessionId ?? (tab.activeSession?.sessionId ?? null);
+
+        let forkedSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        let forkedSourcePath: string | null = null;
+
+        if (tab.provider === 'claude' && sessionId && targetUuid) {
+            try {
+                const fork = await invoke<{forkedSessionId: string; forkedSourcePath: string}>(
+                    'chat_fork_claude_session',
+                    {
+                        sessionId,
+                        messageUuid: targetUuid,
+                        sourcePath: tab.activeSession?.sourcePath ?? null,
+                    },
+                );
+                forkedSessionId = fork.forkedSessionId;
+                forkedSourcePath = fork.forkedSourcePath;
+            } catch {
+                // 回退到内存会话克隆
+            }
+        }
+
+        const forkedMessages = tab.messages.slice(0, index + 1);
+        const forkedTabKey = createDraftTabKey();
+        const baseTab = createEmptyTabFromState(state, tab.currentCwd, nowMs(), forkedTabKey);
+
+        const newTab: ChatSessionTab = {
+            ...baseTab,
+            messages: forkedMessages,
+            sessionId: forkedSessionId,
+            provider: tab.provider,
+            model: tab.model,
+            activeSession: tab.activeSession
+                ? {
+                    ...tab.activeSession,
+                    sessionId: forkedSessionId,
+                    sourcePath: forkedSourcePath ?? tab.activeSession.sourcePath,
+                    title: tab.activeSession.title ? `${tab.activeSession.title} (Fork)` : 'Forked Session',
+                }
+                : null,
+            draft: '',
+            status: 'idle',
+            error: null,
+        };
+
+        set((current) => ({
+            openTabs: upsertTab(saveProjectionBeforeSwitch(current), newTab),
+            activeTabKey: newTab.key,
+            ...projectTabToState(newTab),
+        }));
+
+        return true;
     },
 
     markProviderConfigDirty: async () => {

@@ -23,15 +23,7 @@ import ThinkingBlock from './ThinkingBlock';
 import TurnCompleteDivider from './TurnCompleteDivider';
 import WorkingIndicator from './WorkingIndicator';
 import RewindConfirmDialog from './RewindConfirmDialog';
-import {
-    BashToolBlock,
-    EditToolBlock,
-    GenericToolBlock,
-    PlanToolBlock,
-    ReadToolBlock,
-    TaskExecutionBlock,
-    TodoToolBlock,
-} from '../toolBlocks';
+import ToolCallCard, { defaultToolCallViewCache } from './stream/ToolCallCard';
 
 export interface SessionTimelineProps {
     messages: ChatMessage[];
@@ -72,23 +64,7 @@ function getToolAnchorProps(toolIds: string[]) {
 }
 
 function renderTimelineToolBlock(toolCall: ToolCall) {
-    const { name, input, result, callId, kind } = toolCall;
-    switch (kind) {
-        case 'bash':
-            return <BashToolBlock name={name} input={input} result={result} toolId={callId} compact />;
-        case 'edit':
-            return <EditToolBlock name={name} input={input} result={result} toolId={callId} compact />;
-        case 'read':
-            return <ReadToolBlock name={name} input={input} result={result} toolId={callId} compact />;
-        case 'todo':
-            return <TodoToolBlock name={name} input={input} result={result} toolId={callId} compact />;
-        case 'plan':
-            return <PlanToolBlock name={name} input={input} result={result} toolId={callId} compact />;
-        case 'task':
-            return <TaskExecutionBlock name={name} input={input} result={result} toolId={callId} compact />;
-        default:
-            return <GenericToolBlock name={name} input={input} result={result} toolId={callId} compact />;
-    }
+    return <ToolCallCard toolCall={toolCall} viewCache={defaultToolCallViewCache} />;
 }
 
 export default function SessionTimeline({
@@ -236,6 +212,19 @@ export default function SessionTimeline({
         setDraft(appendQuoteToDraft(draft, quoted));
     };
 
+    const handleForkMessage = useCallback(async (message: ChatMessage) => {
+        if (onForkMessage) {
+            onForkMessage(message);
+            return;
+        }
+        const ok = await useChatStore.getState().forkSessionAtMessage(paneTabKey, message.id);
+        if (ok) {
+            showToast(t('chat.fork.success', 'Session forked to new tab'), 'success');
+        } else {
+            showToast(t('chat.fork.failed', 'Failed to fork session: session may still be in progress.'), 'warning');
+        }
+    }, [onForkMessage, paneTabKey, t]);
+
     // 渲染单条 TimelineItem
     const renderTimelineItem = (item: TimelineItem, index: number) => {
         const isMatch = isSearching && (
@@ -276,6 +265,7 @@ export default function SessionTimeline({
                         anchorId={item.message.id}
                         onAnchorRef={onMessageNodeRef}
                         findToolResult={findToolResult}
+                        onForkMessage={handleForkMessage}
                     />
                 </div>
             );
@@ -346,16 +336,14 @@ export default function SessionTimeline({
                             )}
 
                             <div className="chat-message-actions opacity-0 transition-opacity group-hover:opacity-100 flex items-center gap-1">
-                                {onForkMessage && (
-                                    <button
-                                        type="button"
-                                        className="chat-message-action btn btn-ghost btn-xs"
-                                        title={t('chat.message.fork', 'Fork session from here')}
-                                        onClick={() => onForkMessage(item.message)}
-                                    >
-                                        <GitFork size={13} />
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    className="chat-message-action btn btn-ghost btn-xs"
+                                    title={t('chat.message.fork', 'Fork session from here')}
+                                    onClick={() => handleForkMessage(item.message)}
+                                >
+                                    <GitFork size={13} />
+                                </button>
                                 <button
                                     type="button"
                                     className="chat-message-action btn btn-ghost btn-xs"
