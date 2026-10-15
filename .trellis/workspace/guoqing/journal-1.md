@@ -628,3 +628,69 @@ Archived the Chat completion dropdown UI and context-window task after validatin
 ### Next Steps
 
 - None - task complete
+
+## Session 19: 对标 mindfs 深入分析与对话模块重构规划 (服务商直接无缝切换)
+
+**Date**: 2026-10-14
+**Task**: 对话模块深度重构与服务商无缝切换对齐 mindfs
+**Branch**: `main`
+
+### Summary
+
+深入分析 C:\guodevelop\demo\mindfs 项目架构与核心实现，对齐对话模块功能与数据流；梳理本项目现有 SQLite/Rust/Proxy/Zustand 服务商配置机制与调用路径；制定对话模块全面重构方案，实现服务商直接无缝切换，并使用 Trellis 建立了包含 PRD、技术设计与实施/测试规划的完整工程任务规范。
+
+### Main Changes
+
+- 创建 Trellis 任务 `10-14-10-14-mindfs-alignment-chat-refactor`
+- 编写需求规格说明书 `prd.md`（定义范围边界、核心功能对齐矩阵与验收标准）
+- 编写技术设计架构文档 `design.md`（对比 mindfs 架构、梳理现有服务商调用与热切换链路、设计虚拟时间线与统一 ToolCallCard）
+- 编写分步实施与测试计划 `implement.md`（划分为 5 个落地阶段，覆盖单元测试、集成测试、极端异常与性能防御矩阵）
+
+### Testing
+
+- [OK] 校验 Trellis 任务创建状态与工程规范文档完整性
+
+### Status
+
+[OK] **Planning Completed**
+
+### Next Steps
+
+- 按照实施规划启动 Phase 1：Chat 顶栏/工具栏服务商快速切换器集成与热切换验证
+
+## Session 20: 对齐 mindfs 对话模块重构 (Phase 1 & Phase 2 完成)
+
+**Date**: 2026-10-15
+**Task**: 对话模块深度重构与服务商无缝切换对齐 mindfs
+**Branch**: `main`
+
+### Summary
+
+完成了 Phase 1（服务商直切通道）与 Phase 2（虚拟化时间线与流状态机）的全部实现与测试验证。在 Chat 顶栏与输入区挂载了 `ChatProviderSelector` 实现 0ms 服务商热切换；引入 `@tanstack/react-virtual` 实现了长对话高性能虚拟化容器 `SessionTimeline` 与流式状态机 `useSessionStream`，实现工具自动配对、thinking 独立提取、智能滚动吸底。
+
+### Main Changes
+
+1. **Phase 1: 服务商直接无缝切换通道**
+   - 新增 `src/components/chat/ChatProviderSelector.tsx` 及单测 `ChatProviderSelector.test.tsx`。
+   - 在 `ChatPage.tsx` 顶栏与 `ButtonArea.tsx` 输入框底部挂载切换入口，支持跨服务商与模型自动联动。
+2. **Phase 2: 虚拟化时间线与流状态机**
+   - 新增 `src/types/timeline.ts`：定义标准的 `ToolCall` 与 `TimelineItem` 结构（对齐 mindfs 协议规范）。
+   - 新增 `src/hooks/useSessionStream.ts` 及单测 `useSessionStream.test.ts`：实现 `buildTimelineFromMessages`，按段提取 `user_text`、`assistant_text`、`thought`、`tool`、`compact`，实现运行中/成功/失败状态推导与稳定 ID 机制。
+   - 新增 `src/components/chat/SessionTimeline.tsx` 及单测 `SessionTimeline.test.tsx`：采用 `@tanstack/react-virtual` 动态测算高度，支持智能滚动吸底、上滚暂停跟随与关键词检索。
+   - 增强 `src/components/chat/MessageItem.tsx`：增加分叉会话 `onForkMessage`（对齐 mindfs `ForkIcon`）与悬停工具条。
+   - 将 `ChatPane.tsx` 的消息转录流由传统分页裁切升级为虚拟化 `SessionTimeline`。
+
+### Testing
+
+- [OK] 前端全量单元测试：103 个测试文件、959 项测试用例全部通过 (`npm run test`)。
+- [OK] 前端构建：`npm run build` (`tsc && vite build`) 零错误通过。
+- [OK] 后端构建：`cargo check --manifest-path src-tauri/Cargo.toml` 零错误通过。
+
+### Status
+
+[OK] **Phase 1 & Phase 2 Completed**
+
+### Next Steps
+
+- 推进 Phase 3：开发统一自适应工具调用卡片 `ToolCallCard.tsx`（内置 Diff 视图、命令控制台终端、状态记忆缓存）。
+

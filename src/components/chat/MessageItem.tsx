@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AlertTriangle, Check, CircleSlash, Copy, FoldVertical, History, Quote, RefreshCw, User} from 'lucide-react';
+import {AlertTriangle, Check, CircleSlash, Copy, FoldVertical, GitFork, History, Quote, RefreshCw, User} from 'lucide-react';
 import type {ChatMessage, ContentBlock, TextBlock, ThinkingBlock, ToolResultBlock} from '../../types/chat';
 import {STOPPED_OUTPUT_ERROR, useChatStore} from '../../stores/useChatStore';
 import {useChatPaneTabKey} from './paneTabContext';
@@ -19,13 +19,14 @@ import WorkingIndicator from './WorkingIndicator';
 /** 引用到输入框时截断，避免把一整篇回复灌进 composer。 */
 const QUOTE_MAX_LENGTH = 1_200;
 
-interface MessageItemProps {
+export interface MessageItemProps {
     message: ChatMessage;
     isLast: boolean;
     isSearchMatch?: boolean;
     anchorId?: string;
     onAnchorRef?: (messageId: string, node: HTMLElement | null) => void;
     findToolResult: (toolId: string | undefined) => ToolResultBlock | null;
+    onForkMessage?: (message: ChatMessage) => void;
 }
 
 function isTextBlock(block: ContentBlock): block is TextBlock {
@@ -90,6 +91,7 @@ export default function MessageItem({
     anchorId,
     onAnchorRef,
     findToolResult,
+    onForkMessage,
 }: MessageItemProps) {
     const {t} = useTranslation();
     const [copied, setCopied] = useState(false);
@@ -263,6 +265,7 @@ export default function MessageItem({
         'chat.rewind.unavailable',
         'Cannot rewind: only Claude sessions support this, and the turn must be finished.',
     );
+    const forkLabel = translateWithFallback(t, 'chat.message.fork', 'Fork session from here');
     const canRewind = isUser && Boolean(message.raw?.uuid?.trim());
     const handleRewindConfirm = (restoreFiles: boolean) => {
         setRewindBusy(true);
@@ -285,6 +288,17 @@ export default function MessageItem({
      */
     const messageActions = (
         <div className="chat-message-actions">
+            {onForkMessage && (
+                <button
+                    type="button"
+                    className="chat-message-action"
+                    title={forkLabel}
+                    aria-label={forkLabel}
+                    onClick={() => onForkMessage(message)}
+                >
+                    <GitFork size={13} />
+                </button>
+            )}
             {canRewind && (
                 <button
                     type="button"

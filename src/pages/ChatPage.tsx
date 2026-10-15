@@ -14,6 +14,8 @@ import RightDock from '../components/chat/dock/RightDock';
 import DockShell from '../components/chat/dock/DockShell';
 import StatusStrip from '../components/chat/dock/StatusStrip';
 import ChatSessionSidebar from '../components/chat/ChatSessionSidebar';
+import ChatProviderSelector from '../components/chat/ChatProviderSelector';
+import type {AppType} from '../types/app';
 import {ChatPane} from '../components/chat/ChatPane';
 import {useChatPaneController} from '../components/chat/useChatPaneController';
 import type {ChatWorkspaceProjectOption} from '../components/chat/composer/ContextBar';
@@ -409,7 +411,11 @@ export default function ChatPage() {
                         </button>
                     )}
                 </div>
-                <div className="flex flex-1 items-center justify-end gap-1">
+                <div className="flex flex-1 items-center justify-end gap-1.5">
+                    <ChatProviderSelector
+                        appType={provider as AppType}
+                        disabled={pane.isStreaming}
+                    />
                     <button
                         type="button"
                         className={`btn btn-ghost btn-xs h-7 min-h-0 gap-1.5 px-2 ${sdkMissing ? 'text-warning' : 'text-base-content/60'}`}

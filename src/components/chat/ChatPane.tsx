@@ -8,7 +8,7 @@ import {ChatPaneTabContext} from './paneTabContext';
 import AskUserQuestionDialog from './AskUserQuestionDialog';
 import PlanApprovalDialog from './PlanApprovalDialog';
 import ToolPermissionDialog from './ToolPermissionDialog';
-import MessageList from './MessageList';
+import SessionTimeline from './SessionTimeline';
 import ConversationSearch from './ConversationSearch';
 import ScrollControl from './ScrollControl';
 import ChatInputStatusTabs from './ChatInputStatusTabs';
@@ -131,7 +131,7 @@ export function ChatPane({
                         <p className="text-sm">{t('chat.empty')}</p>
                     </div>
                 )}
-                <MessageList
+                <SessionTimeline
                     messages={controller.searchSourceMessages}
                     searchQuery={controller.searchQuery}
                     fullHistorySearchStatus={controller.fullHistorySearchStatus}

@@ -18,6 +18,8 @@ import {
     Zap,
 } from 'lucide-react';
 import {SelectorDropdown, type SelectorOption} from './SelectorDropdown';
+import ChatProviderSelector from '../ChatProviderSelector';
+import type {AppType} from '../../../types/app';
 import {
     AVAILABLE_MODES,
     AVAILABLE_PROVIDERS,
@@ -223,6 +225,12 @@ export function ButtonArea({
                     buttonIcon={<ProviderBrandIcon provider={provider} size={16} colored />}
                     compact
                     title={providerLabel}
+                    disabled={controlsDisabled}
+                />
+
+                <ChatProviderSelector
+                    appType={provider as AppType}
+                    variant="compact"
                     disabled={controlsDisabled}
                 />
 
