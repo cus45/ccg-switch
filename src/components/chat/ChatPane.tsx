@@ -9,12 +9,15 @@ import AskUserQuestionDialog from './AskUserQuestionDialog';
 import PlanApprovalDialog from './PlanApprovalDialog';
 import ToolPermissionDialog from './ToolPermissionDialog';
 import SessionTimeline from './SessionTimeline';
+import SessionRelatedFiles from './SessionRelatedFiles';
+import UserMessageOutline from './UserMessageOutline';
 import ConversationSearch from './ConversationSearch';
 import ScrollControl from './ScrollControl';
 import ChatInputStatusTabs from './ChatInputStatusTabs';
 import ChatSessionTabs from './ChatSessionTabs';
 import StreamStallHint from './StreamStallHint';
 import {ChatComposer} from './composer/ChatComposer';
+import {openFile} from '../../utils/bridge';
 import type {ChatWorkspaceProjectOption} from './composer/ContextBar';
 import type {ChatWorkspaceStatus} from '../../utils/chatWorkspaceStatus';
 import type {ChatMcpAvailabilitySummary} from '../../utils/chatMcpStatus';
@@ -121,9 +124,14 @@ export function ChatPane({
                 onChange={controller.handleSearchChange}
             />
 
+            <SessionRelatedFiles
+                files={controller.statusSummary.allEdits}
+                onOpenFile={(filePath) => void openFile(filePath)}
+            />
+
             <div
                 ref={controller.scrollRef}
-                className="flex-1 scroll-pb-8 overflow-y-auto px-2 py-3 sm:px-3"
+                className="flex-1 scroll-pb-8 overflow-y-auto px-2 py-3 sm:px-3 relative"
                 onScroll={controller.updateBottomState}
             >
                 {!controller.hasMessages && (
@@ -142,14 +150,34 @@ export function ChatPane({
                     hasEarlierServerHistory={controller.hasEarlierServerHistory}
                     isLoadingEarlierServerHistory={controller.isLoadingEarlierServerHistory}
                     onLoadEarlierServerHistory={controller.handleLoadEarlierServerHistory}
+                    onOpenFile={(filePath) => void openFile(filePath)}
                 />
             </div>
 
-            <ScrollControl
-                visible={controller.hasMessages && !controller.isNearBottom}
-                unreadCount={controller.unreadCount}
-                onScrollToBottom={controller.scrollToBottom}
-            />
+            {/* MindFS Floating Navigation Overlay */}
+            <div className="pointer-events-none relative w-full">
+                <div className="pointer-events-auto absolute right-4 bottom-2 flex flex-col items-end gap-2 z-20">
+                    <UserMessageOutline
+                        anchors={controller.anchorItems}
+                        onSelectAnchor={(anchorId) => {
+                            const node = controller.messageNodeMapRef.current.get(anchorId);
+                            const scrollEl = controller.scrollRef.current;
+                            if (node && scrollEl) {
+                                scrollEl.scrollTo({
+                                    top: Math.max(0, node.offsetTop - (scrollEl.clientHeight * 0.28)),
+                                    behavior: 'smooth',
+                                });
+                                controller.setActiveAnchorId(anchorId);
+                            }
+                        }}
+                    />
+                    <ScrollControl
+                        visible={controller.hasMessages && !controller.isNearBottom}
+                        unreadCount={controller.unreadCount}
+                        onScrollToBottom={controller.scrollToBottom}
+                    />
+                </div>
+            </div>
 
             {/* 发送控制台：约束在会话列内，避免横跨会话栏/状态栏 */}
             <StreamStallHint

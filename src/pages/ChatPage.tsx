@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {invoke} from '@tauri-apps/api/core';
-import {Package, PanelLeftOpen, RefreshCw, Trash2} from 'lucide-react';
+import {PanelLeftOpen} from 'lucide-react';
 import {useChatStore} from '../stores/useChatStore';
 import {useMcpStoreV2} from '../stores/useMcpStoreV2';
 import {useSdkStore} from '../stores/useSdkStore';
@@ -14,8 +14,7 @@ import RightDock from '../components/chat/dock/RightDock';
 import DockShell from '../components/chat/dock/DockShell';
 import StatusStrip from '../components/chat/dock/StatusStrip';
 import ChatSessionSidebar from '../components/chat/ChatSessionSidebar';
-import ChatProviderSelector from '../components/chat/ChatProviderSelector';
-import type {AppType} from '../types/app';
+import ChatWorkspaceHeader from '../components/chat/ChatWorkspaceHeader';
 import {ChatPane} from '../components/chat/ChatPane';
 import {useChatPaneController} from '../components/chat/useChatPaneController';
 import type {ChatWorkspaceProjectOption} from '../components/chat/composer/ContextBar';
@@ -56,7 +55,13 @@ import {
 } from '../utils/chatSidebarLayout';
 import {getSessionSelectionKey, type SessionMeta} from '../types/session';
 import type {EditDiffPreviewMode} from '../components/toolBlocks/EditDiffPreview';
-import {apply1MContextSuffix, contextWindowFor} from '../components/chat/composer/constants';
+import {
+    apply1MContextSuffix,
+    contextWindowFor,
+    CLAUDE_MODELS,
+    CODEX_MODELS,
+    type PermissionMode,
+} from '../components/chat/composer/constants';
 import {isDockShellEnabled} from '../utils/dockDocuments';
 
 /**
@@ -383,62 +388,53 @@ export default function ChatPage() {
     }, [updateSidebarLayoutState]);
 
     return (
-        <div className="flex flex-col h-full">
-            {/* 顶部 chrome：daemon 状态在右侧 StatusStrip 已有一份，这里只在
-                「窄屏（dock 被隐藏）」或「状态不正常」时出现，避免同一信息占两遍位置。 */}
-            <div className="flex items-center justify-between gap-2 px-4 py-1.5">
-                <div
-                    className={`flex items-center gap-1.5 text-xs ${daemonStatusKind === 'ready' ? 'xl:hidden' : ''}`}
-                    title={daemonDiagnosticDisplayText ?? daemonStatusText}
-                >
-                    <span
-                        className={`inline-block w-2 h-2 rounded-full ${daemonIndicatorClass}`}
-                    />
-                    <span className="text-base-content/60">
-                        {daemonStatusText}
-                    </span>
-                    {showDaemonReconnect && (
-                        <button
-                            type="button"
-                            className="btn btn-ghost btn-xs h-6 min-h-0 gap-1 px-2 text-base-content/55"
-                            title={daemonReconnectLabel}
-                            aria-label={daemonReconnectLabel}
-                            disabled={daemonReconnecting}
-                            onClick={() => void reconnectDaemon()}
-                        >
-                            <RefreshCw size={12} className={daemonReconnecting ? 'animate-spin' : ''} />
-                            {daemonReconnectShortLabel}
-                        </button>
-                    )}
-                </div>
-                <div className="flex flex-1 items-center justify-end gap-1.5">
-                    <ChatProviderSelector
-                        appType={provider as AppType}
-                        disabled={pane.isStreaming}
-                    />
-                    <button
-                        type="button"
-                        className={`btn btn-ghost btn-xs h-7 min-h-0 gap-1.5 px-2 ${sdkMissing ? 'text-warning' : 'text-base-content/60'}`}
-                        title={sdkManageLabel}
-                        aria-label={sdkManageLabel}
-                        onClick={() => setSdkModalOpen(true)}
-                    >
-                        <Package size={14} />
-                        <span className="hidden sm:inline">{sdkManageLabel}</span>
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-ghost btn-xs h-7 min-h-0 gap-1.5 px-2 text-base-content/60"
-                        title={clearChatLabel}
-                        aria-label={clearChatLabel}
-                        onClick={handleClear}
-                        disabled={!pane.hasMessages}
-                    >
-                        <Trash2 size={14} />
-                        <span className="hidden sm:inline">{clearChatLabel}</span>
-                    </button>
-                </div>
-            </div>
+        <div className="flex flex-col h-full bg-base-100">
+            {/* MindFS 全新重构工作区顶栏 */}
+            <ChatWorkspaceHeader
+                currentCwd={currentCwd}
+                gitBranch={workspaceStatus.gitBranch}
+                sessionTitle={activeSession?.title}
+                sessionSidebarCollapsed={sessionSidebarCollapsed}
+                onToggleSessionSidebar={() => setSessionSidebarCollapsed(!sessionSidebarCollapsed)}
+                sidebarToggleLabel={sessionSidebarCollapsed ? expandSessionSidebarLabel : collapseSessionSidebarLabel}
+                contextTokens={contextTokens}
+                contextMaxTokens={contextResolvedMaxTokens}
+                contextUsagePercentage={contextUsagePercentage}
+                provider={provider as 'claude' | 'codex'}
+                model={model}
+                onModelChange={(newModel) => {
+                    if (activeTabKey) {
+                        useChatStore.getState().updateTabConfig(activeTabKey, { model: newModel });
+                    }
+                }}
+                availableModels={
+                    provider === 'claude'
+                        ? CLAUDE_MODELS.map((m) => ({ id: m.id, label: m.label }))
+                        : CODEX_MODELS.map((m) => ({ id: m.id, label: m.label }))
+                }
+                permissionMode={permissionMode as PermissionMode}
+                onPermissionModeChange={(newMode) => {
+                    if (activeTabKey) {
+                        useChatStore.getState().updateTabConfig(activeTabKey, { permissionMode: newMode });
+                    }
+                }}
+                daemonStatusText={daemonStatusText}
+                daemonIndicatorClass={daemonIndicatorClass}
+                daemonDiagnosticDisplayText={daemonDiagnosticDisplayText}
+                showDaemonReconnect={showDaemonReconnect}
+                daemonReconnectLabel={daemonReconnectLabel}
+                daemonReconnectShortLabel={daemonReconnectShortLabel}
+                daemonReconnecting={daemonReconnecting}
+                onReconnectDaemon={() => void reconnectDaemon()}
+                hasMessages={pane.hasMessages}
+                isStreaming={pane.isStreaming}
+                onNewSession={() => handleNewSession()}
+                onClearChat={handleClear}
+                onOpenSdkModal={() => setSdkModalOpen(true)}
+                sdkMissing={sdkMissing}
+                clearChatLabel={clearChatLabel}
+                sdkManageLabel={sdkManageLabel}
+            />
 
             {/* 缺少 SDK 提示条 */}
             {sdkMissing && (
